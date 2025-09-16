@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Serial monitor for Antweight Robot debugging
+Serial monitor for ThumbsUp Robot debugging
 Connects to the Pico's USB serial output to display debug messages
 """
 
@@ -63,7 +63,7 @@ def monitor_serial(port, baudrate=115200, raw=False):
         ser = serial.Serial(port, baudrate, timeout=0.1)
         print(f"{Colors.GREEN}Connected to {port} at {baudrate} baud{Colors.ENDC}")
         print(f"{Colors.CYAN}{'='*50}{Colors.ENDC}")
-        print(f"{Colors.CYAN}  Antweight Robot Serial Monitor{Colors.ENDC}")
+        print(f"{Colors.CYAN}  ThumbsUp Robot Serial Monitor{Colors.ENDC}")
         print(f"{Colors.CYAN}{'='*50}{Colors.ENDC}\n")
 
         # Clear any buffered data
@@ -125,7 +125,7 @@ def list_ports():
             print(info)
 
 def main():
-    parser = argparse.ArgumentParser(description='Serial monitor for Antweight Robot')
+    parser = argparse.ArgumentParser(description='Serial monitor for ThumbsUp Robot')
     parser.add_argument('-p', '--port', type=str, help='Serial port (e.g., /dev/ttyACM0 or COM3)')
     parser.add_argument('-b', '--baud', type=int, default=115200, help='Baud rate (default: 115200)')
     parser.add_argument('-l', '--list', action='store_true', help='List available serial ports')

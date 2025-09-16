@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AM32 ESC Configuration Tool for Antweight Robot
+AM32 ESC Configuration Tool for ThumbsUp Robot
 Allows configuring AM32 ESC through the Pico's USB serial connection
 """
 

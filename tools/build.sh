@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build script for Antweight Robot firmware
+# Build script for ThumbsUp Robot firmware
 
 set -e
 
@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}==================================${NC}"
-echo -e "${GREEN}  Antweight Robot Build Script${NC}"
+echo -e "${GREEN}  ThumbsUp Robot Build Script${NC}"
 echo -e "${GREEN}==================================${NC}"
 
 # Check for Pico SDK

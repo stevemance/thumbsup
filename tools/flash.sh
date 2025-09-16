@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Flash script for Antweight Robot firmware
+# Flash script for ThumbsUp Robot firmware
 
 set -e
 
@@ -18,7 +18,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}==================================${NC}"
-echo -e "${GREEN}  Antweight Robot Flash Tool${NC}"
+echo -e "${GREEN}  ThumbsUp Robot Flash Tool${NC}"
 echo -e "${GREEN}==================================${NC}"
 
 # Check if firmware exists
