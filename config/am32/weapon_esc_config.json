@@ -1,0 +1,61 @@
+{
+  "name": "ThumbsUp Weapon ESC Configuration",
+  "description": "AM32 40A ESC settings for F2822-1100KV brushless weapon motor",
+  "version": "1.0",
+  "esc_settings": {
+    "basic": {
+      "motor_direction": "forward",
+      "bidirectional_mode": false,
+      "brake_on_stop": false,
+      "complementary_pwm": true,
+      "variable_pwm_frequency": false,
+      "stuck_rotor_protection": true,
+      "telemetry": false
+    },
+    "timing": {
+      "motor_timing": 16,
+      "motor_kv": 1100,
+      "motor_poles": 14,
+      "startup_power": "medium",
+      "startup_boost": 15,
+      "minimum_startup_duty": 5
+    },
+    "throttle": {
+      "throttle_type": "normal_pwm",
+      "pulse_min": 1000,
+      "pulse_max": 2000,
+      "pulse_center": 1500,
+      "deadband": 2,
+      "throttle_curve": "linear"
+    },
+    "protection": {
+      "temperature_limit": 80,
+      "current_limit": 40,
+      "low_voltage_cutoff": "disabled",
+      "stall_protection_time": 1000,
+      "demag_compensation": "high"
+    },
+    "advanced": {
+      "pwm_frequency": 24,
+      "sinusoidal_mode": false,
+      "regenerative_braking": false,
+      "advance_timing": 8,
+      "pwm_dithering": true,
+      "sine_mode_range": 10
+    }
+  },
+  "notes": {
+    "safety": "Always disconnect weapon motor during initial testing",
+    "calibration": "Perform throttle calibration after flashing",
+    "capacitor": "Use 1000uF low-ESR capacitor on power input",
+    "cooling": "Ensure adequate airflow for ESC cooling",
+    "wiring": "Keep power wires short and use appropriate gauge"
+  },
+  "calibration_procedure": [
+    "1. Power on ESC with throttle at maximum (2000us)",
+    "2. Wait for two beeps",
+    "3. Move throttle to minimum (1000us)",
+    "4. Wait for confirmation beeps",
+    "5. ESC is now calibrated for 1000-2000us range"
+  ]
+}

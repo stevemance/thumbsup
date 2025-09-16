@@ -1,0 +1,89 @@
+# Build directories
+build/
+*.build/
+cmake-build-*/
+
+# Pico SDK
+pico-sdk/
+pico_sdk_import.cmake.bak
+
+# Compiled output
+*.uf2
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+
+# Object files
+*.o
+*.obj
+*.ko
+*.elf
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.so
+*.so.*
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+*.sublime-*
+
+# KiCad temporary files
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*-backups/
+*.net
+*.dsn
+*.ses
+fp-info-cache
+*.kicad_prl
+
+# Documentation build
+docs/_build/
+*.pdf
+
+# Logs
+*.log
+*.tlog
+*.lastbuildstate
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+.#*
+
+# Serial port locks
+*.lock
+
+# Config backups
+*.json.bak
+*.conf.bak
