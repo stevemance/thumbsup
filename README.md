@@ -73,7 +73,7 @@ sudo apt install cmake gcc-arm-none-eabi build-essential
 
 1. Navigate to the firmware directory:
 ```bash
-cd antweight-robot/firmware
+cd thumbsup/firmware
 ```
 
 2. Create build directory and configure:
@@ -88,7 +88,7 @@ cmake ..
 make -j4
 ```
 
-4. The output file `antweight_robot.uf2` will be in the build directory.
+4. The output file `thumbsup.uf2` will be in the build directory.
 
 ## Flashing the Firmware
 
@@ -96,7 +96,7 @@ make -j4
 2. Connect the Pico W to your computer via USB
 3. Release the BOOTSEL button
 4. The Pico will appear as a USB drive
-5. Copy `antweight_robot.uf2` to the drive
+5. Copy `thumbsup.uf2` to the drive
 6. The Pico will automatically reboot with the new firmware
 
 ## AM32 ESC Configuration
@@ -192,7 +192,7 @@ Battery + --[10kΩ]--+--[3.3kΩ]-- GND
 
 Enable debug output by setting `DEBUG_MODE=1` in CMakeLists.txt:
 ```cmake
-target_compile_definitions(antweight_robot PRIVATE
+target_compile_definitions(thumbsup PRIVATE
     DEBUG_MODE=1
 )
 ```

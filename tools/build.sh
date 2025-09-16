@@ -122,22 +122,22 @@ else
 fi
 
 # Check if build succeeded
-if [ -f "$BUILD_DIR/antweight_robot.uf2" ]; then
+if [ -f "$BUILD_DIR/thumbsup.uf2" ]; then
     echo -e "${GREEN}==================================${NC}"
     echo -e "${GREEN}  Build Successful!${NC}"
     echo -e "${GREEN}==================================${NC}"
     echo ""
-    echo "Firmware file: $BUILD_DIR/antweight_robot.uf2"
+    echo "Firmware file: $BUILD_DIR/thumbsup.uf2"
     echo ""
     echo "To flash the firmware:"
     echo "1. Hold BOOTSEL button on Pico W"
     echo "2. Connect Pico W to computer via USB"
     echo "3. Release BOOTSEL button"
-    echo "4. Copy antweight_robot.uf2 to the RPI-RP2 drive"
+    echo "4. Copy thumbsup.uf2 to the RPI-RP2 drive"
     echo ""
 
     # Show file size
-    SIZE=$(du -h "$BUILD_DIR/antweight_robot.uf2" | cut -f1)
+    SIZE=$(du -h "$BUILD_DIR/thumbsup.uf2" | cut -f1)
     echo "Firmware size: $SIZE"
 else
     echo -e "${RED}Build failed!${NC}"

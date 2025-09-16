@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 FIRMWARE_DIR="$PROJECT_ROOT/firmware"
 BUILD_DIR="$FIRMWARE_DIR/build"
-FIRMWARE_FILE="$BUILD_DIR/antweight_robot.uf2"
+FIRMWARE_FILE="$BUILD_DIR/thumbsup.uf2"
 
 # Colors for output
 RED='\033[0;31m'

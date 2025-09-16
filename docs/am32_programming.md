@@ -45,7 +45,7 @@ The AM32 ESC can be programmed through its PWM signal line using a serial protoc
 Use the included Python tool for more control:
 
 ```bash
-cd antweight-robot/tools
+cd thumbsup/tools
 
 # Interactive mode
 ./am32_config.py --interactive
@@ -112,7 +112,7 @@ No additional wiring needed!
 
 2. **Flash Pico Firmware**:
    ```bash
-   cd antweight-robot/tools
+   cd thumbsup/tools
    ./build.sh
    ./flash.sh --auto
    ```
