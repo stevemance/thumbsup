@@ -59,8 +59,17 @@ cd pico-sdk
 git submodule update --init
 export PICO_SDK_PATH=$PWD
 
+# Install Bluepad32
+git clone https://github.com/ricardoquesada/bluepad32.git
+cd bluepad32
+git submodule update --init
+cd external/btstack
+git apply ../patches/*.patch
+cd ../..
+export BLUEPAD32_ROOT=$PWD
+
 # Install build tools
-sudo apt install cmake gcc-arm-none-eabi build-essential
+sudo apt install cmake gcc-arm-none-eabi build-essential picotool
 ```
 
 ### Building
@@ -68,16 +77,20 @@ sudo apt install cmake gcc-arm-none-eabi build-essential
 ```bash
 cd firmware
 mkdir build && cd build
-cmake ..
+cmake .. -DPICO_SDK_PATH=$PICO_SDK_PATH
 make -j$(nproc)
 ```
+
+See [Building Documentation](docs/building.md) for detailed instructions.
 
 ### Testing
 
 - Always test with motor disconnected first
 - Verify failsafe triggers correctly
-- Test Bluetooth disconnection handling
+- Test Bluetooth disconnection handling with Bluepad32
 - Check battery monitoring accuracy
+- Test multiple controller types (Xbox, PlayStation, Switch Pro)
+- Verify controller auto-reconnection
 
 ## Code Style Guide
 
@@ -96,8 +109,13 @@ typedef struct {
     bool enabled;
 } motor_state_t;
 
+// Bluepad32 platform callbacks
+void thumbsup_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t* ctl) {
+    // Process gamepad data
+}
+
 // Always check return values
-if (!bluetooth_init()) {
+if (!safety_check()) {
     handle_error();
 }
 ```
@@ -124,10 +142,13 @@ def configure_esc(port: str, settings: dict) -> bool:
 
 - [ ] IMU integration for self-righting
 - [ ] Telemetry dashboard
-- [ ] Alternative controller support
+- [x] Alternative controller support (Completed with Bluepad32)
 - [ ] Power consumption optimization
 - [ ] Unit test framework
 - [ ] Simulator for testing without hardware
+- [ ] Custom controller profiles in Bluepad32
+- [ ] Rumble feedback implementation
+- [ ] Controller battery monitoring
 
 ## Questions?
 

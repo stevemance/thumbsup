@@ -4,7 +4,7 @@ A complete control system for a 1lb (454g) combat robot using Raspberry Pi Pico 
 
 ## Features
 
-- **Bluetooth Control**: Uses PB Tails Crush gamepad (Xbox 360 compatible) via Bluetooth Classic
+- **Bluetooth Control**: Universal gamepad support via Bluepad32 library (Xbox, PlayStation, Switch Pro, etc.)
 - **Differential Drive**: Tank-style mixing with exponential curves for smooth control
 - **Weapon Control**: Variable speed brushless weapon with safety arming sequence
 - **Safety Systems**: Multiple failsafes including connection loss detection and battery monitoring
@@ -23,8 +23,9 @@ A complete control system for a 1lb (454g) combat robot using Raspberry Pi Pico 
 - **Weapon ESC**: AM32 40A 32-bit ESC
 
 ### Control
-- **Controller**: PB Tails Crush Bluetooth gamepad
-- **Protocol**: Bluetooth Classic (BR/EDR) presenting as Xbox 360 controller
+- **Controller**: Any Bluetooth gamepad supported by Bluepad32
+- **Protocol**: Bluetooth Classic (BR/EDR) and BLE support
+- **Supported Controllers**: Xbox One/Series, PlayStation 3/4/5, Switch Pro, 8BitDo, and more
 
 ## Pin Configuration
 
@@ -63,29 +64,50 @@ git submodule update --init
 export PICO_SDK_PATH=$PWD
 ```
 
-2. Install required tools:
+2. Install Bluepad32:
+```bash
+git clone https://github.com/ricardoquesada/bluepad32.git
+cd bluepad32
+git submodule update --init
+export BLUEPAD32_ROOT=$PWD
+```
+
+3. Install required tools:
 ```bash
 sudo apt update
 sudo apt install cmake gcc-arm-none-eabi build-essential
+# Install picotool for UF2 generation
+cd ~/
+git clone https://github.com/raspberrypi/picotool.git
+cd picotool
+mkdir build && cd build
+cmake .. && make
+sudo make install
 ```
 
 ### Build Process
 
-1. Navigate to the firmware directory:
+1. Set environment variables:
+```bash
+export PICO_SDK_PATH=/path/to/pico-sdk
+export BLUEPAD32_ROOT=/path/to/bluepad32
+```
+
+2. Navigate to the firmware directory:
 ```bash
 cd thumbsup/firmware
 ```
 
-2. Create build directory and configure:
+3. Create build directory and configure:
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake .. -DPICO_SDK_PATH=$PICO_SDK_PATH
 ```
 
-3. Build the firmware:
+4. Build the firmware:
 ```bash
-make -j4
+make -j8
 ```
 
 4. The output file `thumbsup.uf2` will be in the build directory.
@@ -172,9 +194,11 @@ Battery + --[10kΩ]--+--[3.3kΩ]-- GND
 ## Troubleshooting
 
 ### Bluetooth Connection Issues
-- Ensure controller is in pairing mode
+- Ensure controller is in pairing mode (varies by controller type)
 - Check STATUS LED for connection state
 - Reset Pico if connection fails after 10 seconds
+- Bluepad32 automatically handles pairing for supported controllers
+- For first-time pairing, controller may need to be in discovery mode
 
 ### Motor Not Responding
 - Verify PWM signal with oscilloscope/logic analyzer
@@ -190,14 +214,12 @@ Battery + --[10kΩ]--+--[3.3kΩ]-- GND
 
 ### Debug Mode
 
-Enable debug output by setting `DEBUG_MODE=1` in CMakeLists.txt:
-```cmake
-target_compile_definitions(thumbsup PRIVATE
-    DEBUG_MODE=1
-)
-```
+Debug output is enabled by default. Connect via serial terminal (115200 baud) to see:
+- Bluepad32 controller detection and pairing status
+- Gamepad input values
+- System state changes
 
-Connect via serial terminal (115200 baud) to see debug messages.
+To disable debug output, remove `DEBUG_MODE=1` from the source files.
 
 ### Modifying Parameters
 
@@ -207,6 +229,15 @@ Edit `firmware/include/config.h` to adjust:
 - Exponential curves
 - Timing constants
 - Safety thresholds
+
+### Bluetooth Platform Customization
+
+The Bluepad32 platform implementation is in `firmware/src/bluetooth_platform.c`.
+Modify the callbacks to customize:
+- Controller mapping
+- Input processing
+- Special button combinations
+- Rumble/LED feedback
 
 ## CAD Files
 
