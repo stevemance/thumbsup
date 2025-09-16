@@ -1,21 +1,38 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Initialize pico_sdk from submodule
+# PICO_BOARD should be set to 'pico_w', or not set at all.
+if(DEFINED PICO_BOARD AND NOT ${PICO_BOARD} STREQUAL "pico_w")
+    message(FATAL_ERROR "PICO_BOARD must be set to 'pico_w' or not set at all")
+else()
+    set(PICO_BOARD "pico_w")
+endif()
+
+if(DEFINED ENV{BLUEPAD32_ROOT})
+    set(BLUEPAD32_ROOT $ENV{BLUEPAD32_ROOT})
+else()
+    message(FATAL_ERROR "BLUEPAD32_ROOT environment variable is not set")
+endif()
+
+# To use BTstack from Pico SDK do
+#set(BTSTACK_ROOT ${PICO_SDK_PATH}/lib/btstack)
+# To use it from Bluepad32 (up-to-date, with custom patches for controllers):
+set(BTSTACK_ROOT ${BLUEPAD32_ROOT}/external/btstack)
+set(PICO_BTSTACK_PATH ${BTSTACK_ROOT})
+
+# initialize the SDK based on PICO_SDK_PATH
+# note: this must happen before project()
 include(pico_sdk_import.cmake)
 
 project(thumbsup C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-# Initialize the Raspberry Pi Pico SDK
+# initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
-
-# Add Bluepad32 library path
-set(BLUEPAD32_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/bluepad32)
 
 add_executable(thumbsup
     src/main.c
-    src/bluetooth.c
+    src/bluetooth_platform.c
     src/motor_control.c
     src/drive.c
     src/weapon.c
@@ -25,40 +42,34 @@ add_executable(thumbsup
 )
 
 target_include_directories(thumbsup PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${BLUEPAD32_PATH}/include
-)
+    include
+    ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
 
-# Link libraries
-target_link_libraries(thumbsup
+# Needed for btstack_config.h / sdkconfig.h
+# so that libbluepad32 can include them
+include_directories(thumbsup include)
+
+# Needed when using BTstack from our branch
+include_directories(${BTSTACK_ROOT}/3rd-party/bluedroid/encoder/include)
+include_directories(${BTSTACK_ROOT}/3rd-party/bluedroid/decoder/include)
+
+target_link_libraries(thumbsup PUBLIC
     pico_stdlib
     pico_cyw43_arch_none
-    pico_btstack_cyw43
     pico_btstack_classic
+    pico_btstack_cyw43
     hardware_pwm
     hardware_adc
     hardware_gpio
     hardware_uart
+    hardware_watchdog
+    bluepad32
 )
 
-# Enable USB output, disable UART output
+add_subdirectory(${BLUEPAD32_ROOT}/src/components/bluepad32 libbluepad32)
+
 pico_enable_stdio_usb(thumbsup 1)
 pico_enable_stdio_uart(thumbsup 0)
 
-# Create map/bin/hex/uf2 files
+# create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(thumbsup)
-
-# Add compile definitions
-target_compile_definitions(thumbsup PRIVATE
-    PICO_W
-    ROBOT_VERSION="1.0.0"
-    DEBUG_MODE=1
-)
-
-# Add compile options for optimization
-target_compile_options(thumbsup PRIVATE
-    -O2
-    -Wall
-    -Wextra
-    -Wno-unused-parameter
-)
