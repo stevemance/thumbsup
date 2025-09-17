@@ -40,6 +40,9 @@ add_executable(thumbsup
     src/status.c
     src/am32_config.c
     src/safety_test.c
+    # Diagnostic mode disabled - requires lwIP/WiFi stack refactor
+    # src/diagnostic_mode.c
+    # src/web_server.c
 )
 
 target_include_directories(thumbsup PRIVATE
