@@ -44,9 +44,11 @@
 
 // Safety Configuration
 #define WEAPON_ARM_TIMEOUT  5000  // Weapon arm timeout in milliseconds
-#define FAILSAFE_TIMEOUT    500   // Connection loss failsafe timeout (ms)
+#define FAILSAFE_TIMEOUT    1500  // Connection loss failsafe timeout (ms) - increased for reliability
 #define WEAPON_SPINUP_TIME  2000  // Weapon ramp-up time (ms)
 #define WEAPON_RAMP_STEPS   50    // Number of steps for smooth ramping
+#define SAFETY_CHECK_INTERVAL 10  // Safety check interval (ms)
+#define EMERGENCY_STOP_HOLD_TIME 2000  // Time emergency stop must be held to clear (ms)
 
 // Bluetooth Configuration
 #define BT_DEVICE_NAME      "ThumbsUp_Robot"
@@ -105,5 +107,8 @@
 // System Limits
 #define MAX_GAMEPAD_AXIS    127    // Maximum gamepad axis value
 #define MIN_GAMEPAD_AXIS    -128   // Minimum gamepad axis value
+
+// Function declarations
+uint32_t read_battery_voltage(void);
 
 #endif // CONFIG_H

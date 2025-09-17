@@ -39,6 +39,7 @@ add_executable(thumbsup
     src/safety.c
     src/status.c
     src/am32_config.c
+    src/safety_test.c
 )
 
 target_include_directories(thumbsup PRIVATE

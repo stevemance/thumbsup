@@ -8,9 +8,13 @@ static uint8_t current_expo = DRIVE_EXPO;
 static bool drive_enabled = false;
 
 int8_t drive_apply_expo(int8_t input, uint8_t expo) {
+    // SAFETY: Validate inputs to prevent overflow
     if (input == 0 || expo == 0) {
         return input;
     }
+
+    // Clamp expo to valid range
+    expo = expo > 100 ? 100 : expo;
 
     float normalized = (float)input / 127.0f;
     float expo_factor = (float)expo / 100.0f;
@@ -24,30 +28,49 @@ int8_t drive_apply_expo(int8_t input, uint8_t expo) {
         output = -output;
     }
 
-    return (int8_t)(output * 127.0f);
+    // SAFETY: Clamp output to valid int8_t range
+    float result = output * 127.0f;
+    if (result > 127.0f) result = 127.0f;
+    if (result < -127.0f) result = -127.0f;
+
+    return (int8_t)result;
 }
 
 drive_output_t drive_mix(int8_t forward, int8_t turn) {
-    drive_output_t output;
+    drive_output_t output = {0, 0}; // SAFETY: Initialize to safe defaults
+
+    // SAFETY: Validate inputs
+    forward = CLAMP(forward, -127, 127);
+    turn = CLAMP(turn, -127, 127);
 
     forward = drive_apply_expo(forward, current_expo);
     turn = drive_apply_expo(turn, current_expo);
 
-    forward = (forward * MAX_DRIVE_SPEED) / 100;
-    turn = (turn * MAX_DRIVE_SPEED) / 100;
+    // SAFETY: Use 32-bit arithmetic to prevent overflow during scaling
+    int32_t scaled_forward = ((int32_t)forward * MAX_DRIVE_SPEED) / 100;
+    int32_t scaled_turn = ((int32_t)turn * MAX_DRIVE_SPEED) / 100;
 
-    int16_t left = forward + turn;
-    int16_t right = forward - turn;
+    // SAFETY: Clamp after scaling to prevent overflow
+    scaled_forward = CLAMP(scaled_forward, -100, 100);
+    scaled_turn = CLAMP(scaled_turn, -100, 100);
 
-    int16_t max_val = MAX(abs(left), abs(right));
+    int32_t left = scaled_forward + scaled_turn;
+    int32_t right = scaled_forward - scaled_turn;
+
+    // SAFETY: Find max value safely
+    int32_t max_val = (left < 0 ? -left : left);
+    int32_t right_abs = (right < 0 ? -right : right);
+    if (right_abs > max_val) max_val = right_abs;
+
     if (max_val > 100) {
-        float scale = 100.0f / (float)max_val;
-        left = (int16_t)(left * scale);
-        right = (int16_t)(right * scale);
+        // SAFETY: Use double precision for scaling calculation
+        double scale = 100.0 / (double)max_val;
+        left = (int32_t)(left * scale);
+        right = (int32_t)(right * scale);
     }
 
-    output.left_speed = CLAMP(left, -100, 100);
-    output.right_speed = CLAMP(right, -100, 100);
+    output.left_speed = (int8_t)CLAMP(left, -100, 100);
+    output.right_speed = (int8_t)CLAMP(right, -100, 100);
 
     return output;
 }
@@ -65,7 +88,9 @@ bool drive_init(void) {
 }
 
 void drive_update(drive_control_t* control) {
+    // SAFETY: Validate input parameters
     if (!control || !drive_enabled) {
+        DEBUG_PRINT("Drive update: invalid parameters or disabled\n");
         drive_stop();
         return;
     }
@@ -75,7 +100,25 @@ void drive_update(drive_control_t* control) {
         return;
     }
 
+    // SAFETY: Additional validation of control inputs
+    if (control->forward < -127 || control->forward > 127 ||
+        control->turn < -127 || control->turn > 127) {
+        DEBUG_PRINT("Drive update: invalid control values (%d, %d)\n",
+                    control->forward, control->turn);
+        drive_stop();
+        return;
+    }
+
     drive_output_t output = drive_mix(control->forward, control->turn);
+
+    // SAFETY: Verify output is within expected range before sending to motors
+    if (output.left_speed < -100 || output.left_speed > 100 ||
+        output.right_speed < -100 || output.right_speed > 100) {
+        DEBUG_PRINT("CRITICAL: Drive mix produced invalid output (%d, %d)\n",
+                    output.left_speed, output.right_speed);
+        drive_stop();
+        return;
+    }
 
     motor_control_set_speed(MOTOR_LEFT_DRIVE, output.left_speed);
     motor_control_set_speed(MOTOR_RIGHT_DRIVE, output.right_speed);

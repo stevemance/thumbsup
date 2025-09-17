@@ -17,6 +17,7 @@
 #include "safety.h"
 #include "status.h"
 #include "am32_config.h"
+#include "safety_test.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -52,9 +53,22 @@ static void init_hardware(void) {
     printf("=================================\n\n");
 }
 
-static uint32_t read_battery_voltage(void) {
+uint32_t read_battery_voltage(void) {
     uint16_t adc_raw = adc_read();
-    float voltage = (adc_raw * BATTERY_ADC_SCALE / 4095.0f) * BATTERY_DIVIDER * 1000.0f;
+
+    // SAFETY: Validate ADC reading and prevent overflow
+    if (adc_raw > 4095) {
+        DEBUG_PRINT("WARNING: Invalid ADC reading %u\n", adc_raw);
+        adc_raw = 4095;
+    }
+
+    // Use double precision to prevent intermediate overflow
+    double voltage = ((double)adc_raw * BATTERY_ADC_SCALE / 4095.0) * BATTERY_DIVIDER * 1000.0;
+
+    // SAFETY: Clamp result to reasonable range before converting to int
+    if (voltage < 0.0) voltage = 0.0;
+    if (voltage > 20000.0) voltage = 20000.0; // Max 20V for safety
+
     return (uint32_t)voltage;
 }
 
@@ -152,6 +166,23 @@ int main() {
 
     // Initialize AM32 config
     am32_init();
+
+    // SAFETY: Run comprehensive safety tests
+    printf("Running safety validation tests...\n");
+    if (!run_safety_tests()) {
+        printf("\n*** CRITICAL SAFETY FAILURE ***\n");
+        printf("Robot safety tests failed!\n");
+        printf("DO NOT OPERATE - SYSTEM UNSAFE\n");
+        printf("*******************************\n\n");
+
+        // Flash all LEDs rapidly to indicate unsafe condition
+        while (true) {
+            status_set_all_leds(STATUS_LED_BLINK_FAST);
+            status_update();
+            sleep_ms(100);
+        }
+    }
+    printf("Safety tests passed - system ready\n");
 
     // Must be called before uni_init()
     uni_platform_set_custom(get_my_platform());

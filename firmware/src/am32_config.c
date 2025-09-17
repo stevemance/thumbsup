@@ -164,10 +164,17 @@ bool am32_send_command(uint8_t cmd, const uint8_t* data, uint16_t len) {
 }
 
 bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) {
+    // SAFETY: Validate parameters
+    if (buffer == NULL || len == NULL || *len == 0) {
+        DEBUG_PRINT("CRITICAL: Invalid parameters to am32_receive_response\n");
+        return false;
+    }
+
     uint32_t start_time = to_ms_since_boot(get_absolute_time());
     uint16_t received = 0;
     uint16_t expected_len = 0;
     bool got_header = false;
+    uint16_t max_buffer_size = *len; // Store original buffer size
 
     while ((to_ms_since_boot(get_absolute_time()) - start_time) < timeout_ms) {
         if (uart_is_readable(AM32_UART)) {
@@ -179,18 +186,26 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
                     expected_len = byte;
                 } else if (received == 1) {
                     expected_len |= (byte << 8);
+                    // SAFETY: Validate expected length to prevent buffer overflow
+                    if (expected_len > max_buffer_size) {
+                        DEBUG_PRINT("ERROR: AM32 response too large (%u > %u)\n", expected_len, max_buffer_size);
+                        return false;
+                    }
                     got_header = true;
                 }
                 received++;
             } else {
-                // Receive data
-                if (received - 2 < expected_len && received - 2 < *len) {
-                    buffer[received - 2] = byte;
+                // SAFETY: Strict bounds checking
+                uint16_t data_index = received - 2;
+                if (data_index < expected_len && data_index < max_buffer_size) {
+                    buffer[data_index] = byte;
+                } else {
+                    DEBUG_PRINT("WARNING: AM32 buffer overflow prevented\n");
                 }
                 received++;
 
                 if (received >= expected_len + 2) {
-                    *len = expected_len;
+                    *len = (expected_len < max_buffer_size) ? expected_len : max_buffer_size;
                     return true;
                 }
             }
@@ -199,6 +214,7 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
         sleep_ms(1);
     }
 
+    DEBUG_PRINT("AM32 receive timeout after %ums\n", timeout_ms);
     return false;
 }
 

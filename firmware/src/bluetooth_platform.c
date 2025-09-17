@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <pico/cyw43_arch.h>
 #include <pico/time.h>
@@ -25,6 +26,8 @@
 static bool emergency_stop = false;
 static bool armed_state = false;
 static uint32_t last_controller_input = 0;
+static uint32_t emergency_clear_start_time = 0;
+static bool emergency_clear_in_progress = false;
 
 // Declarations
 static void trigger_event_on_gamepad(uni_hid_device_t *d);
@@ -122,9 +125,9 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
     case UNI_CONTROLLER_CLASS_GAMEPAD:
         gp = &ctl->gamepad;
 
-        // Emergency stop (Both triggers pressed)
-        if ((gp->buttons & (BUTTON_TRIGGER_L | BUTTON_TRIGGER_R)) ==
-            (BUTTON_TRIGGER_L | BUTTON_TRIGGER_R)) {
+        // Emergency stop (Both shoulder buttons pressed)
+        if ((gp->buttons & (BUTTON_L1 | BUTTON_R1)) ==
+            (BUTTON_L1 | BUTTON_R1)) {
             emergency_stop = true;
             armed_state = false;
             drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
@@ -134,10 +137,26 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
             break;
         }
 
-        // Clear emergency stop when A button pressed
+        // SAFETY: Clear emergency stop only after holding A button for required time
         if (gp->buttons & BUTTON_A) {
-            emergency_stop = false;
-            logi("Emergency stop cleared\n");
+            if (!emergency_clear_in_progress) {
+                emergency_clear_start_time = to_ms_since_boot(get_absolute_time());
+                emergency_clear_in_progress = true;
+                logi("Hold A button for %dms to clear emergency stop\n", EMERGENCY_STOP_HOLD_TIME);
+            } else {
+                uint32_t hold_time = to_ms_since_boot(get_absolute_time()) - emergency_clear_start_time;
+                if (hold_time >= EMERGENCY_STOP_HOLD_TIME) {
+                    emergency_stop = false;
+                    emergency_clear_in_progress = false;
+                    logi("Emergency stop cleared after %ums hold\n", hold_time);
+                }
+            }
+        } else {
+            // Reset if button released before hold time met
+            if (emergency_clear_in_progress) {
+                emergency_clear_in_progress = false;
+                logi("Emergency stop clear cancelled - button released\n");
+            }
         }
 
         // Weapon arm/disarm with B button (only if not emergency stopped)
@@ -154,13 +173,40 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
 
         // Only process movement if not emergency stopped
         if (!emergency_stop) {
-            // Drive control using left stick
-            int32_t forward = abs(gp->axis_y) < 50 ? 0 : -gp->axis_y; // Invert Y for forward
-            int32_t turn = abs(gp->axis_x) < 50 ? 0 : gp->axis_x;
+            // Drive control using left stick with proper deadzone handling
+            int32_t raw_forward = -gp->axis_y; // Invert Y for forward
+            int32_t raw_turn = gp->axis_x;
 
-            // Scale from -512/512 to -127/127 range for drive system
-            forward = (forward * 127) / 512;
-            turn = (turn * 127) / 512;
+            // SAFETY: Validate input ranges from controller
+            raw_forward = CLAMP(raw_forward, -512, 511);
+            raw_turn = CLAMP(raw_turn, -512, 511);
+
+            // Apply deadzone with proper scaling (use configured deadzone from config.h)
+            int32_t forward = 0, turn = 0;
+
+            if (abs(raw_forward) > STICK_DEADZONE) {
+                // Scale deadzone-adjusted input to full range
+                if (raw_forward > 0) {
+                    forward = ((raw_forward - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
+                } else {
+                    forward = ((raw_forward + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
+                }
+            }
+            if (abs(raw_turn) > STICK_DEADZONE) {
+                if (raw_turn > 0) {
+                    turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
+                } else {
+                    turn = ((raw_turn + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
+                }
+            }
+
+            // Scale to -127/127 with overflow protection
+            if (forward != 0) {
+                forward = CLAMP((forward * 127) / 512, -127, 127);
+            }
+            if (turn != 0) {
+                turn = CLAMP((turn * 127) / 512, -127, 127);
+            }
 
             drive_control_t drive_cmd = {
                 .forward = forward,
@@ -171,9 +217,24 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
 
             // Weapon control with right stick Y-axis (only if armed)
             if (armed_state) {
-                int32_t weapon_speed = abs(gp->axis_ry) < 50 ? 0 : gp->axis_ry;
-                weapon_speed = (weapon_speed * 100) / 512; // Scale to 0-100%
-                weapon_set_speed(weapon_speed > 0 ? weapon_speed : 0); // Only positive speeds
+                int32_t raw_weapon = gp->axis_ry;
+
+                // SAFETY: Validate weapon input range
+                raw_weapon = CLAMP(raw_weapon, -512, 511);
+
+                // Apply deadzone for weapon control with proper scaling
+                int32_t weapon_speed = 0;
+                if (raw_weapon > TRIGGER_THRESHOLD) {
+                    // Scale deadzone-adjusted input (safety: only positive values)
+                    weapon_speed = ((raw_weapon - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
+                    weapon_speed = CLAMP(weapon_speed, 0, 100);
+                }
+                // SAFETY: Negative values are explicitly ignored for weapon control
+
+                weapon_set_speed(weapon_speed);
+            } else {
+                // SAFETY: Ensure weapon is stopped when not armed
+                weapon_set_speed(0);
             }
         }
 

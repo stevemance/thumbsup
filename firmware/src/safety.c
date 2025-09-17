@@ -1,9 +1,12 @@
 #include "safety.h"
 #include "config.h"
 #include "hardware/gpio.h"
+#include "pico/stdlib.h"
 #include <stdio.h>
 
 static bool safety_initialized = false;
+static uint32_t last_safety_check = 0;
+static uint32_t safety_violation_count = 0;
 
 bool safety_init(void) {
     if (safety_initialized) {
@@ -40,4 +43,45 @@ bool safety_is_button_pressed(void) {
 }
 
 void safety_update(void) {
+    if (!safety_initialized) {
+        return;
+    }
+
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
+    // SAFETY: Perform continuous safety monitoring
+    if (current_time - last_safety_check >= SAFETY_CHECK_INTERVAL) {
+        // Read current battery voltage
+        extern uint32_t read_battery_voltage(void);
+        uint32_t battery_mv = read_battery_voltage();
+
+        // Check for safety violations
+        bool violation = false;
+
+        if (!safety_check_battery(battery_mv)) {
+            DEBUG_PRINT("SAFETY VIOLATION: Low battery %umV\n", battery_mv);
+            violation = true;
+        }
+
+        if (safety_is_button_pressed()) {
+            DEBUG_PRINT("SAFETY VIOLATION: Safety button pressed\n");
+            violation = true;
+        }
+
+        // Count consecutive violations for emergency action
+        if (violation) {
+            safety_violation_count++;
+            if (safety_violation_count > 5) {
+                DEBUG_PRINT("CRITICAL: Multiple safety violations - initiating emergency stop\n");
+                extern void weapon_emergency_stop(void);
+                extern void motor_control_emergency_stop(void);
+                weapon_emergency_stop();
+                motor_control_emergency_stop();
+            }
+        } else {
+            safety_violation_count = 0;
+        }
+
+        last_safety_check = current_time;
+    }
 }
