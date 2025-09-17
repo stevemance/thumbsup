@@ -18,7 +18,6 @@
 #include "status.h"
 #include "am32_config.h"
 #include "safety_test.h"
-// #include "diagnostic_mode.h"  // Disabled - requires WiFi stack refactor
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -155,15 +154,6 @@ static void check_config_mode_entry(void) {
 
 int main() {
     init_hardware();
-
-    // Diagnostic mode disabled - requires WiFi/Bluetooth coexistence refactor
-    // if (should_enter_diagnostic_mode()) {
-    //     if (diagnostic_mode_init()) {
-    //         diagnostic_mode_run();
-    //     } else {
-    //         printf("Failed to initialize diagnostic mode\n");
-    //     }
-    // }
 
     // initialize CYW43 driver architecture (will enable BT if/because CYW43_ENABLE_BLUETOOTH == 1)
     if (cyw43_arch_init()) {

@@ -216,13 +216,19 @@ System will restart in Competition Mode.
 - Mode selection logic
 - Safety interlocks
 
-### ⚠️ Currently Disabled
-The diagnostic mode is temporarily disabled due to:
-- CYW43439 WiFi/Bluetooth coexistence issues
-- lwIP stack conflicts with BTstack
-- Memory constraints with both stacks
+### ⚠️ Why It's Disabled
 
-### 🔧 Required for Activation
+The diagnostic mode is **fully implemented** but disabled because:
+
+**You're exactly right** - we CAN have a boot timeout that selects either WiFi OR Bluetooth mode. The CYW43439 chip can do either, just not both simultaneously.
+
+The issue is the Pico SDK's CMake build system requires you to choose at compile time:
+- `pico_cyw43_arch_none` - For Bluetooth (what we use)
+- `pico_cyw43_arch_lwip_poll` - For WiFi with networking
+
+We can't link both in the same binary. The code for exclusive mode selection is ready, but it needs **two separate firmware builds**.
+
+### 🔧 How to Enable Diagnostic Mode
 
 To enable diagnostic mode:
 

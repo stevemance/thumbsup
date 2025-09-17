@@ -98,4 +98,7 @@ void process_web_control(web_control_t* control);
 // Mode selection
 bool should_enter_diagnostic_mode(void);
 
+// Simplified diagnostic mode (exclusive WiFi, no web server)
+void diagnostic_mode_main(void);
+
 #endif // DIAGNOSTIC_MODE_H
