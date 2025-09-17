@@ -42,15 +42,44 @@ A complete control system for a 1lb (454g) combat robot using Raspberry Pi Pico 
 | VSYS | Power In | 5V from ESC BEC |
 | GND | Ground | Common ground |
 
-## Control Mapping
+## Documentation
+
+### 📖 User Manuals
+- **[User Manual](docs/USER_MANUAL.md)** - Complete operating instructions, safety procedures, and troubleshooting
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** - Single-page quick reference for competition use
+- **[Building Guide](docs/building.md)** - Compilation and setup instructions
+- **[Wiring Guide](docs/wiring_guide.md)** - Hardware connection diagrams
+
+### Control Mapping Summary
 
 | Control | Function |
 |---------|----------|
 | Left Stick | Drive control (forward/back + turning) |
-| Right Trigger (R2) | Weapon speed control |
-| X + Y buttons (hold) | Arm weapon |
-| L1 + R1 | Emergency disarm |
-| D-pad | Drive trim adjustments |
+| Right Stick Y | Weapon speed control (when armed) |
+| B Button | Arm/disarm weapon toggle |
+| A Button (hold 2s) | Clear emergency stop |
+| L1 + R1 | Emergency stop (all motors) |
+
+## Safety Features
+
+### Startup Safety Tests
+The robot performs 6 critical safety tests on every startup:
+
+1. **Motor Initialization** - Verifies all motors start in safe positions
+2. **Weapon Safety** - Confirms weapon starts disarmed and interlocks work
+3. **Failsafe System** - Tests signal loss detection (1.5 second timeout)
+4. **Battery Monitoring** - Validates voltage sensing and thresholds
+5. **Emergency Stop** - Verifies E-stop functionality
+6. **Overflow Protection** - Ensures calculation safety
+
+If any test fails, the robot enters lockout mode with rapid LED flashing and will not operate.
+
+### Runtime Safety Features
+- **Connection failsafe** - Motors stop after 1.5s signal loss
+- **Low battery protection** - Weapon disabled below 11.1V
+- **Emergency stop** - L1+R1 instantly stops all motors
+- **Continuous monitoring** - Safety checks run every 10ms
+- **Violation counting** - Multiple violations trigger automatic shutdown
 
 ## Building the Firmware
 
