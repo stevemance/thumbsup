@@ -108,7 +108,28 @@
 #define MAX_GAMEPAD_AXIS    127    // Maximum gamepad axis value
 #define MIN_GAMEPAD_AXIS    -128   // Minimum gamepad axis value
 
+// Common utility macros
+#ifndef CLAMP
+#define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+#endif
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 // Function declarations
 uint32_t read_battery_voltage(void);
+
+// Common constants to replace magic numbers
+#define MAX_SAFETY_VIOLATIONS       5     // Maximum violations before emergency stop
+#define AM32_CONFIG_RETRIES        3     // Retries for AM32 communication
+#define WEB_CONTROL_TIMEOUT_MS     1000  // Web control timeout
+#define SAFETY_BUTTON_HOLD_TIME    2000  // Hold time for safety button actions (ms)
+#define DIAGNOSTIC_MODE_HOLD_TIME  3000  // Hold time to enter diagnostic mode (ms)
+#define DIAGNOSTIC_EXIT_HOLD_TIME  5000  // Hold time to exit diagnostic mode (ms)
 
 #endif // CONFIG_H

@@ -71,10 +71,12 @@ void weapon_update(void) {
         case WEAPON_STATE_SPINNING:
             if (current_speed != target_speed) {
                 if (current_time - last_ramp_time > (WEAPON_SPINUP_TIME / WEAPON_RAMP_STEPS)) {
+                    // Use floating point for smooth ramping, then convert to integer
+                    static const float ramp_step = 100.0f / (float)WEAPON_RAMP_STEPS;
                     if (target_speed > current_speed) {
-                        current_speed = MIN(current_speed + (100 / WEAPON_RAMP_STEPS), target_speed);
+                        current_speed = MIN(current_speed + (uint8_t)(ramp_step + 0.5f), target_speed);
                     } else {
-                        current_speed = MAX(current_speed - (100 / WEAPON_RAMP_STEPS), target_speed);
+                        current_speed = MAX(current_speed - (uint8_t)(ramp_step + 0.5f), target_speed);
                     }
 
                     uint16_t pulse = weapon_speed_to_pulse(current_speed);

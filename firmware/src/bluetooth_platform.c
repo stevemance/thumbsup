@@ -7,6 +7,7 @@
 
 #include <pico/cyw43_arch.h>
 #include <pico/time.h>
+#include <hardware/watchdog.h>
 #include <uni.h>
 
 #include "sdkconfig.h"
@@ -110,10 +111,17 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
 static void my_platform_on_controller_data(uni_hid_device_t *d,
                                            uni_controller_t *ctl) {
     static uni_controller_t prev = {0};
+    static uint32_t last_watchdog_feed = 0;
     uni_gamepad_t *gp;
 
     // Update timestamp
     last_controller_input = to_ms_since_boot(get_absolute_time());
+
+    // Feed watchdog periodically (every 500ms)
+    if (last_controller_input - last_watchdog_feed > 500) {
+        watchdog_update();
+        last_watchdog_feed = last_controller_input;
+    }
 
     // Used to prevent spamming the log, but should be removed in production.
     if (memcmp(&prev, ctl, sizeof(*ctl)) == 0) {
@@ -142,10 +150,10 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
             if (!emergency_clear_in_progress) {
                 emergency_clear_start_time = to_ms_since_boot(get_absolute_time());
                 emergency_clear_in_progress = true;
-                logi("Hold A button for %dms to clear emergency stop\n", EMERGENCY_STOP_HOLD_TIME);
+                logi("Hold A button for %dms to clear emergency stop\n", SAFETY_BUTTON_HOLD_TIME);
             } else {
                 uint32_t hold_time = to_ms_since_boot(get_absolute_time()) - emergency_clear_start_time;
-                if (hold_time >= EMERGENCY_STOP_HOLD_TIME) {
+                if (hold_time >= SAFETY_BUTTON_HOLD_TIME) {
                     emergency_stop = false;
                     emergency_clear_in_progress = false;
                     logi("Emergency stop cleared after %ums hold\n", hold_time);

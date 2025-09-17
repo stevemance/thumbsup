@@ -1,5 +1,7 @@
 #include "safety.h"
 #include "config.h"
+#include "weapon.h"
+#include "motor_control.h"
 #include "hardware/gpio.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
@@ -51,8 +53,7 @@ void safety_update(void) {
 
     // SAFETY: Perform continuous safety monitoring
     if (current_time - last_safety_check >= SAFETY_CHECK_INTERVAL) {
-        // Read current battery voltage
-        extern uint32_t read_battery_voltage(void);
+        // Read current battery voltage (declared in config.h)
         uint32_t battery_mv = read_battery_voltage();
 
         // Check for safety violations
@@ -71,10 +72,8 @@ void safety_update(void) {
         // Count consecutive violations for emergency action
         if (violation) {
             safety_violation_count++;
-            if (safety_violation_count > 5) {
+            if (safety_violation_count > MAX_SAFETY_VIOLATIONS) {
                 DEBUG_PRINT("CRITICAL: Multiple safety violations - initiating emergency stop\n");
-                extern void weapon_emergency_stop(void);
-                extern void motor_control_emergency_stop(void);
                 weapon_emergency_stop();
                 motor_control_emergency_stop();
             }

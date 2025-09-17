@@ -130,17 +130,18 @@ static void check_config_mode_entry(void) {
                 break;
 
             case 'D':
-            case 'd':
+            case 'd': {
                 printf("Applying default weapon settings...\n");
-                am32_config_t config;
-                am32_apply_weapon_defaults(&config);
+                am32_config_t default_config;
+                am32_apply_weapon_defaults(&default_config);
                 if (am32_enter_config_mode()) {
-                    am32_write_settings(&config);
+                    am32_write_settings(&default_config);
                     am32_save_settings();
                     am32_exit_config_mode();
                 }
                 printf("Defaults applied!\n");
                 break;
+            }
 
             default:
                 printf("Exiting config mode...\n");
@@ -195,7 +196,12 @@ int main() {
 
     printf("ThumbsUp robot initialized. Starting Bluepad32...\n");
 
-    // Does not return.
+    // Enable watchdog with 1 second timeout
+    // The BTstack run loop will be modified to feed it
+    watchdog_enable(1000, true);
+    printf("Watchdog enabled (1s timeout)\n");
+
+    // Does not return - BTstack takes over
     btstack_run_loop_execute();
 
     return 0;

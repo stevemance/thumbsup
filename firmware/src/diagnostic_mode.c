@@ -121,8 +121,8 @@ void diagnostic_mode_run(void) {
         if (safety_is_button_pressed()) {
             if (exit_hold_start == 0) {
                 exit_hold_start = current_time;
-                telemetry_log_event("Hold safety button 5s to exit diagnostic mode");
-            } else if (current_time - exit_hold_start > 5000) {
+                telemetry_log_event("Hold safety button %ds to exit diagnostic mode", DIAGNOSTIC_EXIT_HOLD_TIME / 1000);
+            } else if (current_time - exit_hold_start > DIAGNOSTIC_EXIT_HOLD_TIME) {
                 diagnostic_mode_active = false;
                 telemetry_log_event("Exiting diagnostic mode");
             }

@@ -28,8 +28,6 @@ void motor_control_stop_all(void);
 uint16_t motor_control_get_pulse(motor_channel_t channel);
 void motor_control_emergency_stop(void);
 
-#define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
+// Utility macros moved to config.h
 
 #endif // MOTOR_CONTROL_H

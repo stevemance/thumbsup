@@ -1,5 +1,6 @@
 #include "motor_control.h"
 #include "config.h"
+#include "bluetooth_platform.h"
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include <stdio.h>
@@ -131,9 +132,6 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
     // SAFETY: Additional validation for weapon motor
     if (channel == MOTOR_WEAPON) {
         // Weapon motor can only receive MIN_PULSE (off) when not properly armed
-        extern bool bluetooth_platform_is_armed(void);
-        extern bool bluetooth_platform_failsafe_active(void);
-
         if (bluetooth_platform_failsafe_active() || !bluetooth_platform_is_armed()) {
             if (pulse_us != PWM_MIN_PULSE) {
                 DEBUG_PRINT("SAFETY: Weapon pulse blocked - not armed or failsafe active\n");
