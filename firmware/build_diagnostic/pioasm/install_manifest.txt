@@ -1,0 +1,5 @@
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm-install/pioasm/pioasm
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm-install/pioasm/pioasmTargets.cmake
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm-install/pioasm/pioasmTargets-release.cmake
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm-install/pioasm/pioasmConfig.cmake
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm-install/pioasm/pioasmConfigVersion.cmake

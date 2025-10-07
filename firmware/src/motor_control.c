@@ -1,6 +1,6 @@
 #include "motor_control.h"
 #include "config.h"
-#include "bluetooth_platform.h"
+#include "system_status.h"
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include <stdio.h>
@@ -80,13 +80,21 @@ bool motor_control_init(void) {
             motors[i].current_pulse_us = PWM_MIN_PULSE;
             motors[i].target_pulse_us = PWM_MIN_PULSE;
             uint32_t pulse_cycles = (PWM_MIN_PULSE * PWM_WRAP_VALUE) / 20000;
+            #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
+            #else
+            printf("MOTOR: Would set weapon to %d cycles (DISABLED)\n", pulse_cycles);
+            #endif
         } else {
             // Drive motors start at neutral (stopped)
             motors[i].current_pulse_us = PWM_NEUTRAL_PULSE;
             motors[i].target_pulse_us = PWM_NEUTRAL_PULSE;
             uint32_t pulse_cycles = (PWM_NEUTRAL_PULSE * PWM_WRAP_VALUE) / 20000;
+            #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
+            #else
+            printf("MOTOR: Would set drive %d to %d cycles (DISABLED)\n", i, pulse_cycles);
+            #endif
         }
         pwm_set_enabled(motors[i].pwm_slice, true);
     }
@@ -116,7 +124,16 @@ bool motor_control_update(void) {
             }
 
             uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+            #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
+            #else
+            // Log what we would be sending for testing
+            if (motors[i].current_pulse_us != PWM_NEUTRAL_PULSE && i != MOTOR_WEAPON) {
+                printf("MOTOR %d: %dus\n", i, motors[i].current_pulse_us);
+            } else if (i == MOTOR_WEAPON && motors[i].current_pulse_us != PWM_MIN_PULSE) {
+                printf("WEAPON: %dus\n", motors[i].current_pulse_us);
+            }
+            #endif
         }
     }
 
@@ -132,7 +149,7 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
     // SAFETY: Additional validation for weapon motor
     if (channel == MOTOR_WEAPON) {
         // Weapon motor can only receive MIN_PULSE (off) when not properly armed
-        if (bluetooth_platform_failsafe_active() || !bluetooth_platform_is_armed()) {
+        if (system_failsafe_active() || !system_is_armed()) {
             if (pulse_us != PWM_MIN_PULSE) {
                 DEBUG_PRINT("SAFETY: Weapon pulse blocked - not armed or failsafe active\n");
                 pulse_us = PWM_MIN_PULSE;
@@ -181,7 +198,9 @@ void motor_control_stop_all(void) {
         }
 
         uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+        #if !DISABLE_MOTOR_OUTPUT
         pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
+        #endif
     }
 }
 

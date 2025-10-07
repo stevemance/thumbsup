@@ -5,6 +5,8 @@
 #include "weapon.h"
 #include "safety.h"
 #include "status.h"
+#include "system_status.h"
+#include "dhcp_server.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -14,16 +16,38 @@
 #include <hardware/adc.h>
 #include <hardware/gpio.h>
 #include <hardware/watchdog.h>
+#include <lwip/netif.h>
+#include <lwip/ip4_addr.h>
+#include <lwip/dhcp.h>
 #include <lwip/tcp.h>
+#include "cyw43.h"
+#include "cyw43_ll.h"
 
 // Global telemetry data
 static telemetry_data_t g_telemetry = {0};
 static bool diagnostic_mode_active = false;
+static bool armed_state = false;
+static bool failsafe_active = false;
 
 // External functions
 extern uint32_t read_battery_voltage(void);
-extern bool bluetooth_platform_failsafe_active(void);
-extern bool bluetooth_platform_is_armed(void);
+
+// System status interface implementations for diagnostic mode
+bool system_failsafe_active(void) {
+    return failsafe_active;
+}
+
+bool system_is_armed(void) {
+    return armed_state;
+}
+
+void system_set_armed(bool armed) {
+    armed_state = armed;
+}
+
+void system_set_failsafe(bool active) {
+    failsafe_active = active;
+}
 
 // HTML page embedded as string (we'll generate this)
 static const char* html_page = NULL;
@@ -34,25 +58,44 @@ bool diagnostic_mode_init(void) {
     printf("  DIAGNOSTIC MODE STARTING\n");
     printf("=================================\n\n");
 
-    // Initialize CYW43 with WiFi support
-    if (cyw43_arch_init()) {
-        printf("Failed to initialize CYW43\n");
-        return false;
-    }
-
-    // Enable WiFi AP mode
+    // CYW43 should already be initialized by main.c
+    printf("Enabling WiFi AP mode...\n");
     cyw43_arch_enable_ap_mode(WIFI_SSID, WIFI_PASSWORD, WIFI_AUTH);
+    printf("cyw43_arch_enable_ap_mode() completed\n");
 
     printf("WiFi Access Point started\n");
     printf("SSID: %s\n", WIFI_SSID);
     printf("Password: %s\n", WIFI_PASSWORD);
-    printf("IP: 192.168.4.1\n\n");
+
+    // Wait a moment for the AP to fully initialize
+    sleep_ms(100);
+
+    // Configure IP address for AP interface
+    ip4_addr_t gw, mask;
+    IP4_ADDR(&gw, 192, 168, 4, 1);
+    IP4_ADDR(&mask, 255, 255, 255, 0);
+
+    // Actually set the IP on the network interface
+    struct netif *netif = &cyw43_state.netif[CYW43_ITF_AP];
+    netif_set_addr(netif, &gw, &mask, &gw);
+    netif_set_up(netif);
+
+    printf("AP IP configured: 192.168.4.1\n");
+
+    // Start DHCP server
+    if (dhcp_server_init(&gw, &mask)) {
+        printf("DHCP server started (range: 192.168.4.2 - 192.168.4.254)\n\n");
+    } else {
+        printf("Warning: DHCP server failed to start\n");
+        printf("Clients must use static IP in range 192.168.4.2-254\n\n");
+    }
 
     // Initialize web server
     if (!web_server_init()) {
         printf("Failed to start web server\n");
         return false;
     }
+    printf("Web server started - try http://192.168.4.1\n");
 
     // Initialize telemetry
     memset(&g_telemetry, 0, sizeof(g_telemetry));
@@ -70,13 +113,17 @@ bool diagnostic_mode_init(void) {
 void diagnostic_mode_run(void) {
     uint32_t last_telemetry_update = 0;
     uint32_t last_web_update = 0;
+    uint32_t last_heartbeat = 0;
     uint32_t start_time = to_ms_since_boot(get_absolute_time());
 
-    // Initialize hardware
-    motor_control_init();
-    drive_init();
-    weapon_init();
-    status_init();
+    // Skip hardware initialization for now to avoid conflicts
+    // TODO: Re-enable after debugging WiFi issues
+    // motor_control_init();
+    // drive_init();
+    // weapon_init();
+    // status_init();
+
+    printf("Hardware init skipped for WiFi debugging\n");
 
     telemetry_log_event("Systems initialized");
 
@@ -86,6 +133,9 @@ void diagnostic_mode_run(void) {
     while (diagnostic_mode_active) {
         uint32_t current_time = to_ms_since_boot(get_absolute_time());
         uint32_t loop_start = time_us_32();
+
+        // CRITICAL: Poll WiFi driver
+        cyw43_arch_poll();
 
         // Update telemetry
         if (current_time - last_telemetry_update >= TELEMETRY_UPDATE_MS) {
@@ -102,12 +152,10 @@ void diagnostic_mode_run(void) {
         // Process any web control commands
         // Note: web_get_control is defined in web_server.c
 
-        // Update motor outputs
-        motor_control_update();
-        weapon_update();
-
-        // Update status LEDs
-        status_update();
+        // Skip motor/status updates for now
+        // motor_control_update();
+        // weapon_update();
+        // status_update();
 
         // Calculate loop time
         g_telemetry.loop_time_us = time_us_32() - loop_start;
@@ -129,6 +177,29 @@ void diagnostic_mode_run(void) {
         } else {
             exit_hold_start = 0;
         }
+
+        // Heartbeat every 5 seconds
+        if (current_time - last_heartbeat >= 5000) {
+            printf("Heartbeat... (uptime: %lu sec, loop: %lu us)\n",
+                   current_time / 1000, g_telemetry.loop_time_us);
+            last_heartbeat = current_time;
+
+            // Toggle LED to show we're alive
+            static bool led_state = false;
+            led_state = !led_state;
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state);
+
+            // Print network statistics
+            struct netif *netif = &cyw43_state.netif[CYW43_ITF_AP];
+            if (netif) {
+                printf("  AP IP: %d.%d.%d.%d\n",
+                       ip4_addr1(&netif->ip_addr), ip4_addr2(&netif->ip_addr),
+                       ip4_addr3(&netif->ip_addr), ip4_addr4(&netif->ip_addr));
+            }
+        }
+
+        // Small delay to prevent CPU hogging
+        sleep_ms(10);
     }
 
     diagnostic_mode_shutdown();
@@ -144,6 +215,9 @@ void diagnostic_mode_shutdown(void) {
 
     // Shutdown web server
     web_server_shutdown();
+
+    // Stop DHCP server
+    dhcp_server_deinit();
 
     // Disable WiFi
     cyw43_arch_disable_ap_mode();

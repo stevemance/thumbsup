@@ -1,15 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <btstack_run_loop.h>
 #include <pico/cyw43_arch.h>
 #include <pico/stdlib.h>
 #include <hardware/gpio.h>
 #include <hardware/adc.h>
 #include <hardware/watchdog.h>
-#include <uni.h>
 
-#include "sdkconfig.h"
 #include "config.h"
 #include "motor_control.h"
 #include "drive.h"
@@ -19,13 +16,36 @@
 #include "am32_config.h"
 #include "safety_test.h"
 
+#ifdef DIAGNOSTIC_MODE_BUILD
+#if DIAGNOSTIC_MODE_BUILD == 1
+// Diagnostic mode headers
+#include "diagnostic_mode.h"
+#include "web_server.h"
+#define BUILD_MODE_DIAGNOSTIC 1
+#else
+// Competition mode headers
+#include <btstack_run_loop.h>
+#include <uni.h>
+#include "sdkconfig.h"
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
 #error "Pico W must use BLUEPAD32_PLATFORM_CUSTOM"
 #endif
-
 // Defined in bluetooth_platform.c
 struct uni_platform* get_my_platform(void);
+#define BUILD_MODE_DIAGNOSTIC 0
+#endif
+#else
+// Default to competition mode if not specified
+#include <btstack_run_loop.h>
+#include <uni.h>
+#include "sdkconfig.h"
+#ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
+#error "Pico W must use BLUEPAD32_PLATFORM_CUSTOM"
+#endif
+struct uni_platform* get_my_platform(void);
+#define BUILD_MODE_DIAGNOSTIC 0
+#endif
 
 // Robot state is now managed in bluetooth_platform.c
 
@@ -52,8 +72,6 @@ static void init_hardware(void) {
     printf("  Firmware v%s\n", FIRMWARE_VERSION);
     printf("=================================\n\n");
 
-    // Check for diagnostic mode entry
-    printf("Hold safety button for diagnostic mode...\n");
 }
 
 uint32_t read_battery_voltage(void) {
@@ -154,55 +172,138 @@ static void check_config_mode_entry(void) {
 }
 
 int main() {
+    // Initialize stdio first for debugging
+    stdio_init_all();
+
+    // Wait a bit for USB connection
+    sleep_ms(2000);
+
+    printf("\n\n*** MAIN STARTING ***\n");
+    printf("Build mode: COMPETITION\n");
+    printf("Motor output disabled: %d\n", DISABLE_MOTOR_OUTPUT);
+
     init_hardware();
 
-    // initialize CYW43 driver architecture (will enable BT if/because CYW43_ENABLE_BLUETOOTH == 1)
-    if (cyw43_arch_init()) {
-        loge("failed to initialise cyw43_arch\n");
+#if BUILD_MODE_DIAGNOSTIC
+    // DIAGNOSTIC MODE BUILD
+
+    // Wait for USB serial connection
+    for (int i = 0; i < 3; i++) {
+        printf("Starting diagnostic mode in %d...\n", 3-i);
+        sleep_ms(1000);
+    }
+
+    printf("\n=================================\n");
+    printf("  DIAGNOSTIC MODE BUILD\n");
+    printf("=================================\n\n");
+
+    // Initialize for WiFi (diagnostic mode)
+    if (cyw43_arch_init_with_country(CYW43_COUNTRY_USA)) {
+        printf("Failed to initialize WiFi\n");
         return -1;
     }
+    printf("WiFi initialized for diagnostic mode\n");
+#else
+    // COMPETITION MODE BUILD
+    printf("\n=================================\n");
+    printf("  COMPETITION MODE BUILD\n");
+    printf("=================================\n\n");
+
+    // Initialize for Bluetooth (competition mode)
+    if (cyw43_arch_init()) {
+        printf("Failed to initialize Bluetooth\n");
+        return -1;
+    }
+    printf("Bluetooth initialized for competition mode\n");
+#endif
 
     // Turn-on LED. Turn it off once init is done.
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    // Check if we should enter AM32 config mode
-    check_config_mode_entry();
+#if BUILD_MODE_DIAGNOSTIC
+    // DIAGNOSTIC MODE - Run WiFi web server
+    // Keep LED on to show we're running
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    // Initialize AM32 config
-    am32_init();
+    // Start diagnostic mode (it will initialize subsystems)
+    if (diagnostic_mode_init()) {
+        printf("Diagnostic mode started successfully\n");
+        printf("WiFi AP: ThumbsUp_Diag\n");
+        printf("Password: combat123\n");
+        printf("Web interface: http://192.168.4.1\n");
 
-    // SAFETY: Run comprehensive safety tests
-    printf("Running safety validation tests...\n");
-    if (!run_safety_tests()) {
-        printf("\n*** CRITICAL SAFETY FAILURE ***\n");
-        printf("Robot safety tests failed!\n");
-        printf("DO NOT OPERATE - SYSTEM UNSAFE\n");
-        printf("*******************************\n\n");
-
-        // Flash all LEDs rapidly to indicate unsafe condition
+        // Run diagnostic mode loop - does not return
+        diagnostic_mode_run();
+    } else {
+        printf("Failed to start diagnostic mode\n");
+        // Blink LED rapidly to show error
         while (true) {
-            status_set_all_leds(STATUS_LED_BLINK_FAST);
-            status_update();
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+            sleep_ms(100);
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
             sleep_ms(100);
         }
     }
-    printf("Safety tests passed - system ready\n");
+#else
+    // COMPETITION MODE - Run Bluetooth gamepad control
+        printf("\n*** COMPETITION MODE ***\n");
+        printf("Starting Bluetooth initialization...\n");
 
-    // Must be called before uni_init()
-    uni_platform_set_custom(get_my_platform());
+        // Check if we should enter AM32 config mode
+        printf("Checking for config mode...\n");
+        check_config_mode_entry();
 
-    // Initialize BP32
-    uni_init(0, NULL);
+        // Initialize AM32 config
+        printf("Initializing AM32...\n");
+        am32_init();
 
-    printf("ThumbsUp robot initialized. Starting Bluepad32...\n");
+        // Initialize motor control system before safety tests
+        printf("Initializing motor control system...\n");
+        motor_control_init();
 
-    // Enable watchdog with 1 second timeout
-    // The BTstack run loop will be modified to feed it
-    watchdog_enable(1000, true);
-    printf("Watchdog enabled (1s timeout)\n");
+        // Initialize other subsystems needed for tests
+        weapon_init();
+        drive_init();
+        safety_init();
+        status_init();
 
-    // Does not return - BTstack takes over
-    btstack_run_loop_execute();
+        // SAFETY: Run comprehensive safety tests
+        printf("Running safety validation tests...\n");
+        if (!run_safety_tests()) {
+            printf("\n*** CRITICAL SAFETY FAILURE ***\n");
+            printf("Robot safety tests failed!\n");
+            printf("DO NOT OPERATE - SYSTEM UNSAFE\n");
+            printf("*******************************\n\n");
+
+            // Flash all LEDs rapidly to indicate unsafe condition
+            while (true) {
+                status_set_all_leds(STATUS_LED_BLINK_FAST);
+                status_update();
+                sleep_ms(100);
+            }
+        }
+        printf("Safety tests passed - system ready\n");
+
+        // Must be called before uni_init()
+        uni_platform_set_custom(get_my_platform());
+
+        // Initialize BP32
+        printf("About to call uni_init()...\n");
+        uni_init(0, NULL);
+        printf("uni_init() completed successfully\n");
+
+        printf("ThumbsUp robot initialized. Starting Bluepad32...\n");
+
+        // Don't enable watchdog yet - wait for first controller connection
+        // The bluetooth_platform.c will enable it after first gamepad connects
+        printf("Watchdog will be enabled after first controller connection\n");
+
+        // Turn off onboard LED
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+
+        // Does not return - BTstack takes over
+        btstack_run_loop_execute();
+#endif
 
     return 0;
 }

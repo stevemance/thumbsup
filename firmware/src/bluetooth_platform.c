@@ -284,6 +284,10 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // Update last button state for next frame
         last_buttons = gp->buttons;
 
+        // CRITICAL: Update motor PWM outputs and weapon ramping
+        motor_control_update();
+        weapon_update();
+
         break;
 
     case UNI_CONTROLLER_CLASS_BALANCE_BOARD:

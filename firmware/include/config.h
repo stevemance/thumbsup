@@ -7,6 +7,9 @@
 #define ROBOT_NAME "ThumbsUp"
 #define FIRMWARE_VERSION "1.0.0"
 
+// Safety: Disable actual motor PWM output for testing (set to 1 to disable motors)
+#define DISABLE_MOTOR_OUTPUT 0
+
 // Pin Definitions
 #define PIN_DRIVE_LEFT_PWM  2    // GP2 - Left drive motor PWM
 #define PIN_DRIVE_RIGHT_PWM 3    // GP3 - Right drive motor PWM
@@ -83,16 +86,17 @@
 // D-pad: Trim adjustments
 
 // Button Masks for Xbox 360 Controller
-#define BUTTON_A            0x0001
-#define BUTTON_B            0x0002
-#define BUTTON_X            0x0004
-#define BUTTON_Y            0x0008
-#define BUTTON_L1           0x0010
-#define BUTTON_R1           0x0020
-#define BUTTON_BACK         0x0040
-#define BUTTON_START        0x0080
-#define BUTTON_L3           0x0100
-#define BUTTON_R3           0x0200
+// Prefixed with BTN_ to avoid conflicts with Bluepad32
+#define BTN_A               0x0001
+#define BTN_B               0x0002
+#define BTN_X               0x0004
+#define BTN_Y               0x0008
+#define BTN_L1              0x0010
+#define BTN_R1              0x0020
+#define BTN_BACK            0x0040
+#define BTN_START           0x0080
+#define BTN_L3              0x0100
+#define BTN_R3              0x0200
 
 // Trim Configuration
 #define TRIM_STEP           5      // Trim adjustment step size

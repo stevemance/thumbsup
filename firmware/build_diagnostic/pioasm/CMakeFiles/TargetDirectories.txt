@@ -1,0 +1,7 @@
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/pioasm.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/edit_cache.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/rebuild_cache.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/list_install_components.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/install.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/install/local.dir
+/home/smance/projects/thumbsup/firmware/build_diagnostic/pioasm/CMakeFiles/install/strip.dir

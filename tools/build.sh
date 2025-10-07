@@ -37,6 +37,29 @@ if [ -z "$PICO_SDK_PATH" ]; then
     fi
 fi
 
+# Check for Bluepad32
+if [ -z "$BLUEPAD32_ROOT" ]; then
+    echo -e "${YELLOW}Warning: BLUEPAD32_ROOT not set${NC}"
+    echo "Looking for Bluepad32 in common locations..."
+
+    if [ -d "$HOME/bluepad32" ]; then
+        export BLUEPAD32_ROOT="$HOME/bluepad32"
+        echo -e "${GREEN}Found Bluepad32 at $BLUEPAD32_ROOT${NC}"
+    elif [ -d "$HOME/pico/bluepad32" ]; then
+        export BLUEPAD32_ROOT="$HOME/pico/bluepad32"
+        echo -e "${GREEN}Found Bluepad32 at $BLUEPAD32_ROOT${NC}"
+    elif [ -d "/opt/bluepad32" ]; then
+        export BLUEPAD32_ROOT="/opt/bluepad32"
+        echo -e "${GREEN}Found Bluepad32 at $BLUEPAD32_ROOT${NC}"
+    else
+        echo -e "${RED}Error: Could not find Bluepad32${NC}"
+        echo "Please install Bluepad32 and set BLUEPAD32_ROOT"
+        echo "git clone https://github.com/ricardoquesada/bluepad32.git"
+        echo "cd bluepad32 && git submodule update --init"
+        exit 1
+    fi
+fi
+
 # Check for required tools
 echo "Checking for required tools..."
 

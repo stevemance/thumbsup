@@ -82,6 +82,15 @@ If any test fails, the robot enters lockout mode with rapid LED flashing and wil
 - **Continuous monitoring** - Safety checks run every 10ms
 - **Violation counting** - Multiple violations trigger automatic shutdown
 
+## Firmware Modes
+
+The ThumbsUp firmware supports two different build modes:
+
+1. **Competition Mode** (Default) - Bluetooth gamepad control for combat
+2. **Diagnostic Mode** - WiFi web dashboard for testing and configuration
+
+**IMPORTANT**: Due to hardware limitations of the CYW43439 chip, WiFi and Bluetooth cannot run simultaneously. You must choose which mode to build at compile time.
+
 ## Building the Firmware
 
 ### Prerequisites
@@ -117,30 +126,36 @@ sudo make install
 
 ### Build Process
 
-1. Set environment variables:
+#### Quick Build (Both Modes)
+```bash
+cd thumbsup
+./tools/build_modes.sh
+```
+
+This creates two firmware files:
+- `firmware/build/thumbsup.uf2` - Competition mode (Bluetooth)
+- `firmware/build_diagnostic/thumbsup.uf2` - Diagnostic mode (WiFi)
+
+#### Building Individual Modes
+
+**Competition Mode (Bluetooth):**
 ```bash
 export PICO_SDK_PATH=/path/to/pico-sdk
 export BLUEPAD32_ROOT=/path/to/bluepad32
-```
-
-2. Navigate to the firmware directory:
-```bash
 cd thumbsup/firmware
-```
-
-3. Create build directory and configure:
-```bash
-mkdir build
-cd build
-cmake .. -DPICO_SDK_PATH=$PICO_SDK_PATH
-```
-
-4. Build the firmware:
-```bash
+mkdir build && cd build
+cmake .. -DDIAGNOSTIC_MODE=OFF
 make -j8
 ```
 
-4. The output file `thumbsup.uf2` will be in the build directory.
+**Diagnostic Mode (WiFi):**
+```bash
+export PICO_SDK_PATH=/path/to/pico-sdk
+cd thumbsup/firmware
+mkdir build_diagnostic && cd build_diagnostic
+cmake .. -DDIAGNOSTIC_MODE=ON
+make -j8
+```
 
 ## Flashing the Firmware
 
