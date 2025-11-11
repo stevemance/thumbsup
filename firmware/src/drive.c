@@ -3,6 +3,7 @@
 #include "trim_mode.h"
 #include "config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 static uint8_t current_expo = DRIVE_EXPO;

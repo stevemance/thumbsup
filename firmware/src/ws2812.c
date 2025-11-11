@@ -2,6 +2,7 @@
 #include "ws2812.pio.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
+#include "pico/time.h"
 #include <stdlib.h>
 #include <string.h>
 
