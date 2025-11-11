@@ -56,13 +56,6 @@ static void init_hardware(void) {
     adc_gpio_init(PIN_BATTERY_ADC);
     adc_select_input(0);
 
-    gpio_init(PIN_LED_STATUS);
-    gpio_set_dir(PIN_LED_STATUS, GPIO_OUT);
-    gpio_init(PIN_LED_ARMED);
-    gpio_set_dir(PIN_LED_ARMED, GPIO_OUT);
-    gpio_init(PIN_LED_BATTERY);
-    gpio_set_dir(PIN_LED_BATTERY, GPIO_OUT);
-
     gpio_init(PIN_SAFETY_BUTTON);
     gpio_set_dir(PIN_SAFETY_BUTTON, GPIO_IN);
     gpio_pull_up(PIN_SAFETY_BUTTON);
@@ -276,10 +269,10 @@ int main() {
             printf("*******************************\n\n");
 
             // Flash all LEDs rapidly to indicate unsafe condition
+            status_emergency_flash();
             while (true) {
-                status_set_all_leds(STATUS_LED_BLINK_FAST);
                 status_update();
-                sleep_ms(100);
+                sleep_ms(50);
             }
         }
         printf("Safety tests passed - system ready\n");

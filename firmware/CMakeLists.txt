@@ -47,6 +47,7 @@ set(CORE_SOURCES
     src/weapon.c
     src/safety.c
     src/status.c
+    src/ws2812.c
     src/am32_config.c
     src/safety_test.c
 )
@@ -67,6 +68,9 @@ else()
         src/test_mode.c
     )
 endif()
+
+# Generate PIO headers
+pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 
 # Include directories
 if(DIAGNOSTIC_MODE)
@@ -98,6 +102,7 @@ if(DIAGNOSTIC_MODE)
         hardware_gpio
         hardware_uart
         hardware_watchdog
+        hardware_pio
     )
     # Compile definition for diagnostic mode
     target_compile_definitions(thumbsup PRIVATE DIAGNOSTIC_MODE_BUILD=1)
@@ -112,6 +117,7 @@ else()
         hardware_gpio
         hardware_uart
         hardware_watchdog
+        hardware_pio
         bluepad32
     )
     add_subdirectory(${BLUEPAD32_ROOT}/src/components/bluepad32 libbluepad32)

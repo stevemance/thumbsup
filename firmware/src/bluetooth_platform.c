@@ -96,7 +96,8 @@ static uni_error_t my_platform_on_device_discovered(bd_addr_t addr,
 
 static void my_platform_on_device_connected(uni_hid_device_t *d) {
     logi("thumbsup_platform: device connected: %p\n", d);
-    // Device connected - update status
+    // Device connected - update status LED
+    status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
 }
 
 static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
@@ -105,9 +106,12 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
     // Safety: Stop all motors and disarm weapon on disconnect
     drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
     drive_update(&stop_cmd);
-    weapon_disarm();
+    weapon_disarm();  // This also updates weapon LED status
     armed_state = false;
     emergency_stop = true;
+
+    // Update system status LED
+    status_set_system(SYSTEM_STATUS_FAILSAFE, LED_EFFECT_BLINK_FAST);
 }
 
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
@@ -169,6 +173,8 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
             drive_update(&stop_cmd);
             weapon_disarm();
             logi("EMERGENCY STOP TRIGGERED\n");
+            status_set_system(SYSTEM_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
+            status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
             break;
         }
 
@@ -184,6 +190,8 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
                     emergency_stop = false;
                     emergency_clear_in_progress = false;
                     logi("Emergency stop cleared after %ums hold\n", hold_time);
+                    status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
+                    status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
                 }
             }
         } else {
@@ -287,6 +295,7 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // CRITICAL: Update motor PWM outputs and weapon ramping
         motor_control_update();
         weapon_update();
+        status_update();
 
         break;
 

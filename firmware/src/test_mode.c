@@ -1,4 +1,5 @@
 #include "test_mode.h"
+#include "status.h"
 #include <stdio.h>
 #include "pico/time.h"
 #include <uni.h>  // For full gamepad structure definition
@@ -63,10 +64,14 @@ void test_mode_check_activation(test_mode_gamepad_ptr gp_ptr) {
                 printf(ANSI_CLEAR_SCREEN ANSI_HOME ANSI_HIDE_CURSOR);
                 printf(ANSI_BOLD ANSI_CYAN "=== CONTROLLER TEST MODE ===" ANSI_NORMAL "\n");
                 printf("Hold L+R shoulder buttons for 1 second to exit\n\n");
+                // Set LED to show test mode active
+                status_set_system(SYSTEM_STATUS_TEST_MODE, LED_EFFECT_PULSE);
             } else {
                 // Exiting test mode - restore cursor and clear
                 printf(ANSI_SHOW_CURSOR ANSI_CLEAR_SCREEN ANSI_HOME);
                 printf("Exited test mode - returning to normal operation\n");
+                // Restore normal LED status
+                status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
             }
 
             // Reset to prevent immediate re-trigger

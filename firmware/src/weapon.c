@@ -1,6 +1,7 @@
 #include "weapon.h"
 #include "motor_control.h"
 #include "safety.h"
+#include "status.h"
 #include "config.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
@@ -64,6 +65,7 @@ void weapon_update(void) {
             if (current_time - arm_start_time > WEAPON_ARM_TIMEOUT) {
                 weapon_state = WEAPON_STATE_ARMED;
                 DEBUG_PRINT("Weapon armed\n");
+                status_set_weapon(WEAPON_STATUS_ARMED, LED_EFFECT_SOLID);
             }
             break;
 
@@ -83,10 +85,12 @@ void weapon_update(void) {
                     motor_control_set_pulse(MOTOR_WEAPON, pulse);
                     last_ramp_time = current_time;
 
-                    if (current_speed > 0) {
+                    if (current_speed > 0 && weapon_state != WEAPON_STATE_SPINNING) {
                         weapon_state = WEAPON_STATE_SPINNING;
-                    } else if (weapon_state == WEAPON_STATE_SPINNING) {
+                        status_set_weapon(WEAPON_STATUS_SPINNING, LED_EFFECT_SOLID);
+                    } else if (current_speed == 0 && weapon_state == WEAPON_STATE_SPINNING) {
                         weapon_state = WEAPON_STATE_ARMED;
+                        status_set_weapon(WEAPON_STATUS_ARMED, LED_EFFECT_SOLID);
                     }
                 }
             }
@@ -121,6 +125,7 @@ bool weapon_arm(void) {
     weapon_state = WEAPON_STATE_ARMING;
     arm_start_time = to_ms_since_boot(get_absolute_time());
     DEBUG_PRINT("Weapon arming... (Battery: %.1fV)\n", battery_mv / 1000.0f);
+    status_set_weapon(WEAPON_STATUS_ARMING, LED_EFFECT_BLINK_MEDIUM);
 
     return true;
 }
@@ -131,6 +136,7 @@ bool weapon_disarm(void) {
     target_speed = 0;
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
     DEBUG_PRINT("Weapon disarmed\n");
+    status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
 
     return true;
 }
@@ -178,4 +184,5 @@ void weapon_emergency_stop(void) {
     target_speed = 0;
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
     DEBUG_PRINT("WEAPON EMERGENCY STOP!\n");
+    status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
 }

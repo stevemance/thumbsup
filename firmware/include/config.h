@@ -11,14 +11,13 @@
 #define DISABLE_MOTOR_OUTPUT 0
 
 // Pin Definitions
-#define PIN_DRIVE_LEFT_PWM  2    // GP2 - Left drive motor PWM
-#define PIN_DRIVE_RIGHT_PWM 3    // GP3 - Right drive motor PWM
-#define PIN_WEAPON_PWM      4    // GP4 - Weapon motor PWM
+#define PIN_DRIVE_LEFT_PWM  0    // GP0 - Left drive motor PWM
+#define PIN_DRIVE_RIGHT_PWM 1    // GP1 - Right drive motor PWM
+#define PIN_WEAPON_PWM      2    // GP2 - Weapon motor PWM
 
-// Status LEDs
-#define PIN_LED_STATUS      5    // GP5 - Main status LED
-#define PIN_LED_ARMED       6    // GP6 - Weapon armed indicator
-#define PIN_LED_BATTERY     7    // GP7 - Battery status
+// Addressable Status LEDs (SK6812/WS2812)
+#define PIN_STATUS_LEDS     3    // GP3 - SK6812 addressable LEDs data line
+#define NUM_STATUS_LEDS     2    // Number of addressable LEDs in chain
 
 // Optional Safety Button
 #define PIN_SAFETY_BUTTON   8    // GP8 - Physical safety switch (optional)
@@ -69,6 +68,35 @@
 #define LED_BLINK_FAST      100
 #define LED_BLINK_MEDIUM    250
 #define LED_BLINK_SLOW      500
+
+// Addressable LED Color Definitions (GRB format for SK6812)
+// Format: 0x00GGRRBB (Green-Red-Blue)
+// LED 0: System Status LED
+// LED 1: Weapon Status LED
+
+// System Status Colors (LED 0)
+#define LED_COLOR_OFF           0x00000000  // Off
+#define LED_COLOR_BOOT          0x00000020  // Dim blue - booting
+#define LED_COLOR_READY         0x00200000  // Green - ready, no controller
+#define LED_COLOR_CONNECTED     0x00200020  // Green+Blue (cyan) - controller connected
+#define LED_COLOR_FAILSAFE      0x00202000  // Yellow - connection lost
+#define LED_COLOR_LOW_BATTERY   0x00104000  // Orange - low battery
+#define LED_COLOR_CRITICAL_BAT  0x00002000  // Red - critical battery
+#define LED_COLOR_ERROR         0x00002000  // Red - error/safety violation
+#define LED_COLOR_EMERGENCY     0x00002000  // Red - emergency stop
+#define LED_COLOR_TEST_MODE     0x00001020  // Purple - test mode
+
+// Weapon Status Colors (LED 1)
+#define LED_COLOR_WEAPON_OFF    0x00000000  // Off - disarmed
+#define LED_COLOR_WEAPON_ARMING 0x00404000  // Amber/Yellow - arming
+#define LED_COLOR_WEAPON_ARMED  0x00206000  // Orange - armed but not spinning
+#define LED_COLOR_WEAPON_SPIN   0x00006000  // Red - spinning
+#define LED_COLOR_WEAPON_ESTOP  0x00006000  // Red flashing - emergency stop
+
+// Brightness levels (0-255)
+#define LED_BRIGHTNESS_DIM      32
+#define LED_BRIGHTNESS_MEDIUM   128
+#define LED_BRIGHTNESS_FULL     255
 
 // Debug Configuration
 #ifdef DEBUG_MODE
