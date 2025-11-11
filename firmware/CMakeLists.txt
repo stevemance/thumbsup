@@ -48,6 +48,7 @@ set(CORE_SOURCES
     src/safety.c
     src/status.c
     src/ws2812.c
+    src/trim_mode.c
     src/am32_config.c
     src/safety_test.c
 )
@@ -103,6 +104,8 @@ if(DIAGNOSTIC_MODE)
         hardware_uart
         hardware_watchdog
         hardware_pio
+        hardware_flash
+        hardware_sync
     )
     # Compile definition for diagnostic mode
     target_compile_definitions(thumbsup PRIVATE DIAGNOSTIC_MODE_BUILD=1)
@@ -118,6 +121,8 @@ else()
         hardware_uart
         hardware_watchdog
         hardware_pio
+        hardware_flash
+        hardware_sync
         bluepad32
     )
     add_subdirectory(${BLUEPAD32_ROOT}/src/components/bluepad32 libbluepad32)

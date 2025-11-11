@@ -1,5 +1,6 @@
 #include "drive.h"
 #include "motor_control.h"
+#include "trim_mode.h"
 #include "config.h"
 #include <stdio.h>
 #include <math.h>
@@ -109,7 +110,33 @@ void drive_update(drive_control_t* control) {
         return;
     }
 
-    drive_output_t output = drive_mix(control->forward, control->turn);
+    int8_t forward = control->forward;
+    int8_t turn = control->turn;
+
+    // TRIM MODE: Override forward speed and apply trim offset
+    if (trim_mode_is_active()) {
+        // Lock forward speed to calibration level
+        trim_level_t level = trim_mode_get_level();
+        if (level == TRIM_LEVEL_30_PERCENT) {
+            forward = 38;  // 30% of 127 = 38
+        } else {
+            forward = 89;  // 70% of 127 = 89
+        }
+        // Turn input is used for trim adjustment (no further modification needed)
+    } else {
+        // NORMAL MODE: Calculate drive power magnitude and apply trim
+        // Calculate drive power as percentage (0-100%)
+        uint8_t drive_power = (uint8_t)((abs(forward) * 100) / 127);
+
+        // Get interpolated trim offset based on current drive power
+        int8_t trim_offset = trim_mode_get_offset(drive_power);
+
+        // Apply trim to turn value
+        int32_t adjusted_turn = (int32_t)turn + trim_offset;
+        turn = (int8_t)CLAMP(adjusted_turn, -127, 127);
+    }
+
+    drive_output_t output = drive_mix(forward, turn);
 
     // SAFETY: Verify output is within expected range before sending to motors
     if (output.left_speed < -100 || output.left_speed > 100 ||

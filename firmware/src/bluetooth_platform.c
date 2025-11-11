@@ -19,6 +19,7 @@
 #include "status.h"
 #include "system_status.h"
 #include "test_mode.h"
+#include "trim_mode.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -52,6 +53,9 @@ static void my_platform_init(int argc, const char **argv) {
 
     // Initialize test mode
     test_mode_init();
+
+    // Initialize trim mode
+    trim_mode_init();
 
     // Initialize thumbsup subsystems
     motor_control_init();
@@ -161,6 +165,32 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // If in test mode, just update the display and return
         if (test_mode_is_active()) {
             test_mode_update(gp);
+            return;
+        }
+
+        // Check for trim mode activation
+        trim_mode_check_activation(gp);
+
+        // If in trim mode, handle calibration and skip normal operation
+        if (trim_mode_is_active()) {
+            // Update trim calibration
+            trim_mode_update(gp);
+
+            // Keep weapon disarmed during trim mode
+            if (armed_state) {
+                weapon_disarm();
+                armed_state = false;
+            }
+
+            // Drive at locked calibration speed with turn input
+            drive_control_t trim_cmd = {
+                .forward = 0,  // Will be overridden by trim mode in drive.c
+                .turn = gp->axis_x,
+                .enabled = true
+            };
+            drive_update(&trim_cmd);
+            motor_control_update();
+            status_update();
             return;
         }
 
