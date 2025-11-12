@@ -182,10 +182,29 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
                 armed_state = false;
             }
 
-            // Drive at locked calibration speed with turn input
+            // Scale turn input from gamepad range (-512..511) to drive range (-127..127)
+            int32_t raw_turn = gp->axis_x;
+            raw_turn = CLAMP(raw_turn, -512, 511);
+
+            // Apply deadzone
+            int32_t turn = 0;
+            if (abs(raw_turn) > STICK_DEADZONE) {
+                if (raw_turn > 0) {
+                    turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
+                } else {
+                    turn = ((raw_turn + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
+                }
+            }
+
+            // Scale to -127/127 range
+            if (turn != 0) {
+                turn = CLAMP((turn * 127) / 512, -127, 127);
+            }
+
+            // Drive at locked calibration speed with scaled turn input
             drive_control_t trim_cmd = {
                 .forward = 0,  // Will be overridden by trim mode in drive.c
-                .turn = gp->axis_x,
+                .turn = (int8_t)turn,
                 .enabled = true
             };
             drive_update(&trim_cmd);

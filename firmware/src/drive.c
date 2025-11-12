@@ -114,28 +114,44 @@ void drive_update(drive_control_t* control) {
     int8_t forward = control->forward;
     int8_t turn = control->turn;
 
-    // TRIM MODE: Override forward speed and apply trim offset
+    // TRIM MODE: Override forward speed and direct motor control
     if (trim_mode_is_active()) {
-        // Lock forward speed to calibration level
+        // Lock forward speed to calibration level (direct percentage, no expo)
         trim_level_t level = trim_mode_get_level();
+        int8_t forward_percent;
         if (level == TRIM_LEVEL_30_PERCENT) {
-            forward = 38;  // 30% of 127 = 38
+            forward_percent = 30;
         } else {
-            forward = 89;  // 70% of 127 = 89
+            forward_percent = 70;
         }
-        // Turn input is used for trim adjustment (no further modification needed)
-    } else {
-        // NORMAL MODE: Calculate drive power magnitude and apply trim
-        // Calculate drive power as percentage (0-100%)
-        uint8_t drive_power = (uint8_t)((abs(forward) * 100) / 127);
 
-        // Get interpolated trim offset based on current drive power
-        int8_t trim_offset = trim_mode_get_offset(drive_power);
+        // Convert turn from -127..127 to -100..100 percentage
+        int8_t turn_percent = (int8_t)((turn * 100) / 127);
 
-        // Apply trim to turn value
-        int32_t adjusted_turn = (int32_t)turn + trim_offset;
-        turn = (int8_t)CLAMP(adjusted_turn, -127, 127);
+        // Direct tank mixing without expo curves for precise calibration
+        int32_t left = forward_percent + turn_percent;
+        int32_t right = forward_percent - turn_percent;
+
+        // Clamp to valid range
+        left = CLAMP(left, -100, 100);
+        right = CLAMP(right, -100, 100);
+
+        // Set motor speeds directly
+        motor_control_set_speed(MOTOR_LEFT_DRIVE, (int8_t)left);
+        motor_control_set_speed(MOTOR_RIGHT_DRIVE, (int8_t)right);
+        return;  // Skip normal mixing
     }
+
+    // NORMAL MODE: Calculate drive power magnitude and apply trim
+    // Calculate drive power as percentage (0-100%)
+    uint8_t drive_power = (uint8_t)((abs(forward) * 100) / 127);
+
+    // Get interpolated trim offset based on current drive power
+    int8_t trim_offset = trim_mode_get_offset(drive_power);
+
+    // Apply trim to turn value
+    int32_t adjusted_turn = (int32_t)turn + trim_offset;
+    turn = (int8_t)CLAMP(adjusted_turn, -127, 127);
 
     drive_output_t output = drive_mix(forward, turn);
 
