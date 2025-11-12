@@ -125,16 +125,22 @@ void drive_update(drive_control_t* control) {
             forward_percent = 70;
         }
 
-        // Convert turn from -127..127 to -100..100 percentage
-        int8_t turn_percent = (int8_t)((turn * 100) / 127);
+        // Calculate maximum safe turn offset to keep both motors forward
+        // Use 5% as minimum motor speed to prevent stopping or reversing
+        const int8_t MIN_MOTOR_SPEED = 5;
+        int8_t max_turn = forward_percent - MIN_MOTOR_SPEED;
+
+        // Map full stick range (-127..+127) to safe turn range (±max_turn)
+        // This maximizes resolution while preventing reverse
+        int32_t turn_percent = ((int32_t)turn * max_turn) / 127;
 
         // Direct tank mixing without expo curves for precise calibration
         int32_t left = forward_percent + turn_percent;
         int32_t right = forward_percent - turn_percent;
 
-        // Clamp to valid range
-        left = CLAMP(left, -100, 100);
-        right = CLAMP(right, -100, 100);
+        // Clamp to valid range (should not be needed with correct calculation)
+        left = CLAMP(left, MIN_MOTOR_SPEED, 100);
+        right = CLAMP(right, MIN_MOTOR_SPEED, 100);
 
         // Set motor speeds directly
         motor_control_set_speed(MOTOR_LEFT_DRIVE, (int8_t)left);
