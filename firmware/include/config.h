@@ -16,7 +16,7 @@
 #define PIN_WEAPON_PWM      2    // GP2 - Weapon motor PWM
 
 // Addressable Status LEDs (SK6812/WS2812)
-#define PIN_STATUS_LEDS     3    // GP3 - SK6812 addressable LEDs data line
+#define PIN_STATUS_LEDS     28   // GP28 - SK6812 addressable LEDs data line
 #define NUM_STATUS_LEDS     2    // Number of addressable LEDs in chain
 
 // Optional Safety Button

@@ -6,14 +6,14 @@
 
 ```
                     ┌─────────┐
-          (GP0)  1  │●       ●│ 40  VBUS (5V from USB)
-          (GP1)  2  │●       ●│ 39  VSYS (5V from BEC) ←── ESC BEC Power
-     LEFT PWM ←─ 3  │● GP2   ●│ 38  GND
-    RIGHT PWM ←─ 4  │● GP3   ●│ 37  3V3_EN
-   WEAPON PWM ←─ 5  │● GP4   ●│ 36  3V3(OUT)
-   STATUS LED ←─ 6  │● GP5   ●│ 35  ADC_VREF
-    ARMED LED ←─ 7  │● GP6   ●│ 34  GP28 (ADC2)
-  BATTERY LED ←─ 8  │● GP7   ●│ 33  AGND
+     LEFT PWM ←─ 1  │● GP0   ●│ 40  VBUS (5V from USB)
+    RIGHT PWM ←─ 2  │● GP1   ●│ 39  VSYS (5V from BEC) ←── ESC BEC Power
+   WEAPON PWM ←─ 3  │● GP2   ●│ 38  GND
+          (GP3)  4  │●       ●│ 37  3V3_EN
+          (GP4)  5  │●       ●│ 36  3V3(OUT)
+          (GP5)  6  │●       ●│ 35  ADC_VREF
+          (GP6)  7  │●       ●│ 34  GP28 ←── SK6812 Status LEDs
+          (GP7)  8  │●       ●│ 33  AGND
  SAFETY BUTTON ←─ 9  │● GP8   ●│ 32  GP27 (ADC1)
           (GP9) 10  │●       ●│ 31  GP26 (ADC0) ←── Battery Monitor
          (GP10) 11  │●       ●│ 30  RUN
@@ -33,14 +33,12 @@
 
 | GPIO | Pin# | Function | Direction | Description | Wire Color (Suggested) |
 |------|------|----------|-----------|-------------|----------------------|
-| GP2 | 3 | PWM | Output | Left Drive Motor Signal | Yellow |
-| GP3 | 4 | PWM | Output | Right Drive Motor Signal | Orange |
-| GP4 | 5 | PWM | Output | Weapon Motor Signal (AM32 ESC) | Red |
-| GP5 | 6 | Digital | Output | Status LED (Blue) | Blue |
-| GP6 | 7 | Digital | Output | Armed LED (Red) | Red |
-| GP7 | 8 | Digital | Output | Battery LED (Green/Yellow/Red) | Green |
+| GP0 | 1 | PWM | Output | Left Drive Motor Signal | Yellow |
+| GP1 | 2 | PWM | Output | Right Drive Motor Signal | Orange |
+| GP2 | 3 | PWM | Output | Weapon Motor Signal (AM32 ESC) | Red |
 | GP8 | 9 | Digital | Input (Pull-up) | Safety Button | White |
 | GP26 | 31 | ADC0 | Input | Battery Voltage Monitor | Brown |
+| GP28 | 34 | Data | Output | SK6812 Addressable LEDs (2 LEDs) | Green |
 
 ## Safety Button Configuration
 
@@ -78,21 +76,34 @@ If you choose not to install a safety button:
 
 ## LED Indicators
 
-### Status LED (GP5 - Blue)
-- **Solid ON**: System operational
-- **Slow Blink (1Hz)**: Waiting for controller
-- **Fast Blink (5Hz)**: Emergency stop / Failsafe active
-- **OFF**: System not ready
+The system uses **2 SK6812 addressable RGB LEDs** on GP28:
+- **LED 0**: System Status
+- **LED 1**: Weapon Status
 
-### Armed LED (GP6 - Red)
-- **Solid ON**: ⚠️ WEAPON ARMED - DANGER ⚠️
-- **OFF**: Weapon safe/disarmed
+### System Status LED (LED 0 - GP28)
+- **Dim Blue**: Booting/initializing
+- **Green Solid**: Ready, no controller connected
+- **Cyan (Green+Blue)**: Controller connected, normal operation
+- **Yellow Blinking**: Failsafe - connection lost
+- **Orange Solid**: Low battery warning
+- **Orange Blinking**: Critical battery
+- **Red Solid/Blinking**: Error or emergency stop
+- **Purple Pulse**: Test/diagnostic mode
 
-### Battery LED (GP7 - Multi-color or Green)
-- **Solid GREEN**: Battery good (>11.1V)
-- **Blinking YELLOW**: Battery low (10.5-11.1V)
-- **Fast Blinking RED**: Battery critical (<10.5V)
-- **OFF**: No power
+### Weapon Status LED (LED 1 - GP28)
+- **Off**: Weapon disarmed (safe)
+- **Amber/Yellow Blinking**: Arming sequence in progress
+- **Orange Solid**: Armed but not spinning
+- **Red Solid**: ⚠️ WEAPON SPINNING - DANGER ⚠️
+- **Red Fast Blinking**: Emergency stop active
+
+### Trim Mode LED Feedback
+When in trim calibration mode (L3+R3 hold):
+- **Green Blink**: Sample captured (A button pressed)
+- **Red Blink**: Last sample removed (B button pressed)
+- **Orange Pulse**: Fitting curves in progress
+- **Green Solid**: Trim calibration complete
+- **Red 3x Blinks**: Error - not enough samples
 
 ### WiFi LED (Built-in on Pico W)
 - **ON during boot**: Initializing

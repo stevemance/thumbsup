@@ -52,7 +52,7 @@ static uint32_t get_blink_rate(led_effect_t effect) {
     }
 }
 
-// Helper to scale color by brightness
+// Helper to scale color by brightness (GRB format)
 static uint32_t scale_color(uint32_t color, uint8_t brightness) {
     if (brightness == 255) return color;
 
@@ -245,8 +245,8 @@ void status_test_pattern(void) {
     }
 
     static const uint32_t test_colors[] = {
-        0x00200000,  // Green
-        0x00002000,  // Red
+        0x00200000,  // Green (GRB)
+        0x00002000,  // Red (GRB)
         0x00000020,  // Blue
         0x00202000,  // Yellow
         0x00200020,  // Cyan

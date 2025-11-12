@@ -4,74 +4,329 @@
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
-#include <uni.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <math.h>
+
+// Only include uni.h in competition mode (when Bluepad32 is available)
+#if !DIAGNOSTIC_MODE_BUILD
+#include <uni.h>
+#endif
 
 // Flash storage configuration
 // Store trim data in the last sector of flash (2MB - 4KB for Pico W)
 #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
-#define TRIM_MAGIC 0x54524D31  // "TRM1" magic number for validation
+#define TRIM_MAGIC_V2 0x54524D32  // "TRM2" magic number for new version
+
+// Minimum samples required to save
+#define MIN_SAMPLES_TO_SAVE 5
+
+// Minimum speed threshold - samples below this are discarded
+#define MIN_SPEED_THRESHOLD 5
+
+// Maximum samples per direction after downsampling
+#define MAX_SAMPLES_PER_DIRECTION 20
+
+// Outlier rejection threshold (standard deviations)
+#define OUTLIER_THRESHOLD 3.0f
+
+// LED feedback duration in milliseconds
+#define LED_FEEDBACK_BLINK_MS 200
+#define LED_FEEDBACK_SOLID_MS 1000
 
 // Trim data structure stored in flash
 typedef struct {
-    uint32_t magic;
-    int8_t trim_30_percent;  // Trim at 30% power
-    int8_t trim_70_percent;  // Trim at 70% power
-    uint8_t reserved[2];     // Padding for alignment
-    uint32_t checksum;       // Simple checksum for validation
-} __attribute__((packed)) trim_data_t;
+    uint32_t magic;                       // Magic number for validation
+    uint8_t num_samples;                  // Number of valid samples
+    trim_sample_t samples[MAX_TRIM_SAMPLES]; // Sample array
+    uint8_t reserved[3];                  // Padding for alignment
+    uint32_t checksum;                    // Simple checksum
+} __attribute__((packed)) trim_data_flash_t;
 
-// Trim mode state
+// Runtime state
 static trim_mode_state_t trim_state = TRIM_MODE_INACTIVE;
-static trim_level_t current_level = TRIM_LEVEL_30_PERCENT;
-static int8_t trim_30 = 0;  // Saved trim at 30% power
-static int8_t trim_70 = 0;  // Saved trim at 70% power
-static int8_t working_trim = 0; // Trim being adjusted during current calibration level
+static trim_sample_t samples[MAX_TRIM_SAMPLES];
+static uint8_t num_samples = 0;
+static trim_sample_t fitted_samples[MAX_TRIM_SAMPLES]; // Cleaned and sorted samples
+static uint8_t num_fitted_samples = 0;
 
 // Activation tracking
 static bool activation_buttons_held = false;
 static uint32_t activation_hold_start = 0;
 #define ACTIVATION_HOLD_TIME_MS 2000  // 2 seconds to enter/exit
 
-// Level switching
-static bool level_button_prev = false;
-#define LEVEL_BUTTON_MASK BTN_Y  // Y button to advance levels
+// Button state tracking for edge detection
+static bool button_a_prev = false;
+static bool button_b_prev = false;
+
+// Feedback state for non-blocking LED flashes
+typedef enum {
+    FEEDBACK_NONE,
+    FEEDBACK_CAPTURED,
+    FEEDBACK_REMOVED,
+    FEEDBACK_EXIT_SUCCESS,
+    FEEDBACK_EXIT_ERROR
+} feedback_state_t;
+
+static feedback_state_t feedback_state = FEEDBACK_NONE;
+static uint32_t feedback_start_time = 0;
+#define FEEDBACK_FLASH_DURATION_MS 750  // Long enough to see clearly
+#define FEEDBACK_EXIT_DURATION_MS 1500  // Show exit feedback longer
+
+// Bright colors for feedback (full brightness) - use GRB format (0x00GGRRBB)
+#define FEEDBACK_COLOR_CAPTURED  0x00FF0000  // Bright GREEN in GRB for adding (A button)
+#define FEEDBACK_COLOR_REMOVED   0x0000FF00  // Bright RED in GRB for removing (B button)
+
+// LED feedback functions - non-blocking, just change the LED state
+static void trim_feedback_captured(void) {
+    // Bright green flash
+    feedback_state = FEEDBACK_CAPTURED;
+    feedback_start_time = to_ms_since_boot(get_absolute_time());
+    status_set_led_color(0, FEEDBACK_COLOR_CAPTURED, LED_EFFECT_SOLID);
+    printf("Trim: Sample captured! (%d total)\n", num_samples);
+}
+
+static void trim_feedback_removed(void) {
+    // Bright red flash
+    feedback_state = FEEDBACK_REMOVED;
+    feedback_start_time = to_ms_since_boot(get_absolute_time());
+    status_set_led_color(0, FEEDBACK_COLOR_REMOVED, LED_EFFECT_SOLID);
+    printf("Trim: Sample removed! (%d remaining)\n", num_samples);
+}
+
+static void trim_feedback_fitting(void) {
+    // Orange pulsing while fitting curves
+    status_set_led_color(0, LED_COLOR_LOW_BATTERY, LED_EFFECT_PULSE);
+    printf("Trim: Fitting curves...\n");
+}
+
+static void trim_feedback_complete(void) {
+    // Green solid - success
+    feedback_state = FEEDBACK_EXIT_SUCCESS;
+    feedback_start_time = to_ms_since_boot(get_absolute_time());
+    status_set_led_color(0, LED_COLOR_READY, LED_EFFECT_SOLID);
+    printf("Trim: Calibration complete and saved!\n");
+}
+
+static void trim_feedback_error(void) {
+    // Fast red blinking - error
+    feedback_state = FEEDBACK_EXIT_ERROR;
+    feedback_start_time = to_ms_since_boot(get_absolute_time());
+    status_set_led_color(0, LED_COLOR_ERROR, LED_EFFECT_BLINK_FAST);
+    printf("Trim: ERROR - Not enough samples to save (need at least 5)\n");
+}
 
 // Calculate simple checksum
-static uint32_t calculate_checksum(const trim_data_t *data) {
-    return data->magic + data->trim_30_percent + data->trim_70_percent;
+static uint32_t calculate_checksum(const trim_data_flash_t *data) {
+    uint32_t sum = data->magic + data->num_samples;
+    for (uint8_t i = 0; i < data->num_samples && i < MAX_TRIM_SAMPLES; i++) {
+        sum += data->samples[i].speed_percent + data->samples[i].turn_offset;
+    }
+    return sum;
 }
 
 // Get flash memory pointer
-static const trim_data_t* get_flash_trim_data(void) {
-    return (const trim_data_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
+static const trim_data_flash_t* get_flash_trim_data(void) {
+    return (const trim_data_flash_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
+}
+
+// Comparison function for qsort
+static int compare_samples_by_speed(const void *a, const void *b) {
+    const trim_sample_t *sa = (const trim_sample_t*)a;
+    const trim_sample_t *sb = (const trim_sample_t*)b;
+    return sa->speed_percent - sb->speed_percent;
+}
+
+// Calculate mean of turn offsets
+static float calculate_mean(const trim_sample_t *samples, uint8_t count) {
+    if (count == 0) return 0.0f;
+    float sum = 0.0f;
+    for (uint8_t i = 0; i < count; i++) {
+        sum += samples[i].turn_offset;
+    }
+    return sum / count;
+}
+
+// Calculate standard deviation of turn offsets
+static float calculate_stddev(const trim_sample_t *samples, uint8_t count, float mean) {
+    if (count < 2) return 0.0f;
+    float sum_sq = 0.0f;
+    for (uint8_t i = 0; i < count; i++) {
+        float diff = samples[i].turn_offset - mean;
+        sum_sq += diff * diff;
+    }
+    return sqrtf(sum_sq / (count - 1));
+}
+
+// Remove outliers from a set of samples
+static uint8_t remove_outliers(trim_sample_t *samples, uint8_t count) {
+    if (count < 3) return count; // Need at least 3 samples for outlier detection
+
+    float mean = calculate_mean(samples, count);
+    float stddev = calculate_stddev(samples, count, mean);
+
+    if (stddev < 0.1f) return count; // All samples very similar, no outliers
+
+    uint8_t new_count = 0;
+    float threshold = OUTLIER_THRESHOLD * stddev;
+
+    for (uint8_t i = 0; i < count; i++) {
+        float diff = fabsf(samples[i].turn_offset - mean);
+        if (diff <= threshold) {
+            samples[new_count++] = samples[i];
+        } else {
+            printf("Trim: Removed outlier: speed=%d, offset=%d (diff=%.1f > %.1f)\n",
+                   samples[i].speed_percent, samples[i].turn_offset, diff, threshold);
+        }
+    }
+
+    return new_count;
+}
+
+// Downsample if too many samples
+static uint8_t downsample(trim_sample_t *samples, uint8_t count, uint8_t target_count) {
+    if (count <= target_count) return count;
+
+    // Sort by speed first
+    qsort(samples, count, sizeof(trim_sample_t), compare_samples_by_speed);
+
+    trim_sample_t downsampled[MAX_TRIM_SAMPLES];
+    uint8_t new_count = 0;
+
+    // Always keep first and last
+    downsampled[new_count++] = samples[0];
+
+    // Calculate step size to get approximately target_count samples
+    float step = (float)(count - 1) / (target_count - 1);
+
+    for (uint8_t i = 1; i < target_count - 1; i++) {
+        uint8_t idx = (uint8_t)(i * step + 0.5f);
+        if (idx < count) {
+            downsampled[new_count++] = samples[idx];
+        }
+    }
+
+    // Always keep last
+    downsampled[new_count++] = samples[count - 1];
+
+    // Copy back
+    memcpy(samples, downsampled, new_count * sizeof(trim_sample_t));
+
+    printf("Trim: Downsampled from %d to %d samples\n", count, new_count);
+    return new_count;
+}
+
+bool trim_mode_fit_curves(void) {
+    printf("\n=== FITTING TRIM CURVES ===\n");
+
+    if (num_samples < MIN_SAMPLES_TO_SAVE) {
+        printf("Error: Not enough samples (%d < %d)\n", num_samples, MIN_SAMPLES_TO_SAVE);
+        return false;
+    }
+
+    trim_feedback_fitting();
+
+    // Step 1: Remove near-zero speeds
+    uint8_t cleaned_count = 0;
+    for (uint8_t i = 0; i < num_samples; i++) {
+        if (abs(samples[i].speed_percent) >= MIN_SPEED_THRESHOLD) {
+            fitted_samples[cleaned_count++] = samples[i];
+        }
+    }
+    printf("After removing near-zero speeds: %d samples\n", cleaned_count);
+
+    if (cleaned_count < MIN_SAMPLES_TO_SAVE) {
+        printf("Error: Not enough samples after cleanup\n");
+        return false;
+    }
+
+    // Step 2: Separate forward and reverse samples
+    trim_sample_t forward_samples[MAX_TRIM_SAMPLES];
+    trim_sample_t reverse_samples[MAX_TRIM_SAMPLES];
+    uint8_t forward_count = 0;
+    uint8_t reverse_count = 0;
+
+    for (uint8_t i = 0; i < cleaned_count; i++) {
+        if (fitted_samples[i].speed_percent > 0) {
+            forward_samples[forward_count++] = fitted_samples[i];
+        } else {
+            reverse_samples[reverse_count++] = fitted_samples[i];
+        }
+    }
+
+    printf("Forward samples: %d, Reverse samples: %d\n", forward_count, reverse_count);
+
+    // Step 3: Remove outliers from each direction
+    if (forward_count > 2) {
+        forward_count = remove_outliers(forward_samples, forward_count);
+        printf("After outlier removal - Forward: %d\n", forward_count);
+    }
+
+    if (reverse_count > 2) {
+        reverse_count = remove_outliers(reverse_samples, reverse_count);
+        printf("After outlier removal - Reverse: %d\n", reverse_count);
+    }
+
+    // Step 4: Downsample if needed
+    if (forward_count > MAX_SAMPLES_PER_DIRECTION) {
+        forward_count = downsample(forward_samples, forward_count, 15);
+    }
+
+    if (reverse_count > MAX_SAMPLES_PER_DIRECTION) {
+        reverse_count = downsample(reverse_samples, reverse_count, 15);
+    }
+
+    // Step 5: Combine and sort all samples
+    num_fitted_samples = 0;
+    for (uint8_t i = 0; i < reverse_count; i++) {
+        fitted_samples[num_fitted_samples++] = reverse_samples[i];
+    }
+    for (uint8_t i = 0; i < forward_count; i++) {
+        fitted_samples[num_fitted_samples++] = forward_samples[i];
+    }
+
+    // Sort all samples by speed
+    qsort(fitted_samples, num_fitted_samples, sizeof(trim_sample_t), compare_samples_by_speed);
+
+    printf("Final fitted samples: %d\n", num_fitted_samples);
+    for (uint8_t i = 0; i < num_fitted_samples; i++) {
+        printf("  [%d] speed=%d, offset=%d\n", i,
+               fitted_samples[i].speed_percent,
+               fitted_samples[i].turn_offset);
+    }
+
+    printf("=== CURVE FITTING COMPLETE ===\n\n");
+    return true;
 }
 
 bool trim_mode_init(void) {
     trim_state = TRIM_MODE_INACTIVE;
-    current_level = TRIM_LEVEL_30_PERCENT;
-    trim_30 = 0;
-    trim_70 = 0;
-    working_trim = 0;
+    num_samples = 0;
+    num_fitted_samples = 0;
+    memset(samples, 0, sizeof(samples));
+    memset(fitted_samples, 0, sizeof(fitted_samples));
 
     // Try to load saved trim from flash
     if (trim_mode_load()) {
-        printf("Trim mode: Loaded trim 30%%=%d, 70%%=%d\n", trim_30, trim_70);
+        printf("Trim mode: Loaded %d trim samples from flash\n", num_fitted_samples);
     } else {
-        printf("Trim mode: No valid trim data found, using defaults (0, 0)\n");
-        trim_30 = 0;
-        trim_70 = 0;
+        printf("Trim mode: No valid trim data found, starting fresh\n");
     }
 
     return true;
 }
 
 bool trim_mode_load(void) {
-    const trim_data_t *flash_data = get_flash_trim_data();
+    const trim_data_flash_t *flash_data = get_flash_trim_data();
 
     // Validate magic number
-    if (flash_data->magic != TRIM_MAGIC) {
+    if (flash_data->magic != TRIM_MAGIC_V2) {
+        return false;
+    }
+
+    // Validate sample count
+    if (flash_data->num_samples > MAX_TRIM_SAMPLES) {
         return false;
     }
 
@@ -80,28 +335,28 @@ bool trim_mode_load(void) {
         return false;
     }
 
-    // Validate trim ranges
-    if (flash_data->trim_30_percent < -100 || flash_data->trim_30_percent > 100) {
-        return false;
-    }
-    if (flash_data->trim_70_percent < -100 || flash_data->trim_70_percent > 100) {
-        return false;
-    }
+    // Load the samples into fitted_samples (these are already cleaned)
+    num_fitted_samples = flash_data->num_samples;
+    memcpy(fitted_samples, flash_data->samples, num_fitted_samples * sizeof(trim_sample_t));
 
-    // Load the trim values
-    trim_30 = flash_data->trim_30_percent;
-    trim_70 = flash_data->trim_70_percent;
     return true;
 }
 
 bool trim_mode_save(void) {
-    trim_data_t data = {
-        .magic = TRIM_MAGIC,
-        .trim_30_percent = trim_30,
-        .trim_70_percent = trim_70,
-        .reserved = {0, 0},
+    if (num_fitted_samples == 0) {
+        printf("Trim mode: No samples to save\n");
+        return false;
+    }
+
+    trim_data_flash_t data = {
+        .magic = TRIM_MAGIC_V2,
+        .num_samples = num_fitted_samples,
+        .reserved = {0, 0, 0},
         .checksum = 0
     };
+
+    // Copy fitted samples
+    memcpy(data.samples, fitted_samples, num_fitted_samples * sizeof(trim_sample_t));
 
     // Calculate checksum
     data.checksum = calculate_checksum(&data);
@@ -109,7 +364,7 @@ bool trim_mode_save(void) {
     // Prepare buffer (must be 256-byte aligned for flash write)
     uint8_t buffer[FLASH_PAGE_SIZE];
     memset(buffer, 0xFF, FLASH_PAGE_SIZE);
-    memcpy(buffer, &data, sizeof(trim_data_t));
+    memcpy(buffer, &data, sizeof(trim_data_flash_t));
 
     // Disable interrupts during flash operation
     uint32_t ints = save_and_disable_interrupts();
@@ -123,11 +378,24 @@ bool trim_mode_save(void) {
     // Re-enable interrupts
     restore_interrupts(ints);
 
-    printf("Trim mode: Saved trim 30%%=%d, 70%%=%d to flash\n", trim_30, trim_70);
+    printf("Trim mode: Saved %d samples to flash\n", num_fitted_samples);
     return true;
 }
 
+void trim_mode_handle_exit_feedback(void) {
+    // Handle exit feedback timeout - restore to normal connected state
+    if (feedback_state == FEEDBACK_EXIT_SUCCESS || feedback_state == FEEDBACK_EXIT_ERROR) {
+        uint32_t now = to_ms_since_boot(get_absolute_time());
+        if (now - feedback_start_time > FEEDBACK_EXIT_DURATION_MS) {
+            // Exit feedback complete, restore normal connected status
+            feedback_state = FEEDBACK_NONE;
+            status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
+        }
+    }
+}
+
 void trim_mode_check_activation(trim_gamepad_ptr gp_ptr) {
+#if !DIAGNOSTIC_MODE_BUILD
     uni_gamepad_t *gp = (uni_gamepad_t*)gp_ptr;
     uint32_t current_time = to_ms_since_boot(get_absolute_time());
 
@@ -146,41 +414,42 @@ void trim_mode_check_activation(trim_gamepad_ptr gp_ptr) {
             if (trim_state == TRIM_MODE_INACTIVE) {
                 // Enter trim mode
                 trim_state = TRIM_MODE_ACTIVE;
-                current_level = TRIM_LEVEL_30_PERCENT;
-                working_trim = trim_30;  // Start with current 30% trim
+                num_samples = 0; // Clear working samples
+                feedback_state = FEEDBACK_NONE; // Reset feedback state
 
-                printf("\n=== MOTOR TRIM CALIBRATION MODE ===\n");
-                printf("Level 1: 30%% power\n");
-                printf("- Robot will drive forward at 30%% speed\n");
-                printf("- Use left stick X-axis to steer until straight\n");
-                printf("- Press Y button to advance to 70%% power\n");
-                printf("- Hold L3+R3 for 2s to save and exit\n");
-                printf("Current trim: 30%%=%d, 70%%=%d\n\n", trim_30, trim_70);
+                printf("\n=== DYNAMIC TRIM CALIBRATION MODE ===\n");
+                printf("Drive normally with full control\n");
+                printf("- Press A button to capture trim sample\n");
+                printf("- Press B button to remove last sample\n");
+                printf("- Collect 5+ samples at various speeds\n");
+                printf("- Hold L3+R3 for 2s to fit curves and exit\n\n");
 
-                // Set LED to show trim mode
-                status_set_system(SYSTEM_STATUS_READY, LED_EFFECT_BLINK_MEDIUM);
+                // Set LED to show trim mode (blinking to indicate active)
+                status_set_system(SYSTEM_STATUS_TEST_MODE, LED_EFFECT_BLINK_MEDIUM);
                 status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
 
             } else {
-                // Exit trim mode - save both trim values
+                // Exit trim mode - fit curves and save
                 trim_state = TRIM_MODE_INACTIVE;
-
-                // Save the working trim to the appropriate level
-                if (current_level == TRIM_LEVEL_30_PERCENT) {
-                    trim_30 = working_trim;
-                } else {
-                    trim_70 = working_trim;
-                }
+                feedback_state = FEEDBACK_NONE; // Reset feedback state
 
                 printf("\n=== EXITING TRIM MODE ===\n");
-                printf("Saving trim values: 30%%=%d, 70%%=%d\n", trim_30, trim_70);
+                printf("Collected %d samples\n", num_samples);
 
-                trim_mode_save();
+                // Fit curves with collected samples
+                if (trim_mode_fit_curves()) {
+                    trim_mode_save();
+                    trim_feedback_complete();
+                    printf("Trim mode: Saved successfully\n");
+                } else {
+                    trim_feedback_error();
+                    printf("Trim mode: Not enough samples, trim not saved\n");
+                }
 
-                printf("Trim mode saved. Returning to normal operation.\n\n");
+                printf("Returning to normal operation.\n\n");
 
-                // Restore normal LED status
-                status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
+                // LED feedback stays visible through normal status updates
+                // The success/error LED state will remain until next mode change
             }
 
             // Reset to prevent immediate re-trigger
@@ -192,6 +461,37 @@ void trim_mode_check_activation(trim_gamepad_ptr gp_ptr) {
         activation_buttons_held = false;
         activation_hold_start = 0;
     }
+#endif // !DIAGNOSTIC_MODE_BUILD
+}
+
+void trim_mode_capture_sample(int8_t forward, int8_t turn) {
+    if (num_samples >= MAX_TRIM_SAMPLES) {
+        printf("Trim: Sample buffer full (%d samples)\n", MAX_TRIM_SAMPLES);
+        trim_feedback_error();
+        return;
+    }
+
+    samples[num_samples].speed_percent = forward;
+    samples[num_samples].turn_offset = turn;
+    num_samples++;
+
+    printf("Trim: Captured sample #%d: speed=%d, offset=%d\n",
+           num_samples, forward, turn);
+
+    trim_feedback_captured();
+}
+
+void trim_mode_remove_last_sample(void) {
+    if (num_samples == 0) {
+        printf("Trim: No samples to remove\n");
+        return;
+    }
+
+    num_samples--;
+    printf("Trim: Removed sample #%d (now %d samples)\n",
+           num_samples + 1, num_samples);
+
+    trim_feedback_removed();
 }
 
 bool trim_mode_update(trim_gamepad_ptr gp_ptr) {
@@ -199,58 +499,42 @@ bool trim_mode_update(trim_gamepad_ptr gp_ptr) {
         return false;
     }
 
+#if !DIAGNOSTIC_MODE_BUILD
     uni_gamepad_t *gp = (uni_gamepad_t*)gp_ptr;
 
-    // Check for level advancement (Y button press)
-    bool level_button = (gp->buttons & LEVEL_BUTTON_MASK) != 0;
-    if (level_button && !level_button_prev) {
-        // Button just pressed - save current working trim and switch levels
-        if (current_level == TRIM_LEVEL_30_PERCENT) {
-            trim_30 = working_trim;  // Save 30% trim
-            current_level = TRIM_LEVEL_70_PERCENT;
-            working_trim = trim_70;   // Load 70% trim
-            printf("\n=== Trim Level 2: 70%% power ===\n");
-            printf("30%% trim saved as: %d\n", trim_30);
-            printf("Continue adjusting until robot drives straight at 70%% power\n");
-            printf("Hold L3+R3 for 2s to save and exit\n\n");
-        } else {
-            trim_70 = working_trim;  // Save 70% trim
-            current_level = TRIM_LEVEL_30_PERCENT;
-            working_trim = trim_30;   // Load 30% trim
-            printf("\n=== Back to Level 1: 30%% power ===\n");
-            printf("70%% trim saved as: %d\n\n", trim_70);
-        }
+    // Check for A button press (capture sample)
+    bool button_a = (gp->buttons & BTN_A) != 0;
+    if (button_a && !button_a_prev) {
+        // A button just pressed - this is handled in bluetooth_platform.c
+        // because it needs the current drive state
     }
-    level_button_prev = level_button;
+    button_a_prev = button_a;
 
-    // Read steering input from left stick X-axis
-    int32_t raw_turn = gp->axis_x;
-    raw_turn = CLAMP(raw_turn, -512, 511);
-
-    // Apply deadzone
-    int32_t turn = 0;
-    if (abs(raw_turn) > STICK_DEADZONE) {
-        if (raw_turn > 0) {
-            turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
-        } else {
-            turn = ((raw_turn + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
-        }
+    // Check for B button press (remove last sample)
+    bool button_b = (gp->buttons & BTN_B) != 0;
+    if (button_b && !button_b_prev) {
+        trim_mode_remove_last_sample();
     }
+    button_b_prev = button_b;
 
-    // Convert to -100 to +100 range and update working trim
-    // This is the offset needed to make the robot go straight
-    working_trim = (int8_t)((turn * 100) / 512);
-    working_trim = CLAMP(working_trim, -100, 100);
-
-    // Debugging output (throttled)
-    static uint32_t last_print = 0;
+    // Handle feedback flash timeout - restore normal trim mode LED state
     uint32_t now = to_ms_since_boot(get_absolute_time());
-    if (now - last_print > 500) {
-        printf("Trim: %d  Turn input: %d  Level: %s\n",
-               working_trim, turn,
-               current_level == TRIM_LEVEL_30_PERCENT ? "30%" : "70%");
+    if (feedback_state != FEEDBACK_NONE && feedback_state != FEEDBACK_EXIT_SUCCESS && feedback_state != FEEDBACK_EXIT_ERROR) {
+        if (now - feedback_start_time > FEEDBACK_FLASH_DURATION_MS) {
+            // Flash complete, restore blinking purple trim mode state
+            feedback_state = FEEDBACK_NONE;
+            status_set_system(SYSTEM_STATUS_TEST_MODE, LED_EFFECT_BLINK_MEDIUM);
+        }
+    }
+
+    // Status output
+    static uint32_t last_print = 0;
+    if (now - last_print > 1000) {
+        printf("Trim mode: %d samples collected (Press A to capture, B to remove last)\n",
+               num_samples);
         last_print = now;
     }
+#endif // !DIAGNOSTIC_MODE_BUILD
 
     return true;  // Trim mode is active
 }
@@ -259,48 +543,63 @@ bool trim_mode_is_active(void) {
     return trim_state == TRIM_MODE_ACTIVE;
 }
 
-int8_t trim_mode_get_offset(uint8_t drive_power_percent) {
-    // If in trim mode, return the working trim (what's being adjusted)
-    if (trim_state == TRIM_MODE_ACTIVE) {
-        return working_trim;
+int8_t trim_mode_get_offset(int8_t speed_percent) {
+    // If no fitted samples, return 0
+    if (num_fitted_samples == 0) {
+        return 0;
     }
 
-    // Normal operation: interpolate between 30% and 70% calibration points
-    // This handles motor non-linearity across the power range
-
-    // Clamp drive power to valid range
-    if (drive_power_percent > 100) {
-        drive_power_percent = 100;
+    // If only one sample, return its offset
+    if (num_fitted_samples == 1) {
+        return fitted_samples[0].turn_offset;
     }
 
-    // Below 30%: use 30% trim
-    if (drive_power_percent <= 30) {
-        return trim_30;
+    // Piecewise linear interpolation
+    // Samples are sorted by speed_percent
+
+    // If speed is below all samples, use first sample's offset
+    if (speed_percent <= fitted_samples[0].speed_percent) {
+        return fitted_samples[0].turn_offset;
     }
 
-    // Above 70%: use 70% trim
-    if (drive_power_percent >= 70) {
-        return trim_70;
+    // If speed is above all samples, use last sample's offset
+    if (speed_percent >= fitted_samples[num_fitted_samples - 1].speed_percent) {
+        return fitted_samples[num_fitted_samples - 1].turn_offset;
     }
 
-    // Between 30% and 70%: linear interpolation
-    // interpolation_factor = 0.0 at 30%, 1.0 at 70%
-    float interpolation_factor = (float)(drive_power_percent - 30) / 40.0f;
+    // Find the two nearest samples (one below, one above)
+    for (uint8_t i = 0; i < num_fitted_samples - 1; i++) {
+        if (speed_percent >= fitted_samples[i].speed_percent &&
+            speed_percent <= fitted_samples[i + 1].speed_percent) {
 
-    // Interpolate between the two trim values
-    float interpolated = trim_30 + (trim_70 - trim_30) * interpolation_factor;
+            // Linear interpolation
+            int8_t speed1 = fitted_samples[i].speed_percent;
+            int8_t speed2 = fitted_samples[i + 1].speed_percent;
+            int8_t offset1 = fitted_samples[i].turn_offset;
+            int8_t offset2 = fitted_samples[i + 1].turn_offset;
 
-    return (int8_t)(interpolated + 0.5f);  // Round to nearest integer
-}
+            // Handle case where speeds are equal (shouldn't happen with cleaned data)
+            if (speed1 == speed2) {
+                return offset1;
+            }
 
-trim_level_t trim_mode_get_level(void) {
-    return current_level;
+            // Linear interpolate: offset = offset1 + (offset2-offset1) * (speed-speed1)/(speed2-speed1)
+            float factor = (float)(speed_percent - speed1) / (float)(speed2 - speed1);
+            float interpolated = offset1 + (offset2 - offset1) * factor;
+
+            return (int8_t)(interpolated + 0.5f); // Round to nearest
+        }
+    }
+
+    // Fallback (should not reach here)
+    return 0;
 }
 
 void trim_mode_reset(void) {
-    trim_30 = 0;
-    trim_70 = 0;
-    working_trim = 0;
+    num_samples = 0;
+    num_fitted_samples = 0;
+    memset(samples, 0, sizeof(samples));
+    memset(fitted_samples, 0, sizeof(fitted_samples));
     trim_mode_save();
-    printf("Trim reset to 30%%=0, 70%%=0\n");
+    printf("Trim reset: All samples cleared\n");
 }

@@ -62,7 +62,7 @@ bool motor_control_init(void) {
                   &motors[MOTOR_LEFT_DRIVE].pwm_channel);
 
     motors[MOTOR_RIGHT_DRIVE].gpio_pin = PIN_DRIVE_RIGHT_PWM;
-    motors[MOTOR_RIGHT_DRIVE].reversed = true;
+    motors[MOTOR_RIGHT_DRIVE].reversed = true;  // Reversed because motor is mounted facing opposite direction
     setup_pwm_pin(PIN_DRIVE_RIGHT_PWM,
                   &motors[MOTOR_RIGHT_DRIVE].pwm_slice,
                   &motors[MOTOR_RIGHT_DRIVE].pwm_channel);
@@ -173,6 +173,7 @@ bool motor_control_set_speed(motor_channel_t channel, int8_t speed) {
         return false;
     }
 
+    int8_t original_speed = speed;
     speed = CLAMP(speed, -100, 100);
 
     if (motors[channel].reversed) {
@@ -180,6 +181,20 @@ bool motor_control_set_speed(motor_channel_t channel, int8_t speed) {
     }
 
     uint16_t pulse = speed_to_pulse(speed);
+
+    // DEBUG: Log motor commands (only for drive motors)
+    static uint32_t last_motor_debug = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - last_motor_debug > 500 && channel < MOTOR_WEAPON) {
+        if (original_speed != 0) {
+            const char* name = (channel == MOTOR_LEFT_DRIVE) ? "LEFT" : "RIGHT";
+            printf("MOTOR %s: speed=%d pulse=%dus\n", name, speed, pulse);
+        }
+        if (channel == MOTOR_RIGHT_DRIVE) {
+            last_motor_debug = now;
+        }
+    }
+
     return motor_control_set_pulse(channel, pulse);
 }
 

@@ -24,11 +24,8 @@ int8_t drive_apply_expo(int8_t input, uint8_t expo) {
     float linear = normalized;
     float cubic = normalized * normalized * normalized;
 
+    // Cubic of negative is already negative, so no need to invert
     float output = linear * (1.0f - expo_factor) + cubic * expo_factor;
-
-    if (input < 0) {
-        output = -output;
-    }
 
     // SAFETY: Clamp output to valid int8_t range
     float result = output * 127.0f;
@@ -45,8 +42,22 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
     forward = CLAMP(forward, -127, 127);
     turn = CLAMP(turn, -127, 127);
 
+    int8_t forward_before_expo = forward;
+    int8_t turn_before_expo = turn;
+
     forward = drive_apply_expo(forward, current_expo);
     turn = drive_apply_expo(turn, current_expo);
+
+    // DEBUG: Log expo transformation
+    static uint32_t last_expo_debug = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now - last_expo_debug > 500) {
+        if (forward_before_expo != 0 || turn_before_expo != 0) {
+            printf("EXPO: F %d→%d, T %d→%d\n",
+                   forward_before_expo, forward, turn_before_expo, turn);
+        }
+        last_expo_debug = now;
+    }
 
     // SAFETY: Use 32-bit arithmetic to prevent overflow during scaling
     int32_t scaled_forward = ((int32_t)forward * MAX_DRIVE_SPEED) / 100;
@@ -73,6 +84,16 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
 
     output.left_speed = (int8_t)CLAMP(left, -100, 100);
     output.right_speed = (int8_t)CLAMP(right, -100, 100);
+
+    // DEBUG: Log final output speeds
+    static uint32_t last_mix_debug = 0;
+    uint32_t now2 = to_ms_since_boot(get_absolute_time());
+    if (now2 - last_mix_debug > 500) {
+        if (output.left_speed != 0 || output.right_speed != 0) {
+            printf("MIX: L=%d R=%d\n", output.left_speed, output.right_speed);
+        }
+        last_mix_debug = now2;
+    }
 
     return output;
 }
@@ -114,46 +135,32 @@ void drive_update(drive_control_t* control) {
     int8_t forward = control->forward;
     int8_t turn = control->turn;
 
-    // TRIM MODE: Override forward speed and direct motor control
+    // TRIM MODE: Pass through normal driving (no overrides, no trim applied)
     if (trim_mode_is_active()) {
-        // Lock forward speed to calibration level (direct percentage, no expo)
-        trim_level_t level = trim_mode_get_level();
-        int8_t forward_percent;
-        if (level == TRIM_LEVEL_30_PERCENT) {
-            forward_percent = 30;
-        } else {
-            forward_percent = 70;
+        // In trim mode, drive normally without any trim correction
+        // User adjusts steering to make robot go straight, then captures samples
+        drive_output_t output = drive_mix(forward, turn);
+
+        // SAFETY: Verify output is within expected range
+        if (output.left_speed < -100 || output.left_speed > 100 ||
+            output.right_speed < -100 || output.right_speed > 100) {
+            DEBUG_PRINT("CRITICAL: Drive mix produced invalid output (%d, %d)\n",
+                        output.left_speed, output.right_speed);
+            drive_stop();
+            return;
         }
 
-        // Calculate maximum safe turn offset to keep both motors forward
-        // Use 5% as minimum motor speed to prevent stopping or reversing
-        const int8_t MIN_MOTOR_SPEED = 5;
-        int8_t max_turn = forward_percent - MIN_MOTOR_SPEED;
-
-        // Map full stick range (-127..+127) to safe turn range (±max_turn)
-        // This maximizes resolution while preventing reverse
-        int32_t turn_percent = ((int32_t)turn * max_turn) / 127;
-
-        // Direct tank mixing without expo curves for precise calibration
-        int32_t left = forward_percent + turn_percent;
-        int32_t right = forward_percent - turn_percent;
-
-        // Clamp to valid range (should not be needed with correct calculation)
-        left = CLAMP(left, MIN_MOTOR_SPEED, 100);
-        right = CLAMP(right, MIN_MOTOR_SPEED, 100);
-
-        // Set motor speeds directly
-        motor_control_set_speed(MOTOR_LEFT_DRIVE, (int8_t)left);
-        motor_control_set_speed(MOTOR_RIGHT_DRIVE, (int8_t)right);
-        return;  // Skip normal mixing
+        motor_control_set_speed(MOTOR_LEFT_DRIVE, output.left_speed);
+        motor_control_set_speed(MOTOR_RIGHT_DRIVE, output.right_speed);
+        return;
     }
 
-    // NORMAL MODE: Calculate drive power magnitude and apply trim
-    // Calculate drive power as percentage (0-100%)
-    uint8_t drive_power = (uint8_t)((abs(forward) * 100) / 127);
+    // NORMAL MODE: Apply dynamic trim based on current speed
+    // Calculate speed as signed percentage (-100 to +100)
+    int8_t speed_percent = (int8_t)((forward * 100) / 127);
 
-    // Get interpolated trim offset based on current drive power
-    int8_t trim_offset = trim_mode_get_offset(drive_power);
+    // Get interpolated trim offset based on current speed (supports forward and reverse)
+    int8_t trim_offset = trim_mode_get_offset(speed_percent);
 
     // Apply trim to turn value
     int32_t adjusted_turn = (int32_t)turn + trim_offset;

@@ -171,9 +171,12 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // Check for trim mode activation
         trim_mode_check_activation(gp);
 
-        // If in trim mode, handle calibration and skip normal operation
+        // Handle exit feedback LED restoration
+        trim_mode_handle_exit_feedback();
+
+        // If in trim mode, handle calibration with full driving control
         if (trim_mode_is_active()) {
-            // Update trim calibration
+            // Update trim calibration (handles B button for removing samples)
             trim_mode_update(gp);
 
             // Keep weapon disarmed during trim mode
@@ -182,12 +185,25 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
                 armed_state = false;
             }
 
-            // Scale turn input from gamepad range (-512..511) to drive range (-127..127)
+            // Allow full driving control in trim mode
+            // Drive control using left stick with proper deadzone handling
+            int32_t raw_forward = gp->axis_y; // Forward stick push is negative
             int32_t raw_turn = gp->axis_x;
+
+            // Validate input ranges
+            raw_forward = CLAMP(raw_forward, -512, 511);
             raw_turn = CLAMP(raw_turn, -512, 511);
 
-            // Apply deadzone
-            int32_t turn = 0;
+            // Apply deadzone with proper scaling
+            int32_t forward = 0, turn = 0;
+
+            if (abs(raw_forward) > STICK_DEADZONE) {
+                if (raw_forward > 0) {
+                    forward = ((raw_forward - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
+                } else {
+                    forward = ((raw_forward + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
+                }
+            }
             if (abs(raw_turn) > STICK_DEADZONE) {
                 if (raw_turn > 0) {
                     turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
@@ -197,13 +213,31 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
             }
 
             // Scale to -127/127 range
+            if (forward != 0) {
+                forward = CLAMP((forward * 127) / 512, -127, 127);
+            }
             if (turn != 0) {
                 turn = CLAMP((turn * 127) / 512, -127, 127);
             }
 
-            // Drive at locked calibration speed with scaled turn input
+            // Convert to percentage for trim sample capture (-100 to +100)
+            int8_t forward_percent = (int8_t)((forward * 100) / 127);
+            int8_t turn_percent = (int8_t)((turn * 100) / 127);
+
+            // Static variable for A button edge detection
+            static bool button_a_prev = false;
+            bool button_a = (gp->buttons & BTN_A) != 0;
+
+            // Check for A button press (capture sample)
+            if (button_a && !button_a_prev) {
+                // Capture current forward speed and turn value as a sample
+                trim_mode_capture_sample(forward_percent, turn_percent);
+            }
+            button_a_prev = button_a;
+
+            // Send drive commands (no trim applied in trim mode)
             drive_control_t trim_cmd = {
-                .forward = 0,  // Will be overridden by trim mode in drive.c
+                .forward = (int8_t)forward,
                 .turn = (int8_t)turn,
                 .enabled = true
             };
@@ -274,8 +308,16 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // Only process movement if not emergency stopped
         if (!emergency_stop) {
             // Drive control using left stick with proper deadzone handling
-            int32_t raw_forward = -gp->axis_y; // Invert Y for forward
+            int32_t raw_forward = gp->axis_y; // Forward stick push is negative
             int32_t raw_turn = gp->axis_x;
+
+            // DEBUG: Print raw axis values every 500ms
+            static uint32_t last_debug = 0;
+            uint32_t now_debug = to_ms_since_boot(get_absolute_time());
+            if (now_debug - last_debug > 500) {
+                printf("RAW: Y=%d X=%d\n", (int)gp->axis_y, (int)gp->axis_x);
+                last_debug = now_debug;
+            }
 
             // SAFETY: Validate input ranges from controller
             raw_forward = CLAMP(raw_forward, -512, 511);
