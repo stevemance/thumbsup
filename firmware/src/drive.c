@@ -85,12 +85,18 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
     output.left_speed = (int8_t)CLAMP(left, -100, 100);
     output.right_speed = (int8_t)CLAMP(right, -100, 100);
 
-    // DEBUG: Log final output speeds
+    // DEBUG: Log final output speeds with real units
     static uint32_t last_mix_debug = 0;
     uint32_t now2 = to_ms_since_boot(get_absolute_time());
     if (now2 - last_mix_debug > 500) {
         if (output.left_speed != 0 || output.right_speed != 0) {
-            printf("MIX: L=%d R=%d\n", output.left_speed, output.right_speed);
+            float left_ms = PWM_PERCENT_TO_MS(output.left_speed);
+            float right_ms = PWM_PERCENT_TO_MS(output.right_speed);
+            int left_rpm = PWM_PERCENT_TO_RPM(output.left_speed);
+            int right_rpm = PWM_PERCENT_TO_RPM(output.right_speed);
+            printf("MIX: L=%d%% (%.2fm/s, %dRPM) R=%d%% (%.2fm/s, %dRPM)\n",
+                   output.left_speed, left_ms, left_rpm,
+                   output.right_speed, right_ms, right_rpm);
         }
         last_mix_debug = now2;
     }

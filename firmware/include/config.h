@@ -34,6 +34,32 @@
 #define PWM_NEUTRAL_PULSE   1500  // Neutral position
 #define PWM_MAX_PULSE       2000  // Maximum pulse width (full forward)
 
+// Robot Physical Specifications
+#define WHEEL_DIAMETER_MM   43.2f   // LEGO 43.2x22 ZR tire diameter (mm)
+#define WHEEL_CIRCUMFERENCE_M 0.1357f // π × 43.2mm = 135.7mm = 0.1357m
+#define WHEELBASE_MM        86.0f   // Wheel center-to-center distance (mm)
+#define WHEELBASE_M         0.086f  // Wheelbase in meters
+#define TURN_RADIUS_M       0.043f  // Minimum turn radius (pivot turn) = wheelbase/2
+#define GEAR_RATIO          22.6f   // Motor gearbox ratio (22.6:1)
+
+// Motor Specifications (3S / 12V nominal)
+#define MOTOR_FREE_RPM_3S   1220    // Free speed at 12V (RPM)
+#define MOTOR_STALL_CURRENT_A 2.0f  // Stall current (A)
+#define MOTOR_STALL_TORQUE_NM 0.116f // Stall torque (N·m)
+
+// Calculated Performance Characteristics
+#define MAX_VELOCITY_MS     2.76f   // Max theoretical velocity (m/s) = 1220 RPM × 0.1357m / 60s
+#define MAX_VELOCITY_KMH    9.9f    // Max velocity in km/h
+#define MAX_WHEEL_RPM       1220    // Max wheel RPM (same as motor due to direct drive)
+
+// Turning Performance (Differential Drive)
+// When spinning in place (wheels opposite directions):
+// Angular velocity ω = (V_right - V_left) / wheelbase
+//                    = (2.76 - (-2.76)) / 0.086 = 64.2 rad/s = 3680 deg/s
+#define MAX_ANGULAR_VELOCITY_RAD_S 64.2f  // Max rotation speed (rad/s) when spinning in place
+#define MAX_ANGULAR_VELOCITY_DEG_S 3680.0f // Max rotation speed (deg/s) = 10.2 rev/s!
+#define MAX_SPIN_TIME_MS    98      // Time for 360° spin at max speed (ms)
+
 // Control Parameters
 #define STICK_DEADZONE      15    // Joystick deadzone (0-127 scale)
 #define TRIGGER_THRESHOLD   20    // Minimum trigger value to activate
@@ -41,8 +67,20 @@
 #define MAX_WEAPON_SPEED    100   // Maximum weapon speed percentage
 
 // Exponential Curve Parameters
-#define DRIVE_EXPO          30    // Drive exponential curve (0-100, 0=linear)
+// NOTE: Increased from 30% to 70% for better low-speed control
+// Higher expo = more gradual at center stick, maintains full speed at full stick
+// See docs/CONTROL_ANALYSIS.md for detailed explanation
+#define DRIVE_EXPO          70    // Drive exponential curve (0-100, 0=linear)
 #define WEAPON_EXPO         20    // Weapon exponential curve
+
+// Real-Unit Conversion Helpers
+// Convert PWM percentage (-100 to +100) to estimated velocity
+#define PWM_PERCENT_TO_MS(percent) ((percent) * MAX_VELOCITY_MS / 100.0f)
+#define PWM_PERCENT_TO_RPM(percent) ((percent) * MAX_WHEEL_RPM / 100)
+
+// Convert velocity back to PWM percentage (for future closed-loop control)
+#define MS_TO_PWM_PERCENT(velocity) ((velocity) * 100.0f / MAX_VELOCITY_MS)
+#define RPM_TO_PWM_PERCENT(rpm) ((rpm) * 100 / MAX_WHEEL_RPM)
 
 // Safety Configuration
 #define WEAPON_ARM_TIMEOUT  5000  // Weapon arm timeout in milliseconds
