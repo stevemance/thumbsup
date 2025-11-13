@@ -20,6 +20,8 @@
 #include "system_status.h"
 #include "test_mode.h"
 #include "trim_mode.h"
+#include "calibration_mode.h"
+#include "motor_linearization.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -56,9 +58,11 @@ static void my_platform_init(int argc, const char **argv) {
 
     // Initialize trim mode
     trim_mode_init();
+    calibration_mode_init();
 
     // Initialize thumbsup subsystems
     motor_control_init();
+    motor_linearization_init();
     drive_init();
     weapon_init();
     status_init();
@@ -149,16 +153,11 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         last_watchdog_feed = last_controller_input;
     }
 
-    // Used to prevent spamming the log, but should be removed in production.
-    if (memcmp(&prev, ctl, sizeof(*ctl)) == 0) {
-        return;
-    }
-    prev = *ctl;
-
     switch (ctl->klass) {
     case UNI_CONTROLLER_CLASS_GAMEPAD:
         gp = &ctl->gamepad;
 
+        // Check for mode activations BEFORE memcmp to allow hold timers to work
         // Check for test mode activation first
         test_mode_check_activation(gp);
 
@@ -167,6 +166,24 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
             test_mode_update(gp);
             return;
         }
+
+        // Check for calibration mode activation
+        calibration_mode_check_activation(gp);
+
+        // If in calibration mode, step through motor test points
+        if (calibration_mode_is_active()) {
+            calibration_mode_update(gp);
+            motor_control_update();  // Update motors with calibration commands
+            status_update();  // Update LED indicators
+            return;  // Block all other inputs during calibration
+        }
+
+        // Now check if controller state changed - skip normal processing if unchanged
+        // Used to prevent spamming the log, but should be removed in production.
+        if (memcmp(&prev, ctl, sizeof(*ctl)) == 0) {
+            return;
+        }
+        prev = *ctl;
 
         // Check for trim mode activation
         trim_mode_check_activation(gp);

@@ -43,27 +43,29 @@
 #define GEAR_RATIO          22.6f   // Motor gearbox ratio (22.6:1)
 
 // Motor Specifications (3S / 12V nominal)
-#define MOTOR_FREE_RPM_3S   1220    // Free speed at 12V (RPM)
+#define MOTOR_FREE_RPM_3S   1220    // Theoretical free speed at 12V (RPM) - see note below
 #define MOTOR_STALL_CURRENT_A 2.0f  // Stall current (A)
 #define MOTOR_STALL_TORQUE_NM 0.116f // Stall torque (N·m)
 
-// Calculated Performance Characteristics
-#define MAX_VELOCITY_MS     2.76f   // Max theoretical velocity (m/s) = 1220 RPM × 0.1357m / 60s
-#define MAX_VELOCITY_KMH    9.9f    // Max velocity in km/h
-#define MAX_WHEEL_RPM       1220    // Max wheel RPM (same as motor due to direct drive)
+// Measured Performance Characteristics (from calibration 2025-11-12)
+// Note: Actual max RPM is ~66% of theoretical due to voltage sag, friction, and ESC losses
+#define MAX_VELOCITY_MS     1.82f   // MEASURED max velocity (m/s) = 805 RPM × 0.1357m / 60s
+#define MAX_VELOCITY_KMH    6.5f    // MEASURED max velocity in km/h
+#define MAX_WHEEL_RPM       805     // MEASURED max wheel RPM under load (was 1220 theoretical)
 
 // Turning Performance (Differential Drive)
 // When spinning in place (wheels opposite directions):
 // Angular velocity ω = (V_right - V_left) / wheelbase
-//                    = (2.76 - (-2.76)) / 0.086 = 64.2 rad/s = 3680 deg/s
-#define MAX_ANGULAR_VELOCITY_RAD_S 64.2f  // Max rotation speed (rad/s) when spinning in place
-#define MAX_ANGULAR_VELOCITY_DEG_S 3680.0f // Max rotation speed (deg/s) = 10.2 rev/s!
-#define MAX_SPIN_TIME_MS    98      // Time for 360° spin at max speed (ms)
+//                    = (1.82 - (-1.82)) / 0.086 = 42.3 rad/s = 2425 deg/s
+#define MAX_ANGULAR_VELOCITY_RAD_S 42.3f  // Max rotation speed (rad/s) when spinning in place
+#define MAX_ANGULAR_VELOCITY_DEG_S 2425.0f // Max rotation speed (deg/s) = 6.7 rev/s
+#define MAX_SPIN_TIME_MS    149     // Time for 360° spin at max speed (ms)
 
 // Control Parameters
 #define STICK_DEADZONE      15    // Joystick deadzone (0-127 scale)
 #define TRIGGER_THRESHOLD   20    // Minimum trigger value to activate
-#define MAX_DRIVE_SPEED     100   // Maximum drive speed percentage
+#define MAX_DRIVE_SPEED     75    // Maximum drive speed percentage (75% of max for better control)
+#define MAX_TURN_SPEED      70    // Maximum turn rate percentage (70% turn sensitivity)
 #define MAX_WEAPON_SPEED    100   // Maximum weapon speed percentage
 
 // Exponential Curve Parameters

@@ -49,6 +49,8 @@ set(CORE_SOURCES
     src/status.c
     src/ws2812.c
     src/trim_mode.c
+    src/calibration_mode.c
+    src/motor_linearization.c
     src/am32_config.c
     src/safety_test.c
 )

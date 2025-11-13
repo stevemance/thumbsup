@@ -1,5 +1,6 @@
 #include "drive.h"
 #include "motor_control.h"
+#include "motor_linearization.h"
 #include "trim_mode.h"
 #include "config.h"
 #include <stdio.h>
@@ -60,8 +61,11 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
     }
 
     // SAFETY: Use 32-bit arithmetic to prevent overflow during scaling
-    int32_t scaled_forward = ((int32_t)forward * MAX_DRIVE_SPEED) / 100;
-    int32_t scaled_turn = ((int32_t)turn * MAX_DRIVE_SPEED) / 100;
+    // Input range is -127 to +127, scale to percentage values
+    // Forward: scale to -100 to +100 (MAX_DRIVE_SPEED = 100%)
+    // Turn: scale to MAX_TURN_SPEED (50% = reduced turn sensitivity for better control)
+    int32_t scaled_forward = ((int32_t)forward * MAX_DRIVE_SPEED) / 127;
+    int32_t scaled_turn = ((int32_t)turn * MAX_TURN_SPEED) / 127;
 
     // SAFETY: Clamp after scaling to prevent overflow
     scaled_forward = CLAMP(scaled_forward, -100, 100);
@@ -156,8 +160,12 @@ void drive_update(drive_control_t* control) {
             return;
         }
 
-        motor_control_set_speed(MOTOR_LEFT_DRIVE, output.left_speed);
-        motor_control_set_speed(MOTOR_RIGHT_DRIVE, output.right_speed);
+        // Apply per-motor linearization compensation
+        int8_t left_compensated = motor_linearization_compensate(MOTOR_LEFT_DRIVE, output.left_speed);
+        int8_t right_compensated = motor_linearization_compensate(MOTOR_RIGHT_DRIVE, output.right_speed);
+
+        motor_control_set_speed(MOTOR_LEFT_DRIVE, left_compensated);
+        motor_control_set_speed(MOTOR_RIGHT_DRIVE, right_compensated);
         return;
     }
 
@@ -183,8 +191,12 @@ void drive_update(drive_control_t* control) {
         return;
     }
 
-    motor_control_set_speed(MOTOR_LEFT_DRIVE, output.left_speed);
-    motor_control_set_speed(MOTOR_RIGHT_DRIVE, output.right_speed);
+    // Apply per-motor linearization compensation
+    int8_t left_compensated = motor_linearization_compensate(MOTOR_LEFT_DRIVE, output.left_speed);
+    int8_t right_compensated = motor_linearization_compensate(MOTOR_RIGHT_DRIVE, output.right_speed);
+
+    motor_control_set_speed(MOTOR_LEFT_DRIVE, left_compensated);
+    motor_control_set_speed(MOTOR_RIGHT_DRIVE, right_compensated);
 }
 
 void drive_stop(void) {
