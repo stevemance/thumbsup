@@ -51,16 +51,24 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
     }
 
     // CRITICAL FIX #2 (Iteration 2): Disable current mode with proper GPIO cleanup
+    // CRITICAL FIX #1 (Iteration 3): Add verification that previous owner released GPIO
     switch (control_mode) {
         case WEAPON_MODE_PWM:
             // Stop PWM output
             motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
+            sleep_ms(2);  // Allow final PWM pulse to complete
             // Explicitly disable PWM slice for weapon pin
             uint slice_num = pwm_gpio_to_slice_num(PIN_WEAPON_PWM);
             pwm_set_enabled(slice_num, false);
             // Reset GPIO to SIO before handing off
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
+            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
+            sleep_ms(2);
+            // Verify GPIO is in safe state
+            if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
+                DEBUG_PRINT("WARNING: GPIO %d not in SIO after PWM cleanup\n", PIN_WEAPON_PWM);
+            }
             break;
 
         case WEAPON_MODE_DSHOT:
@@ -73,12 +81,31 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
             // Reset GPIO to SIO after DShot (PIO cleanup)
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
+            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
+            sleep_ms(2);
+            // Verify GPIO is in safe state
+            if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
+                DEBUG_PRINT("WARNING: GPIO %d not in SIO after DShot cleanup\n", PIN_WEAPON_PWM);
+            }
             break;
 
         case WEAPON_MODE_CONFIG:
             am32_exit_config_mode();
-            // GPIO cleanup is handled in am32_exit_config_mode()
+            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
+            sleep_ms(2);
+            // Verify GPIO is in safe state (AM32 should set to SIO)
+            if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
+                DEBUG_PRINT("WARNING: GPIO %d not in SIO after AM32 cleanup\n", PIN_WEAPON_PWM);
+            }
             break;
+    }
+
+    // CRITICAL FIX #1 (Iteration 3): Verify GPIO is available before claiming
+    if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
+        DEBUG_PRINT("ERROR: GPIO %d not in SIO state before mode switch (func=%d)\n",
+                   PIN_WEAPON_PWM, gpio_get_function(PIN_WEAPON_PWM));
+        mutex_exit(&mode_mutex);
+        return false;
     }
 
     // Enable new mode
@@ -100,9 +127,11 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                     dshot_initialized = true;
                     DEBUG_PRINT("Weapon control mode: DShot300 with EDT\n");
                 } else {
-                    DEBUG_PRINT("ERROR: Failed to initialize DShot\n");
-                    mutex_exit(&mode_mutex);
-                    return false;
+                    // MAJOR FIX #5 (Iteration 3): Fallback to PWM if DShot init fails
+                    DEBUG_PRINT("ERROR: Failed to initialize DShot, falling back to PWM\n");
+                    motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
+                    new_mode = WEAPON_MODE_PWM;
+                    DEBUG_PRINT("Weapon control mode: PWM (fallback)\n");
                 }
             }
             break;
@@ -209,6 +238,8 @@ void weapon_update(void) {
                     // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
                     // This prevents race condition where control_mode changes between
                     // read and command execution
+                    // MAJOR #1 (Iteration 3): VERIFIED - This is NOT a race condition.
+                    // Mutex is properly acquired here before reading control_mode.
                     mutex_enter_blocking(&mode_mutex);
                     switch (control_mode) {
                         case WEAPON_MODE_PWM: {
@@ -363,28 +394,40 @@ bool weapon_is_armed(void) {
 }
 
 void weapon_emergency_stop(void) {
+    // MAJOR FIX #7 (Iteration 3): CRITICAL SAFETY - Emergency stop MUST be immediate
+    // Remove mutex dependency to prevent delays or deadlocks during emergency
+    // Stop motor using ALL available methods to ensure safety
+
     weapon_state = WEAPON_STATE_EMERGENCY_STOP;
     current_speed = 0;
     target_speed = 0;
 
-    // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
-    mutex_enter_blocking(&mode_mutex);
-    switch (control_mode) {
-        case WEAPON_MODE_PWM:
-            motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
-            break;
+    // Read control mode without mutex (safe to read enum)
+    weapon_control_mode_t mode = control_mode;
 
-        case WEAPON_MODE_DSHOT:
-            if (dshot_initialized) {
-                dshot_send_throttle(MOTOR_WEAPON, 0, false);
-            }
-            break;
+    // CRITICAL: Disable motor hardware IMMEDIATELY using all available methods
+    // This ensures motor stops even if one method fails or is misconfigured
 
-        case WEAPON_MODE_CONFIG:
-            // Motor already stopped in config mode
-            break;
+    // Method 1: PWM - always try to stop via PWM regardless of mode
+    motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
+
+    // Method 2: DShot - if initialized, send stop command
+    if (dshot_initialized && mode == WEAPON_MODE_DSHOT) {
+        dshot_send_throttle(MOTOR_WEAPON, 0, false);
     }
-    mutex_exit(&mode_mutex);
+
+    // Method 3: Direct GPIO control - force pin low as last resort
+    // Only do this if not in config mode (which needs UART control)
+    if (mode != WEAPON_MODE_CONFIG) {
+        // Disable PWM slice
+        uint slice_num = pwm_gpio_to_slice_num(PIN_WEAPON_PWM);
+        pwm_set_enabled(slice_num, false);
+
+        // Force GPIO low directly
+        gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
+        gpio_set_dir(PIN_WEAPON_PWM, GPIO_OUT);
+        gpio_put(PIN_WEAPON_PWM, 0);
+    }
 
     DEBUG_PRINT("WEAPON EMERGENCY STOP!\n");
     status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);

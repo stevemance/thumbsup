@@ -5,6 +5,7 @@
 #include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "pico/stdlib.h"
+#include "pico/mutex.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -35,6 +36,11 @@ static dshot_motor_state_t motor_states[MAX_DSHOT_MOTORS] = {0};
 // Multiple motors may share the same PIO program, so track usage
 static uint8_t pio_program_refcount_tx = 0;
 static uint8_t pio_program_refcount_bidir = 0;
+
+// MAJOR FIX #8 (Iteration 3): Mutex for thread-safe PIO reference counting
+// Refcounts are modified during init/deinit and must be protected from races
+static mutex_t pio_refcount_mutex;
+static bool pio_mutex_initialized = false;
 
 // CRC-4 calculation for DShot packets
 uint8_t dshot_calculate_crc(uint16_t packet) {
@@ -321,6 +327,12 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         DEBUG_PRINT("GCR decode table validated successfully\n");
     }
 
+    // MAJOR FIX #8 (Iteration 3): Initialize mutex on first use
+    if (!pio_mutex_initialized) {
+        mutex_init(&pio_refcount_mutex);
+        pio_mutex_initialized = true;
+    }
+
     dshot_motor_state_t* state = &motor_states[motor];
 
     // Copy configuration
@@ -344,7 +356,9 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     }
 
     // CRITICAL FIX #3: Add PIO program with reference counting
-    // Only add program if this is the first user
+    // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+    mutex_enter_blocking(&pio_refcount_mutex);
+
     if (config->bidirectional) {
         if (pio_program_refcount_bidir == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_bidirectional_program);
@@ -363,11 +377,14 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
             if (!found) {
                 DEBUG_PRINT("CRITICAL: PIO bidir refcount=%d but no program found!\n",
                            pio_program_refcount_bidir);
+                mutex_exit(&pio_refcount_mutex);
                 pio_sm_unclaim(state->pio, state->sm);
                 return false;
             }
         }
         pio_program_refcount_bidir++;
+        mutex_exit(&pio_refcount_mutex);
+
         dshot_bidirectional_program_init(state->pio, state->sm, state->pio_offset,
                                          config->gpio_pin, calculate_clk_div(config->speed));
     } else {
@@ -387,11 +404,14 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
             if (!found) {
                 DEBUG_PRINT("CRITICAL: PIO tx refcount=%d but no program found!\n",
                            pio_program_refcount_tx);
+                mutex_exit(&pio_refcount_mutex);
                 pio_sm_unclaim(state->pio, state->sm);
                 return false;
             }
         }
         pio_program_refcount_tx++;
+        mutex_exit(&pio_refcount_mutex);
+
         dshot_tx_program_init(state->pio, state->sm, state->pio_offset,
                               config->gpio_pin, calculate_clk_div(config->speed));
     }
@@ -401,7 +421,8 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     if (state->dma_chan < 0) {
         DEBUG_PRINT("ERROR: No DMA channels available\n");
         // MAJOR FIX #4 (Iteration 2): Clean up PIO program on DMA allocation failure
-        // Decrement refcount and remove program if we were the first user
+        // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+        mutex_enter_blocking(&pio_refcount_mutex);
         if (config->bidirectional) {
             pio_program_refcount_bidir--;
             if (pio_program_refcount_bidir == 0) {
@@ -413,6 +434,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
                 pio_remove_program(state->pio, &dshot_tx_program, state->pio_offset);
             }
         }
+        mutex_exit(&pio_refcount_mutex);
         pio_sm_unclaim(state->pio, state->sm);
 
         // Zero state to prevent use of partially initialized structure
@@ -491,13 +513,42 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     // Start DMA transfer
     dma_channel_start(state->dma_chan);
 
-    // Wait for transfer to complete (fast, ~50μs for DShot300)
-    dma_channel_wait_for_finish_blocking(state->dma_chan);
+    // CRITICAL FIX #2 (Iteration 3): Replace blocking wait with timeout mechanism
+    // Blocking wait can hang indefinitely if DMA fails, preventing emergency stop
+    // Use 50ms timeout (generous for ~50μs typical transfer time)
+    #define DSHOT_DMA_TIMEOUT_MS 50
+    uint32_t start_time = to_ms_since_boot(get_absolute_time());
+    bool timeout = false;
 
-    // MAJOR FIX #1 (Iteration 2): Verify DMA transfer completed without errors
-    if (dma_channel_get_irq0_status(state->dma_chan)) {
-        DEBUG_PRINT("ERROR: DMA transfer failed for motor %d\n", motor);
-        dma_channel_acknowledge_irq0(state->dma_chan);
+    while (dma_channel_is_busy(state->dma_chan)) {
+        if ((to_ms_since_boot(get_absolute_time()) - start_time) > DSHOT_DMA_TIMEOUT_MS) {
+            timeout = true;
+            break;
+        }
+        tight_loop_contents();  // Yield to other code
+    }
+
+    if (timeout) {
+        DEBUG_PRINT("CRITICAL: DMA timeout for motor %d, aborting transfer\n", motor);
+        dma_channel_abort(state->dma_chan);
+        // Wait for abort to complete (should be fast)
+        uint32_t abort_start = to_ms_since_boot(get_absolute_time());
+        while (dma_channel_is_busy(state->dma_chan)) {
+            if ((to_ms_since_boot(get_absolute_time()) - abort_start) > 10) {
+                DEBUG_PRINT("ERROR: DMA abort failed for motor %d\n", motor);
+                break;
+            }
+            tight_loop_contents();
+        }
+        return false;
+    }
+
+    // MAJOR FIX #4 (Iteration 3): Check transfer_count instead of IRQ status
+    // Using dma_channel_get_irq0_status() is semantically wrong for error detection
+    // Check if transfer completed successfully by verifying transfer_count is 0
+    uint32_t remaining = dma_channel_hw_addr(state->dma_chan)->transfer_count;
+    if (remaining != 0) {
+        DEBUG_PRINT("ERROR: DMA transfer incomplete for motor %d (remaining=%u)\n", motor, remaining);
         return false;
     }
 
@@ -603,6 +654,8 @@ void dshot_deinit(motor_channel_t motor) {
     pio_sm_unclaim(state->pio, state->sm);
 
     // CRITICAL FIX #3: Remove PIO program only if this is the last user
+    // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+    mutex_enter_blocking(&pio_refcount_mutex);
     if (state->config.bidirectional) {
         pio_program_refcount_bidir--;
         if (pio_program_refcount_bidir == 0) {
@@ -614,6 +667,7 @@ void dshot_deinit(motor_channel_t motor) {
             pio_remove_program(state->pio, &dshot_tx_program, state->pio_offset);
         }
     }
+    mutex_exit(&pio_refcount_mutex);
 
     // MAJOR FIX #5: Properly cleanup DMA channel before unclaiming
     if (state->dma_chan >= 0) {

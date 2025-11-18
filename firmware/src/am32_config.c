@@ -229,7 +229,9 @@ bool am32_enter_config_mode(void) {
     }
 
     // CRITICAL FIX #3 (Iteration 2): Verify bidirectional communication works
-    // Try to receive a response to confirm RX line is functional
+    // MAJOR FIX #3 (Iteration 3): This validation is MANDATORY - config mode entry
+    // will FAIL if bidirectional communication is not working. This prevents
+    // silent failures where commands are sent but never acknowledged.
     uint8_t response[4];
     uint16_t resp_len = sizeof(response);
     if (!am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
@@ -348,16 +350,28 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
                 received++;
             } else {
                 // SAFETY: Strict bounds checking
+                // MAJOR FIX #6 (Iteration 3): Upgrade truncation to ERROR level and fail
                 uint16_t data_index = received - 2;
                 if (data_index < expected_len && data_index < max_buffer_size) {
                     buffer[data_index] = byte;
-                } else {
-                    DEBUG_PRINT("WARNING: AM32 buffer overflow prevented\n");
+                } else if (data_index >= max_buffer_size) {
+                    // CRITICAL: Buffer would overflow - this is a serious error
+                    DEBUG_PRINT("ERROR: AM32 buffer overflow detected (index=%u, max=%u)\n",
+                               data_index, max_buffer_size);
+                    *len = max_buffer_size;  // Report actual data written
+                    return false;  // Fail the operation
                 }
                 received++;
 
                 if (received >= expected_len + 2) {
+                    // MAJOR FIX #6 (Iteration 3): Ensure *len reflects actual data written
                     *len = (expected_len < max_buffer_size) ? expected_len : max_buffer_size;
+                    // Return false if truncation occurred
+                    if (expected_len > max_buffer_size) {
+                        DEBUG_PRINT("ERROR: Response truncated (%u bytes truncated)\n",
+                                   expected_len - max_buffer_size);
+                        return false;
+                    }
                     return true;
                 }
             }
