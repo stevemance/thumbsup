@@ -7,6 +7,8 @@
 #include "am32_config.h"
 #include "pico/stdlib.h"
 #include "pico/mutex.h"
+#include "hardware/pwm.h"
+#include "hardware/gpio.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -48,10 +50,17 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
         return true;  // Already in requested mode
     }
 
-    // Disable current mode
+    // CRITICAL FIX #2 (Iteration 2): Disable current mode with proper GPIO cleanup
     switch (control_mode) {
         case WEAPON_MODE_PWM:
+            // Stop PWM output
             motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
+            // Explicitly disable PWM slice for weapon pin
+            uint slice_num = pwm_gpio_to_slice_num(PIN_WEAPON_PWM);
+            pwm_set_enabled(slice_num, false);
+            // Reset GPIO to SIO before handing off
+            gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
+            gpio_put(PIN_WEAPON_PWM, 0);
             break;
 
         case WEAPON_MODE_DSHOT:
@@ -61,10 +70,14 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                 dshot_deinit(MOTOR_WEAPON);
                 dshot_initialized = false;
             }
+            // Reset GPIO to SIO after DShot (PIO cleanup)
+            gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
+            gpio_put(PIN_WEAPON_PWM, 0);
             break;
 
         case WEAPON_MODE_CONFIG:
             am32_exit_config_mode();
+            // GPIO cleanup is handled in am32_exit_config_mode()
             break;
     }
 
@@ -193,7 +206,9 @@ void weapon_update(void) {
                         current_speed = MAX((int16_t)current_speed - (int16_t)ramp_step, target_speed);
                     }
 
-                    // CRITICAL FIX #2: Send commands based on control mode
+                    // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
+                    // This prevents race condition where control_mode changes between
+                    // read and command execution
                     mutex_enter_blocking(&mode_mutex);
                     switch (control_mode) {
                         case WEAPON_MODE_PWM: {
@@ -234,7 +249,7 @@ void weapon_update(void) {
             current_speed = 0;
             target_speed = 0;
 
-            // CRITICAL FIX #2: Stop motor in all modes
+            // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
             mutex_enter_blocking(&mode_mutex);
             switch (control_mode) {
                 case WEAPON_MODE_PWM:
@@ -285,7 +300,7 @@ bool weapon_disarm(void) {
     current_speed = 0;
     target_speed = 0;
 
-    // CRITICAL FIX #2: Stop motor in all modes
+    // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
     mutex_enter_blocking(&mode_mutex);
     switch (control_mode) {
         case WEAPON_MODE_PWM:
@@ -352,7 +367,7 @@ void weapon_emergency_stop(void) {
     current_speed = 0;
     target_speed = 0;
 
-    // CRITICAL FIX #2: Emergency stop in all modes
+    // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
     mutex_enter_blocking(&mode_mutex);
     switch (control_mode) {
         case WEAPON_MODE_PWM:

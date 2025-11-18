@@ -2,8 +2,38 @@
  * AM32 ESC Serial Configuration Protocol Implementation
  *
  * CRITICAL FIX #5: Comprehensive protocol documentation
+ * CRITICAL FIX #3 (Iteration 2): Hardware requirements documentation
  *
+ * ============================================================================
+ * HARDWARE REQUIREMENTS - READ THIS BEFORE USING AM32 CONFIG MODE
+ * ============================================================================
+ *
+ * AM32 configuration mode requires BIDIRECTIONAL UART communication.
+ * This means you MUST have both TX and RX lines connected:
+ *
+ *   GP4 (UART1 TX) ---> ESC signal wire (data TO ESC)
+ *   GP5 (UART1 RX) <--- ESC signal wire (data FROM ESC)
+ *
+ * IMPORTANT WIRING NOTES:
+ * 1. Standard ESC wiring uses ONE signal wire - this is NOT sufficient!
+ * 2. For AM32 config to work, you need SEPARATE TX and RX connections
+ * 3. Options for wiring:
+ *    a) Use ESC with dedicated TX/RX pads (bench testing setup)
+ *    b) Use special bidirectional adapter cable
+ *    c) Wire ESC signal pad to GP4, find ESC's MCU UART RX pad and wire to GP5
+ *
+ * WARNING: If only GP4 is connected, AM32 config mode will FAIL silently!
+ * The code will send commands but never receive responses.
+ *
+ * PRODUCTION USE:
+ * For production robots, it's recommended to configure the ESC once on the bench
+ * with proper TX/RX wiring, then use standard PWM or DShot control in operation.
+ * AM32 config mode is primarily for initial setup and testing.
+ *
+ * ============================================================================
  * PROTOCOL OVERVIEW:
+ * ============================================================================
+ *
  * The AM32 ESC uses a serial UART protocol for configuration and monitoring.
  * Communication occurs at 19200 baud (8N1) for normal operation, and 115200
  * baud for bootloader mode.
@@ -198,8 +228,23 @@ bool am32_enter_config_mode(void) {
         return false;
     }
 
+    // CRITICAL FIX #3 (Iteration 2): Verify bidirectional communication works
+    // Try to receive a response to confirm RX line is functional
+    uint8_t response[4];
+    uint16_t resp_len = sizeof(response);
+    if (!am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
+        DEBUG_PRINT("ERROR: No response from ESC - check GP5 RX wiring!\n");
+        DEBUG_PRINT("AM32 config requires BIDIRECTIONAL UART communication:\n");
+        DEBUG_PRINT("  GP4 (TX) -> ESC signal input\n");
+        DEBUG_PRINT("  GP5 (RX) <- ESC signal output\n");
+        DEBUG_PRINT("Standard single-wire ESC connection is NOT sufficient.\n");
+        DEBUG_PRINT("See file header for wiring options.\n");
+        switch_to_pwm_mode();
+        return false;
+    }
+
     am32_in_config_mode = true;
-    DEBUG_PRINT("AM32 config mode active\n");
+    DEBUG_PRINT("AM32 config mode active (bidirectional link verified)\n");
 
     return true;
 }
@@ -283,17 +328,19 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
                     expected_len = byte;
                 } else if (received == 1) {
                     expected_len |= (byte << 8);
+                    // MAJOR FIX #5 (Iteration 2): Check actual buffer size FIRST, then sanity check
+                    // This ensures we protect against buffer overflow before other validations
+                    if (expected_len > max_buffer_size) {
+                        DEBUG_PRINT("ERROR: Response too large for buffer (%u > %u)\n",
+                                   expected_len, max_buffer_size);
+                        return false;
+                    }
                     // MAJOR FIX #1: Validate max length to prevent timeout on huge values
                     // Maximum reasonable response is 512 bytes (prevents waiting for len=65535)
                     #define AM32_MAX_RESPONSE_LEN 512
                     if (expected_len > AM32_MAX_RESPONSE_LEN) {
-                        DEBUG_PRINT("ERROR: AM32 response length exceeds maximum (%u > %u)\n",
+                        DEBUG_PRINT("ERROR: Response exceeds maximum (%u > %u)\n",
                                    expected_len, AM32_MAX_RESPONSE_LEN);
-                        return false;
-                    }
-                    // SAFETY: Validate expected length to prevent buffer overflow
-                    if (expected_len > max_buffer_size) {
-                        DEBUG_PRINT("ERROR: AM32 response too large (%u > %u)\n", expected_len, max_buffer_size);
                         return false;
                     }
                     got_header = true;

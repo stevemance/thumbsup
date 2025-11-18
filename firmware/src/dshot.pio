@@ -210,12 +210,14 @@ static inline void dshot_edt_rx_program_init(PIO pio, uint sm, uint offset, uint
 
 // Calculate clock divider for DShot speed
 static inline float dshot_calculate_clk_div(uint32_t sys_clk_hz, uint dshot_speed) {
-    // MINOR FIX: Correct cycle count documentation
+    // CRITICAL FIX #1 (Iteration 2): Correct cycle count is 15, not 13
     // Each bit consists of PIO instructions with delays:
-    //   Bit 1: set pins, 1 [7] = 8 cycles, set pins, 0 [3] = 4 cycles, jmp = 1 cycle = 13 cycles
-    //   Bit 0: set pins, 1 [3] = 4 cycles, set pins, 0 [7] = 8 cycles, jmp = 1 cycle = 13 cycles
-    // Total cycles per bit = 13 cycles (not 12)
-    uint32_t cycles_per_bit = 13;
+    //   out y, 1                = 1 cycle
+    //   jmp !y, bit_zero        = 1 cycle
+    //   Bit 1: set pins, 1 [7]  = 8 cycles, set pins, 0 [3] = 4 cycles, jmp x-- = 1 cycle = 13 cycles
+    //   Bit 0: set pins, 1 [3]  = 4 cycles, set pins, 0 [7] = 8 cycles, jmp x-- = 1 cycle = 13 cycles
+    // Total cycles per bit = 1 + 1 + 13 = 15 cycles (was incorrectly calculated as 13)
+    uint32_t cycles_per_bit = 15;
 
     // Calculate bit period in microseconds
     uint32_t bit_period_ns;

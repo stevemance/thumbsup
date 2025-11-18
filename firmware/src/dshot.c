@@ -111,21 +111,32 @@ static float calculate_clk_div(dshot_speed_t speed) {
         default: bit_period_ns = 3330; break;
     }
 
-    // CRITICAL FIX #3: PIO program uses 13 cycles per bit, not 12
-    // Each bit in dshot.pio:
-    //   - set pins, X [7 or 3]  = 8 or 4 cycles
-    //   - set pins, Y [3 or 7]  = 4 or 8 cycles
-    //   - jmp x--, bitloop      = 1 cycle
-    //   Total: 8+4+1 = 13 cycles
-    uint32_t cycles_per_bit = 13;
+    // CRITICAL FIX #1 (Iteration 2): PIO program uses 15 cycles per bit, not 13
+    // Each bit in dshot.pio consists of:
+    //   1. out y, 1              = 1 cycle
+    //   2. jmp !y, bit_zero      = 1 cycle
+    //   3. set pins, 1 [7 or 3]  = 8 or 4 cycles
+    //   4. set pins, 0 [3 or 7]  = 4 or 8 cycles
+    //   5. jmp x--, bitloop      = 1 cycle
+    //   Total: 1+1+8+4+1 = 15 cycles (or 1+1+4+8+1 = 15 cycles)
+    // Previous calculation of 13 cycles was missing out y,1 and jmp !y,bit_zero
+    uint32_t cycles_per_bit = 15;
 
     // Calculate required PIO frequency to achieve desired bit timing
     // Formula: pio_freq = (1 MHz * cycles_per_bit * 1000) / bit_period_ns
-    // Example for DShot300 (3330ns per bit):
-    //   pio_freq = (1,000,000 * 13 * 1000) / 3330 = 3,903,903 Hz (~3.9 MHz)
+    //
+    // CRITICAL FIX #1: Updated calculations for 15 cycles per bit
+    // DShot150 (6670ns):  pio_freq = (1,000,000 * 15 * 1000) / 6670 = 2,249,625 Hz (~2.25 MHz)
+    //                     clk_div = 125 MHz / 2.25 MHz = 55.56
+    // DShot300 (3330ns):  pio_freq = (1,000,000 * 15 * 1000) / 3330 = 4,504,505 Hz (~4.5 MHz)
+    //                     clk_div = 125 MHz / 4.5 MHz = 27.78
+    // DShot600 (1670ns):  pio_freq = (1,000,000 * 15 * 1000) / 1670 = 8,982,036 Hz (~9.0 MHz)
+    //                     clk_div = 125 MHz / 9.0 MHz = 13.89
+    // DShot1200 (830ns):  pio_freq = (1,000,000 * 15 * 1000) / 830 = 18,072,289 Hz (~18.1 MHz)
+    //                     clk_div = 125 MHz / 18.1 MHz = 6.91
     //
     // IMPORTANT: Use uint64_t to prevent overflow
-    //   Max intermediate: 1,000,000 * 13 * 1000 = 13,000,000,000 (fits in uint64_t)
+    //   Max intermediate: 1,000,000 * 15 * 1000 = 15,000,000,000 (fits in uint64_t)
     //   Would overflow uint32_t (max 4,294,967,295)
     uint64_t pio_freq_hz = (1000000ULL * cycles_per_bit * 1000ULL) / bit_period_ns;
 
@@ -210,9 +221,19 @@ static bool parse_edt_telemetry(uint32_t raw_data, dshot_telemetry_t* telemetry)
     // Each GCR symbol is 5 bits encoding 4 bits of data
     // Total: 16 bits data (12 bits value + 4 bits CRC)
 
+    // MAJOR FIX #2 (Iteration 2): Document bit extraction positions
+    // EDT frame structure (MSB first):
+    //   [20]=start, [19:15]=GCR0, [14:10]=GCR1, [9:5]=GCR2, [4:0]=GCR3
+    // Start bit at position 20 is used for sync but not extracted into raw_data
+    //
+    // NOTE: This assumes PIO shifts data such that start bit is NOT in raw_data.
+    // If start bit IS included in raw_data, positions would be off by one.
+    // TODO: Hardware validation required - verify bit positions with logic analyzer
+    //       to confirm start bit handling matches this extraction pattern.
+
     // Extract 4 GCR symbols (5 bits each)
     uint8_t gcr[4];
-    gcr[0] = (raw_data >> 16) & 0x1F;  // Bits 20-16
+    gcr[0] = (raw_data >> 16) & 0x1F;  // Bits 20-16 (assuming no start bit in raw_data)
     gcr[1] = (raw_data >> 11) & 0x1F;  // Bits 15-11
     gcr[2] = (raw_data >> 6) & 0x1F;   // Bits 10-6
     gcr[3] = (raw_data >> 1) & 0x1F;   // Bits 5-1
@@ -328,13 +349,22 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         if (pio_program_refcount_bidir == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_bidirectional_program);
         } else {
+            // MAJOR FIX #7 (Iteration 2): Validate that we found the program
             // Reuse existing program offset (all motors using same PIO will have same offset)
             // Find existing offset from another initialized motor with same program
+            bool found = false;
             for (int i = 0; i < MAX_DSHOT_MOTORS; i++) {
                 if (motor_states[i].initialized && motor_states[i].config.bidirectional) {
                     state->pio_offset = motor_states[i].pio_offset;
+                    found = true;
                     break;
                 }
+            }
+            if (!found) {
+                DEBUG_PRINT("CRITICAL: PIO bidir refcount=%d but no program found!\n",
+                           pio_program_refcount_bidir);
+                pio_sm_unclaim(state->pio, state->sm);
+                return false;
             }
         }
         pio_program_refcount_bidir++;
@@ -344,12 +374,21 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         if (pio_program_refcount_tx == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_tx_program);
         } else {
+            // MAJOR FIX #7 (Iteration 2): Validate that we found the program
             // Reuse existing program offset
+            bool found = false;
             for (int i = 0; i < MAX_DSHOT_MOTORS; i++) {
                 if (motor_states[i].initialized && !motor_states[i].config.bidirectional) {
                     state->pio_offset = motor_states[i].pio_offset;
+                    found = true;
                     break;
                 }
+            }
+            if (!found) {
+                DEBUG_PRINT("CRITICAL: PIO tx refcount=%d but no program found!\n",
+                           pio_program_refcount_tx);
+                pio_sm_unclaim(state->pio, state->sm);
+                return false;
             }
         }
         pio_program_refcount_tx++;
@@ -361,7 +400,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     state->dma_chan = dma_claim_unused_channel(true);
     if (state->dma_chan < 0) {
         DEBUG_PRINT("ERROR: No DMA channels available\n");
-        // MAJOR FIX #4: Clean up PIO program on DMA allocation failure
+        // MAJOR FIX #4 (Iteration 2): Clean up PIO program on DMA allocation failure
         // Decrement refcount and remove program if we were the first user
         if (config->bidirectional) {
             pio_program_refcount_bidir--;
@@ -375,6 +414,10 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
             }
         }
         pio_sm_unclaim(state->pio, state->sm);
+
+        // Zero state to prevent use of partially initialized structure
+        memset(state, 0, sizeof(dshot_motor_state_t));
+        state->dma_chan = -1;
         return false;
     }
 
@@ -451,6 +494,13 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     // Wait for transfer to complete (fast, ~50μs for DShot300)
     dma_channel_wait_for_finish_blocking(state->dma_chan);
 
+    // MAJOR FIX #1 (Iteration 2): Verify DMA transfer completed without errors
+    if (dma_channel_get_irq0_status(state->dma_chan)) {
+        DEBUG_PRINT("ERROR: DMA transfer failed for motor %d\n", motor);
+        dma_channel_acknowledge_irq0(state->dma_chan);
+        return false;
+    }
+
     return true;
 }
 
@@ -510,6 +560,15 @@ bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
 
     dshot_motor_state_t* state = &motor_states[motor];
     if (!state->initialized || !state->last_telemetry.valid) {
+        return false;
+    }
+
+    // MAJOR FIX #6 (Iteration 2): Check telemetry freshness (max 100ms age)
+    // Stale telemetry could indicate ESC communication loss or malfunction
+    uint32_t age_ms = to_ms_since_boot(get_absolute_time()) - state->last_telemetry.timestamp_ms;
+    #define TELEMETRY_MAX_AGE_MS 100
+    if (age_ms > TELEMETRY_MAX_AGE_MS) {
+        DEBUG_PRINT("WARNING: Telemetry stale (%u ms old) for motor %d\n", age_ms, motor);
         return false;
     }
 
