@@ -671,6 +671,19 @@ void am32_passthrough_exit(void) {
     am32_exit_config_mode();
 }
 
+// ============================================================================
+// ADVANCED AM32 FEATURES (Not currently used in competition mode)
+// ============================================================================
+// The following functions are complete implementations of the AM32 protocol
+// but are not currently used during robot operation. They are valuable for:
+// - ESC configuration and debugging
+// - Future telemetry integration
+// - Firmware updates
+// - Advanced ESC control
+//
+// These functions are kept for future use and should not be removed.
+// ============================================================================
+
 bool am32_get_info(am32_info_t* info) {
     // SAFETY: Validate parameters
     if (info == NULL) {

@@ -605,6 +605,22 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     return true;
 }
 
+// ============================================================================
+// ADVANCED DSHOT FEATURES (Not currently used - for future ESC integration)
+// ============================================================================
+// The following functions implement advanced DShot protocol features:
+// - Special ESC commands (beep, reverse, save settings, etc.)
+// - Bidirectional EDT telemetry (voltage, current, temperature, RPM)
+// - ESC configuration via DShot protocol
+//
+// These are complete implementations kept for future use when:
+// - Weapon system switches to DShot mode permanently
+// - EDT telemetry is integrated into safety monitoring
+// - Advanced ESC control is needed
+//
+// NOTE: DShot is now enabled by default for weapon motor.
+// ============================================================================
+
 // Send DShot command (must be repeated 6+ times)
 bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd) {
     if (motor >= MAX_DSHOT_MOTORS) {

@@ -21,7 +21,4 @@ bool calibration_mode_update(calibration_gamepad_ptr gp);
 // Check if calibration mode is currently active
 bool calibration_mode_is_active(void);
 
-// Get current calibration step info for display
-void calibration_mode_get_step_info(int* step_num, int* total_steps, int* pwm_percent);
-
 #endif // CALIBRATION_MODE_H

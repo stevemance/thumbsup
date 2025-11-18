@@ -281,10 +281,3 @@ bool calibration_mode_is_active(void) {
     return calibration_active;
 }
 
-void calibration_mode_get_step_info(int* step_num, int* total_steps, int* pwm_percent) {
-    if (step_num) *step_num = current_step;
-    if (total_steps) *total_steps = NUM_CALIBRATION_STEPS;
-    if (pwm_percent && current_step < NUM_CALIBRATION_STEPS) {
-        *pwm_percent = calibration_steps[current_step].pwm_percent;
-    }
-}

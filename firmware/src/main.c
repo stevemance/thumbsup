@@ -16,14 +16,7 @@
 #include "am32_config.h"
 #include "safety_test.h"
 
-#ifdef DIAGNOSTIC_MODE_BUILD
-#if DIAGNOSTIC_MODE_BUILD == 1
-// Diagnostic mode headers
-#include "diagnostic_mode.h"
-#include "web_server.h"
-#define BUILD_MODE_DIAGNOSTIC 1
-#else
-// Competition mode headers
+// Competition mode (Bluetooth) - diagnostic mode removed
 #include <btstack_run_loop.h>
 #include <uni.h>
 #include "sdkconfig.h"
@@ -33,19 +26,6 @@
 #endif
 // Defined in bluetooth_platform.c
 struct uni_platform* get_my_platform(void);
-#define BUILD_MODE_DIAGNOSTIC 0
-#endif
-#else
-// Default to competition mode if not specified
-#include <btstack_run_loop.h>
-#include <uni.h>
-#include "sdkconfig.h"
-#ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
-#error "Pico W must use BLUEPAD32_PLATFORM_CUSTOM"
-#endif
-struct uni_platform* get_my_platform(void);
-#define BUILD_MODE_DIAGNOSTIC 0
-#endif
 
 // Robot state is now managed in bluetooth_platform.c
 
@@ -213,31 +193,6 @@ int main() {
     // Turn-on LED. Turn it off once init is done.
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-#if BUILD_MODE_DIAGNOSTIC
-    // DIAGNOSTIC MODE - Run WiFi web server
-    // Keep LED on to show we're running
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-
-    // Start diagnostic mode (it will initialize subsystems)
-    if (diagnostic_mode_init()) {
-        printf("Diagnostic mode started successfully\n");
-        printf("WiFi AP: ThumbsUp_Diag\n");
-        printf("Password: combat123\n");
-        printf("Web interface: http://192.168.4.1\n");
-
-        // Run diagnostic mode loop - does not return
-        diagnostic_mode_run();
-    } else {
-        printf("Failed to start diagnostic mode\n");
-        // Blink LED rapidly to show error
-        while (true) {
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-            sleep_ms(100);
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-            sleep_ms(100);
-        }
-    }
-#else
     // COMPETITION MODE - Run Bluetooth gamepad control
         printf("\n*** COMPETITION MODE ***\n");
         printf("Starting Bluetooth initialization...\n");
@@ -296,7 +251,6 @@ int main() {
 
         // Does not return - BTstack takes over
         btstack_run_loop_execute();
-#endif
 
     return 0;
 }

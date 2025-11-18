@@ -168,6 +168,24 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
     return true;
 }
 
+// ============================================================================
+// WEAPON MODE SWITCHING API (Not currently used in controller logic)
+// ============================================================================
+// TODO: Integrate these mode switching functions into controller input
+//
+// Current status:
+// - weapon_init() automatically switches to DShot mode by default
+// - Mode switching functions exist but aren't hooked up to controller
+//
+// Future integration ideas:
+// - Button combo to switch between PWM/DShot/Config modes
+// - Safety button long-press to enter AM32 config mode
+// - Status LED feedback for current mode
+// - Store preferred mode in EEPROM/flash
+//
+// For now, DShot is used by default which is optimal for competition.
+// ============================================================================
+
 // Public mode switching functions
 bool weapon_enable_dshot(void) {
     return weapon_set_control_mode(WEAPON_MODE_DSHOT);
@@ -196,13 +214,20 @@ bool weapon_init(void) {
     weapon_state = WEAPON_STATE_DISARMED;
     current_speed = 0;
     target_speed = 0;
-    control_mode = WEAPON_MODE_PWM;  // Start in PWM mode
+    control_mode = WEAPON_MODE_PWM;  // Initialize in PWM mode first
     dshot_initialized = false;
 
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
 
     initialized = true;
-    DEBUG_PRINT("Weapon system initialized in PWM mode\n");
+
+    // Switch to DShot mode by default (better performance, telemetry support)
+    // Hardware is configured for DShot on GP4, ESC supports it
+    if (weapon_enable_dshot()) {
+        DEBUG_PRINT("Weapon system initialized in DShot300 mode\n");
+    } else {
+        DEBUG_PRINT("Weapon system initialized in PWM mode (DShot init failed)\n");
+    }
 
     return true;
 }

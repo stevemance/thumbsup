@@ -41,16 +41,4 @@ bool motor_linearization_init(void);
  */
 int8_t motor_linearization_compensate(motor_channel_t motor, int8_t desired_pwm_percent);
 
-/**
- * Get curve parameters for a specific motor and direction (for debugging/testing)
- *
- * @param motor Motor ID
- * @param is_reverse true for reverse direction
- * @param a_out Output: scale factor
- * @param b_out Output: exponent
- * @param deadband_out Output: deadband threshold
- */
-void motor_linearization_get_params(motor_channel_t motor, bool is_reverse,
-                                     float* a_out, float* b_out, float* deadband_out);
-
 #endif // MOTOR_LINEARIZATION_H

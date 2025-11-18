@@ -136,11 +136,3 @@ int8_t motor_linearization_compensate(motor_channel_t motor, int8_t desired_pwm_
     return compensated_pwm;
 }
 
-void motor_linearization_get_params(motor_channel_t motor, bool is_reverse,
-                                     float* a_out, float* b_out, float* deadband_out) {
-    const motor_curve_params_t* params = select_curve(motor, is_reverse);
-
-    if (a_out) *a_out = params->a;
-    if (b_out) *b_out = params->b;
-    if (deadband_out) *deadband_out = params->deadband;
-}
