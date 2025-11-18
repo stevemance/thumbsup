@@ -8,7 +8,11 @@
 #define AM32_BAUD_RATE          19200
 #define AM32_BAUDRATE_CMD       115200  // For bootloader mode
 #define AM32_SIGNAL_PIN         PIN_WEAPON_PWM
-#define AM32_REPLY_TIMEOUT      100     // ms
+// MAJOR FIX #6: Reply timeout may need adjustment based on hardware testing
+// 100ms should be sufficient for most operations, but slow ESCs or operations
+// like EEPROM read/write may require longer timeouts. Monitor actual response
+// times during hardware testing and increase if timeouts occur frequently.
+#define AM32_REPLY_TIMEOUT      100     // ms (may need increase for slow operations)
 
 // AM32 Protocol Commands
 #define AM32_CMD_KEEPALIVE      0xFF
@@ -17,6 +21,22 @@
 #define AM32_CMD_GET_INFO       0xCC
 #define AM32_CMD_RESET          0xDD
 #define AM32_CMD_BOOTLOADER     0xEE
+#define AM32_CMD_GET_TELEMETRY  0x0A
+#define AM32_CMD_SET_LED        0x4C  // 'L'
+#define AM32_CMD_BEEP           0x42  // 'B'
+#define AM32_CMD_GET_STATUS     0x53  // 'S'
+
+// MSP Protocol Commands
+#define MSP_API_VERSION         1
+#define MSP_FC_VARIANT          2
+#define MSP_FC_VERSION          3
+#define MSP_BOARD_INFO          4
+#define MSP_BUILD_INFO          5
+#define MSP_NAME                10
+#define MSP_SET_NAME            11
+#define MSP_MOTOR               104
+#define MSP_SET_MOTOR           214
+#define MSP_ESC_SENSOR_DATA     139
 
 // AM32 EEPROM Addresses (simplified subset)
 typedef enum {
@@ -83,6 +103,29 @@ typedef struct {
     bool bootloader_version;
 } am32_info_t;
 
+// AM32 Live Telemetry Structure
+typedef struct {
+    uint16_t rpm;                 // Actual motor RPM
+    uint16_t voltage_mv;          // Voltage in millivolts
+    uint16_t current_ma;          // Current in milliamps
+    uint8_t temperature_c;        // Temperature in Celsius
+    uint8_t consumption_mah;      // Consumed mAh
+    uint16_t erpm;                // Electrical RPM
+    bool valid;                   // Data is valid
+    uint32_t timestamp_ms;        // When telemetry was read
+} am32_telemetry_t;
+
+// AM32 ESC Status
+typedef struct {
+    bool armed;                   // ESC is armed
+    bool motor_running;           // Motor is running
+    bool signal_detected;         // Input signal detected
+    bool temperature_warning;     // Over temperature
+    bool current_warning;         // Over current
+    uint8_t error_code;           // Last error code
+    uint32_t uptime_ms;           // ESC uptime
+} am32_status_t;
+
 // Function prototypes
 bool am32_init(void);
 bool am32_enter_config_mode(void);
@@ -104,5 +147,33 @@ void am32_apply_weapon_defaults(am32_config_t* config);
 // Serial passthrough for external configurator
 bool am32_passthrough_mode(void);
 void am32_passthrough_exit(void);
+
+// Live telemetry and monitoring
+bool am32_read_telemetry(am32_telemetry_t* telemetry);
+bool am32_get_status(am32_status_t* status);
+
+// Motor control and testing
+bool am32_set_motor_speed(uint16_t speed_percent);
+bool am32_beep(uint8_t beep_pattern);
+bool am32_set_led(uint8_t led_state);
+
+// MSP protocol support
+bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len);
+bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t* len);
+
+// Firmware update (bootloader mode)
+bool am32_flash_firmware(const uint8_t* firmware_data, uint32_t size);
+bool am32_verify_firmware(void);
+
+/**
+ * AM32 ESC Serial Protocol Implementation
+ *
+ * Protocol reference:
+ * https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware
+ *
+ * Hardware: RP2040 UART1 on GP4 (TX) and GP5 (RX)
+ * Baud rates: 19200 (config), 115200 (bootloader)
+ * Format: 8N1, XOR checksum
+ */
 
 #endif // AM32_CONFIG_H

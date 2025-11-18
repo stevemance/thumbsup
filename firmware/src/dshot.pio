@@ -1,0 +1,240 @@
+; DShot Protocol PIO Program
+; Implements DShot150/300/600/1200 digital ESC protocol
+; Encoding: 0 = T/3 high, 2T/3 low; 1 = 2T/3 high, T/3 low
+;
+; Usage:
+;   - Load 16-bit DShot packet into TX FIFO
+;   - PIO transmits packet with precise timing
+;   - Supports bidirectional EDT telemetry reception
+;
+; Parameters:
+;   - Clock divider configured for desired DShot speed
+;   - Side-set pin configured for output
+;
+; Timing (for 3-cycle instruction):
+;   DShot150:  6.67μs per bit @ 450kHz PIO clock (1.48μs/cycle)
+;   DShot300:  3.33μs per bit @ 900kHz PIO clock (0.74μs/cycle)
+;   DShot600:  1.67μs per bit @ 1.8MHz PIO clock (0.37μs/cycle)
+;   DShot1200: 0.83μs per bit @ 3.6MHz PIO clock (0.185μs/cycle)
+
+.program dshot_tx
+
+.wrap_target
+    ; Wait for data in TX FIFO
+    pull block              ; Pull 16-bit DShot packet from FIFO
+
+    set x, 15               ; Set bit counter to 15 (16 bits total)
+
+bitloop:
+    ; Shift out MSB first
+    out y, 1                ; Get next bit into Y register
+    jmp !y, bit_zero        ; Jump to bit_zero handler if Y=0
+
+bit_one:
+    ; Bit 1: 2T/3 high, T/3 low (8:4 cycles = 2:1 ratio)
+    set pins, 1     [7]     ; 8 cycles HIGH (1 + 7 delay)
+    set pins, 0     [3]     ; 4 cycles LOW (1 + 3 delay)
+    jmp x--, bitloop        ; Decrement counter and loop
+    jmp done                ; All bits sent
+
+bit_zero:
+    ; Bit 0: T/3 high, 2T/3 low (4:8 cycles = 1:2 ratio)
+    set pins, 1     [3]     ; 4 cycles HIGH (1 + 3 delay)
+    set pins, 0     [7]     ; 8 cycles LOW (1 + 7 delay)
+    jmp x--, bitloop        ; Decrement counter and loop
+
+done:
+    ; Ensure line is low after transmission
+    set pins, 0             ; Set low
+    nop             [31]    ; Delay for stability (2 instructions)
+.wrap
+
+
+; DShot bidirectional telemetry reception (EDT)
+; Receives telemetry frame after DShot command
+; EDT frame: 21 bits GCR encoded data
+;
+; Timing: Telemetry arrives ~30μs after DShot frame
+; Bit period matches DShot speed
+
+.program dshot_edt_rx
+.wrap_target
+    ; Wait for start bit (low-to-high transition)
+    wait 0 pin 0            ; Wait for line to go low
+    wait 1 pin 0            ; Wait for line to go high (start bit)
+
+    ; Delay to center of first data bit
+    set x, 20       [15]    ; 21 bits total, delay to bit center
+
+bitloop:
+    ; Sample bit in center of bit period
+    in pins, 1      [7]     ; Sample pin, delay for next bit
+    jmp x--, bitloop        ; Continue for all bits
+
+    ; Push received data to RX FIFO
+    push block
+.wrap
+
+
+; Combined DShot TX/RX for bidirectional mode
+; First transmits DShot packet, then receives EDT telemetry
+
+.program dshot_bidirectional
+
+.wrap_target
+    ; === TRANSMIT PHASE ===
+    pull block              ; Pull 16-bit DShot packet from FIFO
+    set pindirs, 1          ; Set pin as output
+    set x, 15               ; Set bit counter
+
+tx_bitloop:
+    out y, 1                ; Get next bit
+    jmp !y, tx_bit_zero     ; Handle bit 0
+
+tx_bit_one:
+    set pins, 1     [7]     ; 8 cycles HIGH (2T/3)
+    set pins, 0     [3]     ; 4 cycles LOW (T/3)
+    jmp x--, tx_bitloop
+    jmp tx_done
+
+tx_bit_zero:
+    set pins, 1     [3]     ; 4 cycles HIGH (T/3)
+    set pins, 0     [7]     ; 8 cycles LOW (2T/3)
+    jmp x--, tx_bitloop
+
+tx_done:
+    set pins, 0             ; Ensure line low
+    nop             [31]    ; Wait for telemetry
+
+    ; === RECEIVE PHASE ===
+    set pindirs, 0          ; Set pin as input (with pull-up)
+
+    ; Wait for telemetry start bit
+    wait 0 pin 0    [3]     ; Wait for line low
+    wait 1 pin 0    [3]     ; Wait for line high (start)
+
+    set x, 20       [7]     ; 21 bits, delay to center
+
+rx_bitloop:
+    in pins, 1      [7]     ; Sample bit, delay for next
+    jmp x--, rx_bitloop
+
+    ; Push telemetry data
+    push block
+
+    ; Restore output mode for next packet
+    set pindirs, 1
+    set pins, 0
+.wrap
+
+
+% c-sdk {
+// Helper function to initialize DShot TX PIO
+static inline void dshot_tx_program_init(PIO pio, uint sm, uint offset, uint pin, float clk_div) {
+    // Configure state machine
+    pio_sm_config c = dshot_tx_program_get_default_config(offset);
+
+    // Configure SET pins for output
+    sm_config_set_set_pins(&c, pin, 1);
+
+    // Configure OSR (output shift register)
+    sm_config_set_out_shift(&c, false, false, 16);  // Shift left, no autopull, 16 bits
+
+    // Set clock divider for desired DShot speed
+    sm_config_set_clkdiv(&c, clk_div);
+
+    // Set pin direction to output
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    // Initialize pin to low
+    pio_gpio_init(pio, pin);
+
+    // Load configuration and start state machine
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+// Helper function to initialize DShot bidirectional PIO
+static inline void dshot_bidirectional_program_init(PIO pio, uint sm, uint offset, uint pin, float clk_div) {
+    pio_sm_config c = dshot_bidirectional_program_get_default_config(offset);
+
+    // Configure SET pins
+    sm_config_set_set_pins(&c, pin, 1);
+
+    // Configure IN pins for telemetry reception
+    sm_config_set_in_pins(&c, pin);
+
+    // Configure shifts
+    sm_config_set_out_shift(&c, false, false, 16);  // TX: shift left, 16 bits
+    sm_config_set_in_shift(&c, false, false, 21);   // RX: shift left, 21 bits
+
+    // Set clock divider
+    sm_config_set_clkdiv(&c, clk_div);
+
+    // Initialize GPIO
+    pio_gpio_init(pio, pin);
+
+    // Start as output, will switch during operation
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    // Enable pull-up for input phase
+    gpio_pull_up(pin);
+
+    // Load and enable
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+// Helper function to initialize EDT RX PIO
+static inline void dshot_edt_rx_program_init(PIO pio, uint sm, uint offset, uint pin, float clk_div) {
+    pio_sm_config c = dshot_edt_rx_program_get_default_config(offset);
+
+    // Configure IN pins
+    sm_config_set_in_pins(&c, pin);
+
+    // Configure ISR (input shift register)
+    sm_config_set_in_shift(&c, false, false, 21);  // Shift left, 21 bits
+
+    // Set clock divider
+    sm_config_set_clkdiv(&c, clk_div);
+
+    // Set pin as input with pull-up
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+    gpio_pull_up(pin);
+    pio_gpio_init(pio, pin);
+
+    // Load and enable
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+// Calculate clock divider for DShot speed
+static inline float dshot_calculate_clk_div(uint32_t sys_clk_hz, uint dshot_speed) {
+    // MINOR FIX: Correct cycle count documentation
+    // Each bit consists of PIO instructions with delays:
+    //   Bit 1: set pins, 1 [7] = 8 cycles, set pins, 0 [3] = 4 cycles, jmp = 1 cycle = 13 cycles
+    //   Bit 0: set pins, 1 [3] = 4 cycles, set pins, 0 [7] = 8 cycles, jmp = 1 cycle = 13 cycles
+    // Total cycles per bit = 13 cycles (not 12)
+    uint32_t cycles_per_bit = 13;
+
+    // Calculate bit period in microseconds
+    uint32_t bit_period_ns;
+    switch(dshot_speed) {
+        case 150:  bit_period_ns = 6670; break;
+        case 300:  bit_period_ns = 3330; break;
+        case 600:  bit_period_ns = 1670; break;
+        case 1200: bit_period_ns = 830;  break;
+        default:   bit_period_ns = 3330; break;  // Default to DShot300
+    }
+
+    // Required PIO clock frequency
+    // pio_freq = (1000000 / bit_period_ns) * cycles_per_bit
+    uint32_t pio_freq_khz = (1000000 * cycles_per_bit) / bit_period_ns;
+
+    // Clock divider = sys_clk / pio_freq
+    float clk_div = (float)sys_clk_hz / ((float)pio_freq_khz * 1000.0f);
+
+    return clk_div;
+}
+
+%}
