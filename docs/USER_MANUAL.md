@@ -91,38 +91,18 @@ The ThumbsUp robot uses standard Bluetooth gamepads (Xbox, PlayStation, or compa
    - Status LED turns on (system booting)
    - WiFi LED blinks (Bluetooth initializing)
 
-### 3. Safety Test Phase
-The robot automatically runs safety tests on startup:
+### 3. System Initialization
+The robot initializes and tests safety systems on startup:
+- Motor controllers initialize to safe (stopped) state
+- Weapon safety interlocks engage
+- Battery monitor calibrates
+- Addressable LEDs perform startup animation
+- Bluetooth radio initializes
 
-```
-=================================
-  ThumbsUp Safety Test Suite
-=================================
-
-Test 1: Motor Initialization Safety...
-  ✓ PASSED
-Test 2: Weapon Safety Checks...
-  ✓ PASSED
-Test 3: Failsafe Conditions...
-  ✓ PASSED
-Test 4: Battery Monitoring...
-  ✓ PASSED
-Test 5: Emergency Stop Functions...
-  ✓ PASSED
-Test 6: Integer Overflow Protection...
-  ✓ PASSED
-
-=================================
-  Test Results: 6/6 passed
-  ✓ ALL SAFETY TESTS PASSED
-  System is safe for operation
-=================================
-```
-
-**If any test fails:**
-- Robot enters lockout mode
-- All LEDs flash rapidly
-- **DO NOT OPERATE** - service required
+Status LED will show:
+- **Blue pulse**: System initializing
+- **Green**: Ready, waiting for controller
+- **Cyan**: Controller connected, ready to operate
 
 ### 4. Controller Connection
 1. Turn on Bluetooth gamepad
@@ -132,134 +112,62 @@ Test 6: Integer Overflow Protection...
 
 ---
 
-## Safety Test Suite
+## Status LED System
 
-The robot runs 6 critical safety tests at startup:
+The robot uses 2 SK6812 addressable RGB LEDs for status indication:
 
-### Test 1: Motor Initialization Safety
-**What it tests:**
-- Weapon motor starts at minimum (safe) position
-- Drive motors start at neutral (stopped)
-- PWM signals are within valid range
+### LED 0: System Status
+Shows overall robot state and health
 
-**Pass criteria:**
-- Weapon pulse = 1000μs (motor off)
-- Drive pulses = 1500μs (neutral)
+### LED 1: Weapon Status
+Shows weapon arming and activity state
 
-**User indication:**
-- Serial output shows "✓ PASSED"
-- No motor movement during test
-
-### Test 2: Weapon Safety Checks
-**What it tests:**
-- Weapon starts in DISARMED state
-- Low battery prevents arming
-- Safety button prevents arming
-
-**Pass criteria:**
-- Initial state = WEAPON_STATE_DISARMED
-- Arming blocked if battery < 11.1V
-- Arming blocked if safety button pressed
-
-**User indication:**
-- Armed LED remains OFF
-- Weapon does not respond to throttle
-
-### Test 3: Failsafe Conditions
-**What it tests:**
-- Failsafe system is operational
-- Timeout detection works
-- Emergency stop accessible
-
-**Pass criteria:**
-- Failsafe function exists and compiles
-- 1500ms timeout configured
-- Emergency stop can be triggered
-
-**User indication:**
-- No errors in serial output
-- System ready for failsafe monitoring
-
-### Test 4: Battery Monitoring
-**What it tests:**
-- Battery voltage reading circuit
-- Voltage thresholds are sensible
-- ADC is functioning
-
-**Pass criteria:**
-- Voltage reads between 6V-15V
-- Low voltage < Max voltage
-- Critical < Low voltage thresholds
-
-**User indication:**
-- Battery LED shows appropriate state:
-  - Solid GREEN: Good (>11.1V)
-  - Blinking YELLOW: Low (10.5-11.1V)
-  - Fast blinking RED: Critical (<10.5V)
-
-### Test 5: Emergency Stop Functions
-**What it tests:**
-- Emergency stop immediately halts motors
-- Weapon enters emergency state
-- System can be reset properly
-
-**Pass criteria:**
-- All motors stop within 10ms
-- Weapon state = EMERGENCY_STOP
-- Motors can be reinitialized
-
-**User indication:**
-- Brief motor initialization test
-- No sustained motor movement
-
-### Test 6: Integer Overflow Protection
-**What it tests:**
-- PWM value clamping works
-- Invalid inputs are handled safely
-- No calculation overflows
-
-**Pass criteria:**
-- Over-range values are clamped
-- Under-range values are clamped
-- All calculations stay in bounds
-
-**User indication:**
-- No erratic motor behavior
-- System remains stable
+See LED Indicators section below for complete pattern details.
 
 ---
 
 ## LED Indicators
 
-### Status LED (Blue)
-| Pattern | Meaning |
-|---------|---------|
-| Solid ON | System operational |
-| Slow blink (1Hz) | Waiting for controller |
-| Fast blink (5Hz) | Emergency stop / Failsafe active |
-| OFF | System not ready |
+The robot uses 2 SK6812 addressable RGB LEDs (GP28):
 
-### Armed LED (Red)
-| Pattern | Meaning |
-|---------|---------|
-| Solid ON | Weapon ARMED - DANGER |
-| OFF | Weapon safe/disarmed |
-| Cannot turn ON | Safety interlock active |
+### LED 0: System Status LED
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Dim Blue | Solid | Booting/initializing |
+| Green | Solid | Ready, no controller connected |
+| Cyan | Solid | Controller connected, normal operation |
+| Yellow | Blinking | Failsafe - connection lost |
+| Orange | Solid | Low battery warning |
+| Orange | Blinking | Critical battery |
+| Red | Solid/Blinking | Error or emergency stop |
+| Purple | Pulsing | Test/diagnostic/calibration mode |
 
-### Battery LED (Green/Yellow/Red)
-| Pattern | Meaning | Voltage |
-|---------|---------|---------|
-| Solid GREEN | Battery good | >11.1V |
-| Blinking YELLOW | Battery low | 10.5-11.1V |
-| Fast blinking RED | Battery critical | <10.5V |
-| OFF | No power | - |
+### LED 1: Weapon Status LED
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Off | - | Weapon disarmed (safe) |
+| Amber/Yellow | Blinking | Arming sequence in progress |
+| Orange | Solid | Armed but not spinning |
+| Red | Solid | ⚠️ WEAPON SPINNING - DANGER ⚠️ |
+| Red | Fast Blinking | Emergency stop active |
 
-### WiFi/Bluetooth LED (on Pico W)
+### Trim Mode LED Feedback
+During trim calibration (L3+R3 hold):
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Green | Blink | Sample captured (A button) |
+| Red | Blink | Sample removed (B button) |
+| Orange | Pulse | Fitting curves |
+| Green | Solid | Calibration complete |
+| Red | 3x Blinks | Error - not enough samples |
+
+### WiFi/Bluetooth LED (Built-in on Pico W)
 | Pattern | Meaning |
 |---------|---------|
 | ON during boot | Initializing |
-| OFF after init | Ready for connections |
-| Blinking | Activity/pairing |
+| OFF after init | Normal operation (Competition mode) |
+| Blinking | Bluetooth activity |
+| Solid ON | Diagnostic mode active (WiFi AP) |
 
 ---
 

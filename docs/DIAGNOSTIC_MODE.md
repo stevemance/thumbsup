@@ -4,7 +4,7 @@
 
 The ThumbsUp robot firmware includes a **Diagnostic Mode** that provides a WiFi-based web interface for telemetry, testing, and control. This mode is designed for pit debugging, system testing, and detailed diagnostics when Bluetooth gamepad control is not needed.
 
-> **Note**: Diagnostic Mode is currently disabled in the build due to WiFi/Bluetooth coexistence limitations with the CYW43439 chip. The implementation is complete but requires stack refactoring to enable both radios simultaneously.
+> **Note**: Diagnostic Mode is fully implemented and functional. To use it, build with `-DDIAGNOSTIC_MODE=ON` in CMake. This creates a separate firmware build with WiFi instead of Bluetooth (the CYW43439 chip can only use one radio at a time).
 
 ## Features
 
@@ -83,9 +83,9 @@ The firmware supports two mutually exclusive operating modes:
 
 ### Mode Selection
 
-Mode is selected at boot time:
-- **Normal boot** → Competition Mode
-- **Hold safety button 3 seconds during boot** → Diagnostic Mode
+Mode is selected at build time using CMake option:
+- **Default build**: Competition Mode (Bluetooth gamepad control)
+- **Build with `-DDIAGNOSTIC_MODE=ON`**: Diagnostic Mode (WiFi access point)
 
 ### Technical Implementation
 
@@ -228,26 +228,31 @@ The issue is the Pico SDK's CMake build system requires you to choose at compile
 
 We can't link both in the same binary. The code for exclusive mode selection is ready, but it needs **two separate firmware builds**.
 
-### 🔧 How to Enable Diagnostic Mode
+### 🔧 How to Build Diagnostic Mode
 
-To enable diagnostic mode:
+To build and flash diagnostic mode firmware:
 
-1. **Option A**: Exclusive Mode (Recommended)
-   - Fully initialize either WiFi OR Bluetooth
-   - Not both simultaneously
-   - Requires conditional compilation
+```bash
+cd firmware
+mkdir build-diagnostic
+cd build-diagnostic
+cmake .. -DDIAGNOSTIC_MODE=ON
+make -j8
 
-2. **Option B**: Coexistence Mode (Complex)
-   - Use `pico_cyw43_arch_lwip_threadsafe`
-   - Implement time-division multiplexing
-   - May impact real-time performance
-   - Requires significant refactoring
+# Flash to Pico W
+cp thumbsup.uf2 /media/$(whoami)/RPI-RP2/
 
-3. **Option C**: External Module
-   - Separate diagnostic module
-   - ESP32 or second Pico W
-   - Serial communication
-   - Maintains performance
+# Or use picotool
+picotool load thumbsup.elf
+picotool reboot
+```
+
+To return to competition mode, rebuild without the flag:
+```bash
+cd ../build
+cmake ..
+make -j8
+```
 
 ## Security Considerations
 

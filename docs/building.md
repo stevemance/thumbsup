@@ -131,19 +131,27 @@ make -j8
 
 The firmware consists of:
 - `src/main.c` - Main entry point and initialization
-- `src/bluetooth_platform.c` - Bluepad32 platform implementation
-- `src/motor_control.c` - Motor PWM control
+- `src/bluetooth_platform.c` - Bluepad32 platform implementation (competition mode)
+- `src/motor_control.c` - Motor PWM/DShot control
 - `src/drive.c` - Drive mixing and control
 - `src/weapon.c` - Weapon motor control
 - `src/safety.c` - Safety systems
 - `src/status.c` - LED status indicators
+- `src/ws2812.c` - SK6812 addressable LED driver
+- `src/motor_linearization.c` - Motor response curve compensation
+- `src/calibration_mode.c` - Motor calibration system
+- `src/trim_mode.c` - Dynamic trim adjustment
 - `src/am32_config.c` - AM32 ESC configuration
+- `src/dshot.c` - DShot digital protocol
+- `src/diagnostic_mode.c` - WiFi diagnostic mode (optional build)
+- `src/web_server.c` - Web dashboard (diagnostic mode)
 
 ### Configuration Files
 
 - `include/config.h` - System configuration and pin definitions
 - `include/sdkconfig.h` - Bluepad32 SDK configuration
 - `include/btstack_config.h` - BTstack Bluetooth configuration
+- `CMakeLists.txt` - Build system with DIAGNOSTIC_MODE option
 
 ## Troubleshooting
 
@@ -251,9 +259,24 @@ Create `.vscode/settings.json`:
 }
 ```
 
+## Building Diagnostic Mode
+
+To build the WiFi diagnostic version instead:
+
+```bash
+cd firmware
+mkdir build-diagnostic
+cd build-diagnostic
+cmake .. -DDIAGNOSTIC_MODE=ON
+make -j8
+```
+
+This creates a separate firmware with WiFi access point and web dashboard.
+
 ## Next Steps
 
 After building successfully:
-1. [Flash the firmware](../README.md#flashing-the-firmware) to your Pico W
-2. [Configure your gamepad](#) for Bluetooth pairing
-3. [Test the system](safety_procedures.md) following safety procedures
+1. Flash the firmware to your Pico W
+2. Pair your Bluetooth gamepad (competition mode) or connect to WiFi (diagnostic mode)
+3. Test the system following [safety procedures](safety_procedures.md)
+4. See [User Manual](USER_MANUAL.md) for operation instructions

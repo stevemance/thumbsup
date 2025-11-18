@@ -8,9 +8,9 @@
                     ┌─────────┐
      LEFT PWM ←─ 1  │● GP0   ●│ 40  VBUS (5V from USB)
     RIGHT PWM ←─ 2  │● GP1   ●│ 39  VSYS (5V from BEC) ←── ESC BEC Power
-   WEAPON PWM ←─ 3  │● GP2   ●│ 38  GND
+          (GP2)  3  │●       ●│ 38  GND
           (GP3)  4  │●       ●│ 37  3V3_EN
-          (GP4)  5  │●       ●│ 36  3V3(OUT)
+   WEAPON PWM ←─ 5  │● GP4   ●│ 36  3V3(OUT)
           (GP5)  6  │●       ●│ 35  ADC_VREF
           (GP6)  7  │●       ●│ 34  GP28 ←── SK6812 Status LEDs
           (GP7)  8  │●       ●│ 33  AGND
@@ -35,7 +35,7 @@
 |------|------|----------|-----------|-------------|----------------------|
 | GP0 | 1 | PWM | Output | Left Drive Motor Signal | Yellow |
 | GP1 | 2 | PWM | Output | Right Drive Motor Signal | Orange |
-| GP2 | 3 | PWM | Output | Weapon Motor Signal (AM32 ESC) | Red |
+| GP4 | 5 | PWM/UART1/DShot | Output | Weapon Motor Signal (AM32 ESC, DShot) | Red |
 | GP8 | 9 | Digital | Input (Pull-up) | Safety Button | White |
 | GP26 | 31 | ADC0 | Input | Battery Voltage Monitor | Brown |
 | GP28 | 34 | Data | Output | SK6812 Addressable LEDs (2 LEDs) | Green |
@@ -45,17 +45,18 @@
 ### Physical Button
 The safety button (GP8) is **OPTIONAL but HIGHLY RECOMMENDED** for:
 
-1. **Configuration Mode Entry**
-   - Hold during power-on to enter AM32 ESC configuration mode
-   - Used to configure weapon ESC settings
+1. **Calibration Mode Entry**
+   - Hold X+Y buttons at startup to enter motor calibration mode
+   - Used to capture motor response curves for linearization
 
-2. **Diagnostic Mode Entry** (when enabled in build)
-   - Hold for 3 seconds during boot to enter WiFi diagnostic mode
-   - Provides web dashboard for testing and monitoring
+2. **Trim Mode Entry**
+   - Hold L3+R3 buttons during operation for trim adjustment
+   - Compensates for motor asymmetry and drift
 
-3. **Runtime Safety**
-   - Press during operation to immediately disarm weapon
-   - Part of the safety violation monitoring system
+3. **Diagnostic Mode Entry** (requires special build)
+   - Build with -DDIAGNOSTIC_MODE=ON
+   - Provides WiFi access point with web dashboard
+   - For testing and telemetry monitoring
 
 ### Button Wiring
 ```
