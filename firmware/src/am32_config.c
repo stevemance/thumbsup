@@ -603,16 +603,16 @@ uint8_t am32_calculate_checksum(const uint8_t* data, uint16_t len) {
 void am32_apply_weapon_defaults(am32_config_t* config) {
     config->motor_direction = 0;        // Forward only
     config->bidirectional = 0;          // Unidirectional
-    config->brake_on_stop = 0;          // No brake for weapon
-    config->startup_power = 6;          // Medium-high power
+    config->brake_on_stop = 1;          // Active brake for weapon safety
+    config->startup_power = 5;          // Medium power (gentler for F2822 small motor)
     config->motor_timing = 16;          // 16 degrees
     config->motor_kv = 1100;            // F2822-1100KV
     config->motor_poles = 14;           // Standard outrunner
     config->pwm_frequency = 24;         // 24kHz
     config->throttle_min = 1000;        // 1000us minimum
     config->throttle_max = 2000;        // 2000us maximum
-    config->temperature_limit = 80;     // 80°C limit
-    config->current_limit = 40;         // 40A limit
+    config->temperature_limit = 70;     // 70°C limit (conservative for F2822 small motor)
+    config->current_limit = 10;         // 10A limit (F2822-1100KV max 9.9A)
     config->low_voltage_cutoff = 0;     // Disabled (robot handles this)
     config->demag_compensation = 2;     // High for weapon loads
     config->sine_mode = 0;              // Trapezoidal
