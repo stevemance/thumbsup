@@ -52,6 +52,7 @@ set(CORE_SOURCES
     src/calibration_mode.c
     src/motor_linearization.c
     src/am32_config.c
+    src/dshot.c
     src/safety_test.c
 )
 
@@ -74,6 +75,7 @@ endif()
 
 # Generate PIO headers
 pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
+pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 
 # Include directories
 if(DIAGNOSTIC_MODE)
@@ -106,6 +108,7 @@ if(DIAGNOSTIC_MODE)
         hardware_uart
         hardware_watchdog
         hardware_pio
+        hardware_dma
         hardware_flash
         hardware_sync
     )
@@ -123,6 +126,7 @@ else()
         hardware_uart
         hardware_watchdog
         hardware_pio
+        hardware_dma
         hardware_flash
         hardware_sync
         bluepad32

@@ -159,7 +159,8 @@ bool am32_set_led(uint8_t led_state);
 
 // MSP protocol support
 bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len);
-bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t* len);
+// CRITICAL FIX #3 (Iteration 4): Add buffer_size parameter to prevent overflow
+bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint16_t* len);
 
 // Firmware update (bootloader mode)
 bool am32_flash_firmware(const uint8_t* firmware_data, uint32_t size);

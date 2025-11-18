@@ -309,8 +309,14 @@ bool am32_send_command(uint8_t cmd, const uint8_t* data, uint16_t len) {
 
 bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) {
     // SAFETY: Validate parameters
-    if (buffer == NULL || len == NULL || *len == 0) {
-        DEBUG_PRINT("CRITICAL: Invalid parameters to am32_receive_response\n");
+    // MAJOR FIX #5 (Iteration 4): Explicit zero-length validation
+    if (buffer == NULL || len == NULL) {
+        DEBUG_PRINT("CRITICAL: NULL parameters to am32_receive_response\n");
+        return false;
+    }
+
+    if (*len == 0) {
+        DEBUG_PRINT("CRITICAL: Zero-length buffer in am32_receive_response\n");
         return false;
     }
 
@@ -436,6 +442,7 @@ bool am32_write_settings(const am32_config_t* config) {
     }
 
     // MINOR FIX: Validate config parameter ranges before writing to ESC
+    // MAJOR FIX #6 (Iteration 4): Comprehensive range validation
     // This prevents sending invalid values that could damage the ESC or motor
     if (config->temperature_limit > 150) {
         DEBUG_PRINT("ERROR: Temperature limit too high (%d > 150°C)\n", config->temperature_limit);
@@ -455,6 +462,23 @@ bool am32_write_settings(const am32_config_t* config) {
     }
     if (config->pwm_frequency != 24 && config->pwm_frequency != 48 && config->pwm_frequency != 96) {
         DEBUG_PRINT("ERROR: Invalid PWM frequency (%d, must be 24, 48, or 96 kHz)\n", config->pwm_frequency);
+        return false;
+    }
+    // MAJOR FIX #6 (Iteration 4): Additional parameter validation
+    if (config->demag_compensation > 2) {
+        DEBUG_PRINT("ERROR: Demag compensation out of range (%d, must be 0-2)\n", config->demag_compensation);
+        return false;
+    }
+    if (config->sine_mode > 1) {
+        DEBUG_PRINT("ERROR: Sine mode out of range (%d, must be 0 or 1)\n", config->sine_mode);
+        return false;
+    }
+    if (config->deadband > 10) {
+        DEBUG_PRINT("ERROR: Deadband too high (%d > 10us)\n", config->deadband);
+        return false;
+    }
+    if (config->motor_poles < 2 || config->motor_poles > 36 || (config->motor_poles % 2) != 0) {
+        DEBUG_PRINT("ERROR: Motor poles invalid (%d, must be even number 2-36)\n", config->motor_poles);
         return false;
     }
 
@@ -606,10 +630,10 @@ bool am32_passthrough_mode(void) {
         return false;
     }
 
-    // MINOR FIX: Intentional infinite loop for passthrough mode
-    // This loop bridges USB serial <-> AM32 UART until user presses ESC key
-    // Escape mechanism: ESC key (0x1B) breaks the loop at line 453
-    // Watchdog is fed inside loop to prevent system reset during long config sessions
+    // CRITICAL FIX #4 (Iteration 4): Use non-blocking getchar to prevent infinite loop
+    // Original code used getchar_timeout_us(0) to check if available, then blocking getchar()
+    // This creates race: interrupt could consume char between the two calls → hang forever
+    // Fix: Use getchar_timeout_us(1000) for non-blocking read with short timeout
     while (true) {
         // SAFETY: Feed watchdog to prevent resets (only if enabled)
         if (watchdog_hw->ctrl & WATCHDOG_CTRL_ENABLE_BITS) {
@@ -617,8 +641,10 @@ bool am32_passthrough_mode(void) {
         }
 
         // USB -> AM32
-        if (getchar_timeout_us(0) != PICO_ERROR_TIMEOUT) {
-            int c = getchar();
+        // CRITICAL FIX #4 (Iteration 4): Use getchar_timeout_us(1000) instead of getchar()
+        // This prevents blocking forever if character is consumed between check and read
+        int c = getchar_timeout_us(1000);
+        if (c != PICO_ERROR_TIMEOUT) {
             if (c == 0x1B) {  // ESC key to exit
                 DEBUG_PRINT("ESC key pressed, exiting passthrough mode\n");
                 break;
@@ -883,8 +909,11 @@ bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len) {
     return true;
 }
 
-bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t* len) {
-    if (cmd == NULL || payload == NULL || len == NULL) {
+bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint16_t* len) {
+    // CRITICAL FIX #3 (Iteration 4): Buffer overflow protection
+    // Validate buffer_size parameter and payload_len from wire before writing
+    if (cmd == NULL || payload == NULL || len == NULL || buffer_size == 0) {
+        DEBUG_PRINT("CRITICAL: Invalid parameters to am32_msp_receive\n");
         return false;
     }
 
@@ -917,6 +946,13 @@ bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t* len) {
                 break;
             case 3:  // Payload length
                 payload_len = byte;
+                // CRITICAL FIX #3 (Iteration 4): Validate payload_len before accepting it
+                // Malicious ESC could send payload_len=255 for caller's 32-byte buffer
+                if (payload_len > buffer_size) {
+                    DEBUG_PRINT("ERROR: MSP payload too large (%u > %u), rejecting\n",
+                               payload_len, buffer_size);
+                    return false;
+                }
                 calc_checksum = byte;
                 state = 4;
                 break;
@@ -931,10 +967,17 @@ bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t* len) {
                 }
                 break;
             case 5:  // Payload
-                payload[idx++] = byte;
-                calc_checksum ^= byte;
-                if (idx >= payload_len) {
-                    state = 6;
+                // CRITICAL FIX #3 (Iteration 4): Double-check bounds before write
+                if (idx < payload_len && idx < buffer_size) {
+                    payload[idx++] = byte;
+                    calc_checksum ^= byte;
+                    if (idx >= payload_len) {
+                        state = 6;
+                    }
+                } else {
+                    // Should never reach here due to validation in state 3
+                    DEBUG_PRINT("CRITICAL: Buffer overflow prevented in MSP receive\n");
+                    return false;
                 }
                 break;
             case 6:  // Checksum

@@ -4,7 +4,9 @@
 #include "status.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
-#include <uni.h>  // For full gamepad structure definition
+#if !DIAGNOSTIC_MODE_BUILD
+#include <uni.h>  // For full gamepad structure definition (competition mode only)
+#endif
 
 // Calibration step definition
 typedef struct {
@@ -65,6 +67,7 @@ bool calibration_mode_init(void) {
 }
 
 void calibration_mode_check_activation(calibration_gamepad_ptr gp_ptr) {
+#if !DIAGNOSTIC_MODE_BUILD
     uni_gamepad_t* gp = (uni_gamepad_t*)gp_ptr;
 
     // Activation: Hold X + Y buttons simultaneously
@@ -136,9 +139,14 @@ void calibration_mode_check_activation(calibration_gamepad_ptr gp_ptr) {
     } else {
         activation_in_progress = false;
     }
+#else
+    // Diagnostic mode: calibration mode not available
+    (void)gp_ptr;
+#endif
 }
 
 bool calibration_mode_update(calibration_gamepad_ptr gp_ptr) {
+#if !DIAGNOSTIC_MODE_BUILD
     if (!calibration_active) {
         return false;
     }
@@ -213,6 +221,11 @@ bool calibration_mode_update(calibration_gamepad_ptr gp_ptr) {
     button_b_prev = button_b;
 
     return true;  // Calibration mode is handling input
+#else
+    // Diagnostic mode: calibration mode not available
+    (void)gp_ptr;
+    return false;
+#endif
 }
 
 static void print_current_step(void) {

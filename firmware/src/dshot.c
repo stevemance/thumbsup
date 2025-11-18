@@ -67,12 +67,21 @@ uint16_t dshot_throttle_from_percent(int8_t percent) {
         return 0;  // Disarmed
     }
 
-    // Map -100 to +100 percent to 48-2047 DShot range
-    int32_t throttle_range = DSHOT_THROTTLE_MAX - DSHOT_THROTTLE_MIN;
-    int32_t value = ((int32_t)percent * throttle_range) / 100;
-    value += (throttle_range / 2) + DSHOT_THROTTLE_MIN;
+    // MAJOR FIX #3 (Iteration 4): Rewrite formula to avoid negative intermediates
+    // Old formula: value = (percent * range) / 100 + (range / 2) + MIN
+    // For percent=-100: value = (-100 * 1999) / 100 + 999 + 48 = -1999 + 1047 = -952 (underflow)
+    //
+    // New approach: Map percent range [-100, +100] to throttle range [MIN, MAX]
+    // Using linear interpolation without negative intermediates:
+    //   percent = -100 → throttle = MIN (48)
+    //   percent = +100 → throttle = MAX (2047)
+    //
+    // Formula: throttle = MIN + ((percent + 100) * (MAX - MIN)) / 200
+    int32_t throttle_range = DSHOT_THROTTLE_MAX - DSHOT_THROTTLE_MIN;  // 1999
+    int32_t normalized_percent = (int32_t)percent + 100;  // 0 to 200
+    int32_t value = DSHOT_THROTTLE_MIN + (normalized_percent * throttle_range) / 200;
 
-    // Clamp to valid range
+    // Clamp to valid range (defensive, should not be needed with correct formula)
     if (value < DSHOT_THROTTLE_MIN) value = DSHOT_THROTTLE_MIN;
     if (value > DSHOT_THROTTLE_MAX) value = DSHOT_THROTTLE_MAX;
 
@@ -437,9 +446,22 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         mutex_exit(&pio_refcount_mutex);
         pio_sm_unclaim(state->pio, state->sm);
 
-        // Zero state to prevent use of partially initialized structure
-        memset(state, 0, sizeof(dshot_motor_state_t));
+        // MAJOR FIX #4 (Iteration 4): Initialize fields individually instead of memset
+        // memset() on entire structure could corrupt adjacent memory if size is wrong
+        // Explicit field initialization is safer and more maintainable
+        state->initialized = false;
+        state->pio = NULL;
+        state->sm = 0;
+        state->pio_offset = 0;
         state->dma_chan = -1;
+        state->last_packet = 0;
+        state->last_telemetry.valid = false;
+        state->last_telemetry.erpm = 0;
+        state->last_telemetry.voltage_cV = 0;
+        state->last_telemetry.current_cA = 0;
+        state->last_telemetry.temperature_C = 0;
+        state->last_telemetry.crc = 0;
+        state->last_telemetry.timestamp_ms = 0;
         return false;
     }
 
@@ -480,6 +502,17 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     dshot_motor_state_t* state = &motor_states[motor];
     if (!state->initialized) {
         DEBUG_PRINT("WARNING: DShot not initialized for motor %d\n", motor);
+        return false;
+    }
+
+    // MAJOR FIX #2 (Iteration 4): NULL pointer checks before dereferencing
+    if (state->pio == NULL) {
+        DEBUG_PRINT("CRITICAL: NULL PIO pointer for motor %d\n", motor);
+        return false;
+    }
+
+    if (state->dma_chan < 0) {
+        DEBUG_PRINT("CRITICAL: Invalid DMA channel for motor %d\n", motor);
         return false;
     }
 
@@ -544,12 +577,29 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     }
 
     // MAJOR FIX #4 (Iteration 3): Check transfer_count instead of IRQ status
-    // Using dma_channel_get_irq0_status() is semantically wrong for error detection
-    // Check if transfer completed successfully by verifying transfer_count is 0
+    // MAJOR FIX #7 (Iteration 4): Verify PIO consumed data after DMA completion
+    // DMA completion only means data was written to PIO FIFO, not that PIO transmitted it
     uint32_t remaining = dma_channel_hw_addr(state->dma_chan)->transfer_count;
     if (remaining != 0) {
         DEBUG_PRINT("ERROR: DMA transfer incomplete for motor %d (remaining=%u)\n", motor, remaining);
         return false;
+    }
+
+    // MAJOR FIX #7 (Iteration 4): Check PIO state machine status after DMA completion
+    // Verify that PIO actually consumed the data from FIFO and is transmitting
+    // TX FIFO should be draining (level decreasing) or empty if transmission complete
+    uint8_t fifo_level_after = pio_sm_get_tx_fifo_level(state->pio, state->sm);
+    if (fifo_level_after > 0) {
+        // Wait a bit for PIO to drain FIFO (typical DShot frame is ~30μs)
+        sleep_us(50);
+        uint8_t fifo_level_final = pio_sm_get_tx_fifo_level(state->pio, state->sm);
+        if (fifo_level_final >= fifo_level_after) {
+            // FIFO not draining - PIO may be stalled
+            DEBUG_PRINT("WARNING: PIO FIFO not draining for motor %d (level=%u)\n",
+                       motor, fifo_level_final);
+            // Not a critical error - data is in FIFO and will transmit eventually
+            // Return true since DMA succeeded, but log the warning
+        }
     }
 
     return true;

@@ -1,50 +1,111 @@
-(kicad_sch (version 20211123) (generator eeschema)
-
-  (uuid e63e39d7-6ac0-4ffd-8aa3-1841c4c47536)
-
-  (paper "A4")
-
-  (title_block
-    (title "Antweight Combat Robot Control System")
-    (date "2025-01-16")
-    (rev "1.0")
-    (company "ThumbsUp Robot")
-    (comment 1 "Raspberry Pi Pico W based combat robot controller")
-    (comment 2 "3S LiPo powered with brushed drive and brushless weapon")
-  )
-
-  (lib_symbols)
-
-  (text "RASPBERRY PI PICO W" (at 50 30 0)
-    (effects (font (size 2.54 2.54)) (justify left))
-  )
-
-  (text "Power Distribution" (at 150 30 0)
-    (effects (font (size 2.54 2.54)) (justify left))
-  )
-
-  (text "ESC Connections" (at 50 100 0)
-    (effects (font (size 2.54 2.54)) (justify left))
-  )
-
-  (text "Status LEDs" (at 150 100 0)
-    (effects (font (size 2.54 2.54)) (justify left))
-  )
-
-  (text "Pin Assignments:\n\nGP2 - Left Drive PWM\nGP3 - Right Drive PWM\nGP4 - Weapon PWM\n\nGP5 - Status LED\nGP6 - Armed LED\nGP7 - Battery LED\n\nGP8 - Safety Button\n\nGP26/ADC0 - Battery Monitor\n\nVSYS - 5V from ESC BEC\nGND - Common Ground" (at 50 150 0)
-    (effects (font (size 1.27 1.27)) (justify left))
-  )
-
-  (text "Power Requirements:\n\n3S LiPo (11.1V nominal)\n40A AM32 Weapon ESC\n2ch Brushed Drive ESC\n\n5V BEC to Pico VSYS\n\n1000uF capacitor on\nweapon ESC power" (at 150 150 0)
-    (effects (font (size 1.27 1.27)) (justify left))
-  )
-
-  (text "Signal Connections:\n\nAll ESCs use standard\nservo PWM signals:\n- Signal wire to GPIO\n- Ground to common GND\n- No power from ESC signal\n\n50Hz PWM frequency\n1000-2000us pulse width" (at 50 200 0)
-    (effects (font (size 1.27 1.27)) (justify left))
-  )
-
-  (text "Safety Features:\n\n- Weapon arm sequence\n- Connection failsafe\n- Battery monitoring\n- Emergency stop\n- Physical safety button" (at 150 200 0)
-    (effects (font (size 1.27 1.27)) (justify left))
-  )
-
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "e63e39d7-6ac0-4ffd-8aa3-1841c4c47536")
+	(paper "A4")
+	(title_block
+		(title "ThumbsUp - Antweight Combat Robot Control System")
+		(date "2025-11-18")
+		(rev "1.2")
+		(company "ThumbsUp Robot")
+		(comment 1 "Raspberry Pi Pico W with Bluepad32 Bluetooth controller")
+		(comment 2 "3S LiPo powered with brushed drive motors and brushless weapon")
+		(comment 3 "AM32 ESC integration with DShot and serial configuration")
+	)
+	(lib_symbols)
+	(text "Power Requirements:\n\n3S LiPo (11.1V nominal)\n40A AM32 Weapon ESC\n  - UART serial config\n  - DShot protocol support\n  - EDT telemetry (bidir)\n2ch Brushed Drive ESC\n\n5V BEC to Pico VSYS\n\n1000uF capacitor on\nweapon ESC power"
+		(exclude_from_sim no)
+		(at 150 150 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "11f8afd7-885e-4798-808d-e9fb90c0ba3e")
+	)
+	(text "Pin Assignments:\n\nMOTOR CONTROL:\nGP0 - Left Drive PWM\nGP1 - Right Drive PWM\nGP2 - Weapon PWM (or DShot)\n\nAM32 ESC INTERFACE:\nGP4 - UART1 TX (AM32 config)\nGP5 - UART1 RX (AM32 config)\n\nSTATUS INDICATORS:\nGP28 - Addressable LEDs\n       (2x SK6812/WS2812)\n       LED0: System Status\n       LED1: Weapon Status\n\nINPUTS:\nGP8 - Safety Button\nGP26/ADC0 - Battery Monitor\n\nPOWER:\nVSYS - 5V from ESC BEC\nGND - Common Ground"
+		(exclude_from_sim no)
+		(at 50 150 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "12939425-7704-4e35-a6b0-ca112310a370")
+	)
+	(text "Signal Connections:\n\nAll ESCs use standard\nservo PWM signals:\n- Signal wire to GPIO\n- Ground to common GND\n- No power from ESC signal\n\n50Hz PWM frequency\n1000-2000us pulse width"
+		(exclude_from_sim no)
+		(at 50 200 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "23942eba-ac33-434b-888e-b7b6542c448f")
+	)
+	(text "Power Distribution"
+		(exclude_from_sim no)
+		(at 150 30 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left)
+		)
+		(uuid "2b24c9e1-76ea-488b-acb8-21c92e23f713")
+	)
+	(text "ESC Connections"
+		(exclude_from_sim no)
+		(at 50 100 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left)
+		)
+		(uuid "52580525-0cbc-4099-b0e9-a9ff8750ce7c")
+	)
+	(text "Status LEDs"
+		(exclude_from_sim no)
+		(at 150 100 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left)
+		)
+		(uuid "5c0a7b3d-f9a5-437f-97b1-eb855e898e2f")
+	)
+	(text "RASPBERRY PI PICO W"
+		(exclude_from_sim no)
+		(at 50 30 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left)
+		)
+		(uuid "c2b49027-c5fc-48e5-a347-5e71dc01f656")
+	)
+	(text "Features:\n\nSAFETY:\n- Weapon arm sequence\n- Connection failsafe\n- Battery monitoring\n- Emergency stop\n- Physical safety button\n\nCONTROL:\n- Motor linearization\n- Per-motor calibration\n- 70% expo curve\n- Dynamic trim system\n- Bluepad32 Bluetooth\n\nCALIBRATION:\n- Hold X+Y to enter\n- Auto-stepping PWM\n- Measured: 805 RPM max"
+		(exclude_from_sim no)
+		(at 150 200 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "de674748-4982-4f3e-ae26-8d4d2524507b")
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
 )

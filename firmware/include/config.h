@@ -13,7 +13,9 @@
 // Pin Definitions
 #define PIN_DRIVE_LEFT_PWM  0    // GP0 - Left drive motor PWM
 #define PIN_DRIVE_RIGHT_PWM 1    // GP1 - Right drive motor PWM
-#define PIN_WEAPON_PWM      2    // GP2 - Weapon motor PWM
+// CRITICAL FIX #1: Change weapon to GP4 to enable UART1/DShot on same pin
+// GP4 is UART1 TX, allowing AM32 config mode and DShot protocol
+#define PIN_WEAPON_PWM      4    // GP4 - Weapon motor PWM/UART1_TX/DShot
 
 // Addressable Status LEDs (SK6812/WS2812)
 #define PIN_STATUS_LEDS     28   // GP28 - SK6812 addressable LEDs data line
