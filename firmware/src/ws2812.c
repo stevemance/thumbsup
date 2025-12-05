@@ -9,7 +9,7 @@
 #define WS2812_FREQ 800000  // 800 kHz
 
 static PIO pio = NULL;
-static uint sm = 0;
+static int sm = 0;  // Must be int, not uint - pio_claim_unused_sm returns -1 on failure
 static uint offset = 0;
 static uint32_t *pixel_buffer = NULL;
 static uint num_pixels = 0;

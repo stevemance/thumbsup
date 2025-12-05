@@ -656,8 +656,8 @@ bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
         return false;  // No telemetry available
     }
 
-    // Read telemetry frame from PIO
-    uint32_t raw_data = pio_sm_get_blocking(state->pio, state->sm);
+    // Read telemetry frame from PIO (non-blocking since we verified FIFO has data)
+    uint32_t raw_data = pio_sm_get(state->pio, state->sm);
 
     // Parse EDT frame
     if (parse_edt_telemetry(raw_data, &state->last_telemetry)) {

@@ -279,7 +279,8 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         }
 
         // SAFETY: Clear emergency stop only after holding A button for required time
-        if (gp->buttons & BTN_A) {
+        // Only process if emergency stop is actually active
+        if (emergency_stop && (gp->buttons & BTN_A)) {
             if (!emergency_clear_in_progress) {
                 emergency_clear_start_time = to_ms_since_boot(get_absolute_time());
                 emergency_clear_in_progress = true;
@@ -405,24 +406,16 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         weapon_update();
         status_update();
 
+        // CRITICAL: Run continuous safety monitoring (battery, safety button)
+        safety_update();
+
         break;
 
     case UNI_CONTROLLER_CLASS_BALANCE_BOARD:
-        // Do something
-        uni_balance_board_dump(&ctl->balance_board);
-        break;
-
     case UNI_CONTROLLER_CLASS_MOUSE:
-        // Do something
-        uni_mouse_dump(&ctl->mouse);
-        break;
-
     case UNI_CONTROLLER_CLASS_KEYBOARD:
-        // Do something
-        uni_keyboard_dump(&ctl->keyboard);
-        break;
-
     default:
+        // Robot only supports gamepads - ignore other controller types
         loge("Unsupported controller class: %d\n", ctl->klass);
         break;
     }
