@@ -56,8 +56,7 @@ static bool activation_buttons_held = false;
 static uint32_t activation_hold_start = 0;
 #define ACTIVATION_HOLD_TIME_MS 2000  // 2 seconds to enter/exit
 
-// Button state tracking for edge detection
-static bool button_a_prev = false;
+// Button state tracking for edge detection (A button handled in bluetooth_platform.c)
 static bool button_b_prev = false;
 
 // Feedback state for non-blocking LED flashes
@@ -502,13 +501,8 @@ bool trim_mode_update(trim_gamepad_ptr gp_ptr) {
 #if !DIAGNOSTIC_MODE_BUILD
     uni_gamepad_t *gp = (uni_gamepad_t*)gp_ptr;
 
-    // Check for A button press (capture sample)
-    bool button_a = (gp->buttons & BTN_A) != 0;
-    if (button_a && !button_a_prev) {
-        // A button just pressed - this is handled in bluetooth_platform.c
-        // because it needs the current drive state
-    }
-    button_a_prev = button_a;
+    // Note: A button (capture sample) is handled in bluetooth_platform.c
+    // because it needs the current drive state at capture time
 
     // Check for B button press (remove last sample)
     bool button_b = (gp->buttons & BTN_B) != 0;
@@ -587,7 +581,8 @@ int8_t trim_mode_get_offset(int8_t speed_percent) {
             float factor = (float)(speed_percent - speed1) / (float)(speed2 - speed1);
             float interpolated = offset1 + (offset2 - offset1) * factor;
 
-            return (int8_t)(interpolated + 0.5f); // Round to nearest
+            // Use roundf() for correct rounding of negative numbers
+            return (int8_t)roundf(interpolated);
         }
     }
 

@@ -30,7 +30,7 @@ struct uni_platform* get_my_platform(void);
 // Robot state is now managed in bluetooth_platform.c
 
 static void init_hardware(void) {
-    stdio_init_all();
+    // Note: stdio_init_all() is called in main() before this function
 
     adc_init();
     adc_gpio_init(PIN_BATTERY_ADC);

@@ -1,0 +1,86 @@
+# AM32 ESC Configuration for ThumbsUp Combat Robot
+#
+# This is the source of truth for ESC configuration.
+# Changes here are tracked in git and applied at startup.
+#
+# Values from actual ESC read on 2024-11-19
+
+# System info
+eeprom_version: 3
+firmware_version:
+  major: 2
+  minor: 19
+
+# Motor configuration
+motor:
+  kv: 27                    # Motor KV / 40 (e.g., 1100KV = 27)
+  poles: 14                 # Number of magnetic poles
+  direction_reversed: false # Reverse motor direction
+  bidirectional: false      # 3D mode (requires center stick = stop)
+  brake_on_stop: true       # Active braking when throttle at zero
+  stall_protection: false   # Protect against stalled motor
+
+# Startup configuration
+startup:
+  power: 100                # Startup power (1-255)
+  use_sine_start: true      # Use sinusoidal startup
+  sine_mode_power: 6        # Power for sine mode
+  sine_changeover_throttle: 15  # Throttle level for sine->normal
+
+# Timing and PWM
+timing:
+  advance_level: 16         # Motor timing advance (0-30 degrees)
+  auto_advance: true        # Automatic timing advance
+  pwm_frequency: 24         # PWM frequency in kHz (24, 48, 96)
+  comp_pwm: false           # Complementary PWM
+  variable_pwm: true        # Variable PWM based on throttle
+
+# Input/Servo configuration
+input:
+  type: 0                   # Input type (0=standard PWM, 1=serial, etc.)
+  servo_low: 139            # Low servo position
+  servo_high: 127           # High servo position
+  servo_neutral: 128        # Neutral position
+  servo_deadband: 50        # Deadband around neutral
+  disable_stick_calibration: false  # Disable auto calibration
+
+# Braking configuration
+braking:
+  active_brake_power: 0     # Active brake power (0-5%)
+  drag_brake_strength: 5    # Drag brake strength
+  driving_brake_strength: 1 # Driving brake strength
+  rc_car_reverse: false     # RC car style reverse
+
+# Protection settings
+protection:
+  temperature_limit: 70     # Max temperature in Celsius
+  current_limit: 5          # Current limit
+  low_voltage_cutoff: false # Enable low voltage cutoff
+  low_cell_volt_cutoff: 50  # Per-cell voltage cutoff
+  abs_voltage_cutoff: 10    # Absolute voltage cutoff (x0.5V = 5V)
+  stuck_rotor_protection: false  # Protect against stuck rotor
+
+# Current control PID
+current_control:
+  p_gain: 100               # Proportional gain
+  i_gain: 0                 # Integral gain
+  d_gain: 100               # Derivative gain
+  max_ramp: 160             # Max ramp rate
+  min_duty_cycle: 1         # Minimum duty cycle
+
+# Misc settings
+misc:
+  beep_volume: 11           # Beep volume (0-11)
+  telemetry_interval: 0     # Telemetry interval (0=off)
+  use_hall_sensors: false   # Use hall effect sensors
+
+# CAN bus settings
+can:
+  node: 0                   # CAN node ID
+  esc_index: 0              # ESC index
+  require_arming: 0         # Require arming
+  telem_rate: 0             # Telemetry rate
+  require_zero_throttle: 0  # Require zero throttle
+  filter_hz: 0              # Filter frequency
+  debug_rate: 0             # Debug rate
+  term_enable: 0            # Terminal enable
