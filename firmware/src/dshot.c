@@ -44,21 +44,9 @@ static bool pio_mutex_initialized = false;
 
 // CRC-4 calculation for DShot packets
 uint8_t dshot_calculate_crc(uint16_t packet) {
-    // CRC-4 with polynomial 0x19 (x^4 + x^3 + x + 1)
-    uint16_t crc = 0;
-    uint16_t data = packet;
-
-    for (int i = 0; i < 12; i++) {
-        crc ^= (data & 0x800) ? 0x8 : 0;
-        data <<= 1;
-        crc <<= 1;
-
-        if (crc & 0x10) {
-            crc ^= 0x19;
-        }
-    }
-
-    return crc & 0x0F;
+    // DShot CRC is XOR of three 4-bit nibbles
+    // This matches AM32's CRC verification algorithm
+    return ((packet ^ (packet >> 4) ^ (packet >> 8)) & 0x0F);
 }
 
 // Convert percent (-100 to +100) to DShot throttle value
