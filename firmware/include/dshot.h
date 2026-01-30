@@ -133,6 +133,15 @@ bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd);
 bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 
 /**
+ * Read raw EDT telemetry samples (40 samples, 2x oversampled).
+ *
+ * @param motor Motor channel
+ * @param raw_data Output raw frame bits
+ * @return true if a frame was read
+ */
+bool dshot_read_telemetry_raw(motor_channel_t motor, uint64_t* raw_data);
+
+/**
  * Convert electrical RPM to mechanical RPM
  *
  * @param erpm Electrical RPM from telemetry

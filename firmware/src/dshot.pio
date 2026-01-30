@@ -65,11 +65,11 @@ done:
     wait 1 pin 0            ; Wait for line to go high (start bit)
 
     ; Delay to center of first data bit
-    set x, 20       [7]     ; 21 bits total, delay to bit center
+    set x, 20       [7]     ; 21 bits total, delay to bit center (~12-cycle bit)
 
 bitloop:
     ; Sample bit in center of bit period
-    in pins, 1      [14]    ; Sample pin, delay for next bit
+    in pins, 1      [10]    ; Sample pin, delay for next bit (~12-cycle bit)
     jmp x--, bitloop        ; Continue for all bits
 
     ; Push received data to RX FIFO
@@ -117,21 +117,27 @@ tx_done:
 
     ; === RECEIVE PHASE ===
     ; Wait for telemetry start bit (falling edge to low), then sample mid-bit.
+    ; Allow a longer wait window for ESC telemetry turnaround.
     set x, 31
 wait_low:
     jmp pin, wait_low_dec
     jmp got_low
 wait_low_dec:
-    jmp x--, wait_low [7]
+    jmp x--, wait_low [31]
     jmp rx_timeout
 
 got_low:
-    ; Telemetry bit rate is 5/4 of DShot, so use shorter sample spacing.
-    set x, 20       [5]     ; 21 bits incl. start, delay to mid-bit (~13-cycle bit)
+    ; Telemetry oversampling: 2 samples per data bit (40 total samples).
+    set x, 31       [2]     ; Delay before first sample, then capture 32 samples
 
-rx_bitloop:
-    in pins, 1      [11]    ; Sample bit, delay for next (~13-cycle bit)
-    jmp x--, rx_bitloop
+rx_bitloop0:
+    in pins, 1      [4]     ; Sample at ~1.25us cadence (2x oversample)
+    jmp x--, rx_bitloop0
+
+    set x, 7
+rx_bitloop1:
+    in pins, 1      [4]
+    jmp x--, rx_bitloop1
 
     ; Push telemetry data
     push block
@@ -177,10 +183,11 @@ static inline void dshot_bidirectional_program_init(PIO pio, uint sm, uint offse
 
     // Configure IN pins for telemetry reception
     sm_config_set_in_pins(&c, pin);
+    sm_config_set_jmp_pin(&c, pin);
 
     // Configure shifts
     sm_config_set_out_shift(&c, false, false, 16);  // TX: shift left, 16 bits
-    sm_config_set_in_shift(&c, false, false, 21);   // RX: shift left, 21 bits
+    sm_config_set_in_shift(&c, false, true, 32);    // RX: shift left, autopush 32 bits
 
     // Set clock divider
     sm_config_set_clkdiv(&c, clk_div);

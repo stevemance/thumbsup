@@ -17,6 +17,7 @@
 #define DSHOT_THROTTLE_MIN 48    // Below 48 = disarmed
 #define DSHOT_THROTTLE_MAX 2047
 #define EDT_FRAME_BITS 21        // EDT telemetry frame size
+#define DSHOT_BIDIR_CLKDIV_SCALE 1.0f
 
 // Per-motor DShot state
 typedef struct {
@@ -203,92 +204,66 @@ static bool validate_gcr_table(void) {
     return true;
 }
 
-// EDT telemetry CRC calculation (4-bit, different from DShot CRC)
+// EDT telemetry CRC calculation (4-bit, inverted XOR of nibbles)
 static uint8_t edt_calculate_crc(uint16_t data) {
     uint8_t crc = 0;
-    for (int i = 0; i < 12; i++) {
-        uint8_t bit = (data >> (11 - i)) & 1;
-        uint8_t xor_val = (crc & 0x08) >> 3;
-        crc = ((crc << 1) | bit) & 0x0F;
-        if (xor_val) {
-            crc ^= 0x07;  // Polynomial for EDT: x^3 + x^2 + x + 1
-        }
+    uint16_t csum_data = data & 0x0FFF;
+    for (int i = 0; i < 3; i++) {
+        crc ^= csum_data;
+        csum_data >>= 4;
     }
+    crc = (uint8_t)(~crc) & 0x0F;
     return crc;
 }
 
 // Parse EDT telemetry frame (GCR decoded)
-static bool parse_edt_telemetry(uint32_t raw_data, dshot_telemetry_t* telemetry) {
-    if (telemetry == NULL) {
-        return false;
-    }
-
-    // EDT frame: 21 bits = 1 start bit + 4 GCR symbols (20 bits)
-    // Each GCR symbol is 5 bits encoding 4 bits of data
-    // Total: 16 bits data (12 bits value + 4 bits CRC)
-
-    // MAJOR FIX #2 (Iteration 2): Document bit extraction positions
-    // EDT frame structure (MSB first):
-    //   [20]=start, [19:15]=GCR0, [14:10]=GCR1, [9:5]=GCR2, [4:0]=GCR3
-    // PIO sampling includes the start bit at bit 20; decode uses bits 19..0.
-
-    // Extract 4 GCR symbols (5 bits each)
+static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry) {
     uint8_t gcr[4];
-    gcr[0] = (raw_data >> 15) & 0x1F;  // Bits 19-15
-    gcr[1] = (raw_data >> 10) & 0x1F;  // Bits 14-10
-    gcr[2] = (raw_data >> 5) & 0x1F;   // Bits 9-5
-    gcr[3] = raw_data & 0x1F;          // Bits 4-0
+    gcr[0] = (gcr_stream >> 15) & 0x1F;
+    gcr[1] = (gcr_stream >> 10) & 0x1F;
+    gcr[2] = (gcr_stream >> 5) & 0x1F;
+    gcr[3] = gcr_stream & 0x1F;
 
-    // Decode GCR to 4-bit nibbles
     uint8_t nibbles[4];
     for (int i = 0; i < 4; i++) {
         nibbles[i] = gcr_decode_table[gcr[i]];
         if (nibbles[i] == 0xFF) {
-            // Invalid GCR code
             return false;
         }
     }
 
-    // Reconstruct 16-bit data word
     uint16_t decoded = (nibbles[0] << 12) | (nibbles[1] << 8) |
                        (nibbles[2] << 4) | nibbles[3];
-
-    // Split into value and CRC
-    uint16_t value = (decoded >> 4) & 0xFFF;  // 12 bits
-    uint8_t rx_crc = decoded & 0x0F;          // 4 bits
-
-    // Validate CRC
+    uint16_t value = (decoded >> 4) & 0xFFF;
+    uint8_t rx_crc = decoded & 0x0F;
     uint8_t calc_crc = edt_calculate_crc(value);
     if (rx_crc != calc_crc) {
-        return false;  // CRC mismatch
+        return false;
     }
 
-    // MAJOR FIX #3: Decode telemetry type from value ranges
-    // IMPORTANT: This parsing assumes standard EDT telemetry encoding.
-    // Different ESC manufacturers may use different encoding schemes or ranges.
-    // The value ranges below are based on the AM32 reference implementation:
-    //
-    // Value Range    | Type        | Formula
-    // ---------------|-------------|----------------------------------
-    // 0-2047         | eRPM        | value = eRPM (electrical RPM)
-    // 2048-3071      | Voltage     | voltage_cV = (value - 2048) * 4
-    // 3072-3583      | Current     | current_cA = (value - 3072) * 4
-    // 3584-4095      | Temperature | temperature_C = (value - 3584) / 2
-    // 4096+          | Event/Status| ESC-specific status codes
-    //
-    // If using non-AM32 ESCs, verify these ranges match your ESC's telemetry format.
-    // Some ESCs may use different multipliers or offsets.
-    if (value < 2048) {
-        telemetry->erpm = value;
-    } else if (value >= 2048 && value < 3072) {
-        telemetry->voltage_cV = (value - 2048) * 4;
-    } else if (value >= 3072 && value < 3584) {
-        telemetry->current_cA = (value - 3072) * 4;
-    } else if (value >= 3584 && value < 4096) {
-        telemetry->temperature_C = (value - 3584) / 2;
+    uint8_t type = (value >> 8) & 0x0F;
+    uint8_t data = value & 0xFF;
+    if (type == 0x2) {
+        telemetry->temperature_C = data;
+    } else if (type == 0x4) {
+        telemetry->voltage_cV = (uint16_t)data * 25;
+    } else if (type == 0x6) {
+        telemetry->current_cA = (uint16_t)data * 50;
+    } else if (type == 0xE) {
+        // Event/status frame (EDT init/deinit). Accept but do not overwrite fields.
     } else {
-        // Event/status frames (0xF000-0xFFFF) - accept but don't decode
-        // ESC is reporting status, treat as valid telemetry
+        uint8_t exponent = (value >> 9) & 0x07;
+        uint16_t mantissa = value & 0x01FF;
+        uint32_t period_us = (uint32_t)mantissa << exponent;
+        if (period_us > 0) {
+            uint32_t erpm = 60000000u / period_us;
+            if (erpm > 0xFFFFu) {
+                erpm = 0xFFFFu;
+            }
+            telemetry->erpm = (uint16_t)erpm;
+        } else {
+            return false;
+        }
     }
 
     telemetry->crc = rx_crc;
@@ -296,6 +271,245 @@ static bool parse_edt_telemetry(uint32_t raw_data, dshot_telemetry_t* telemetry)
     telemetry->timestamp_ms = to_ms_since_boot(get_absolute_time());
 
     return true;
+}
+
+static void extract_oversample_bits(uint64_t raw_samples, bool msb_first, uint8_t samples[40]) {
+    if (msb_first) {
+        for (int i = 0; i < 32; i++) {
+            samples[i] = (raw_samples >> (63 - i)) & 1;
+        }
+        for (int i = 0; i < 8; i++) {
+            samples[32 + i] = (raw_samples >> (7 - i)) & 1;
+        }
+    } else {
+        for (int i = 0; i < 32; i++) {
+            samples[i] = (raw_samples >> i) & 1;
+        }
+        for (int i = 0; i < 8; i++) {
+            samples[32 + i] = (raw_samples >> (32 + i)) & 1;
+        }
+    }
+}
+
+static inline int telemetry_state_index(int prev_level, int sym_len, int sym_bits, int xor_acc) {
+    return ((((prev_level * 5) + sym_len) * 16 + sym_bits) * 16 + xor_acc);
+}
+
+static inline void telemetry_state_unpack(int idx, int* prev_level, int* sym_len,
+                                          int* sym_bits, int* xor_acc) {
+    int rem = idx;
+    *prev_level = rem / (5 * 16 * 16);
+    rem %= (5 * 16 * 16);
+    *sym_len = rem / (16 * 16);
+    rem %= (16 * 16);
+    *sym_bits = rem / 16;
+    *xor_acc = rem % 16;
+}
+
+static bool decode_oversampled_choices(const uint8_t even[20], const uint8_t odd[20],
+                                       dshot_telemetry_t* telemetry) {
+    enum { POS_COUNT = 20, STATE_COUNT = 2560 };
+    static uint8_t reachable[POS_COUNT + 1][STATE_COUNT];
+    uint8_t choices[POS_COUNT] = {0};
+
+    memset(reachable, 0, sizeof(reachable));
+
+    for (int prev = 0; prev < 2; prev++) {
+        int idx = telemetry_state_index(prev, 0, 0, 0);
+        reachable[0][idx] = 1;
+    }
+
+    for (int pos = 0; pos < POS_COUNT; pos++) {
+        memset(reachable[pos + 1], 0, STATE_COUNT);
+        for (int idx = 0; idx < STATE_COUNT; idx++) {
+            if (!reachable[pos][idx]) {
+                continue;
+            }
+
+            int prev_level;
+            int sym_len;
+            int sym_bits;
+            int xor_acc;
+            telemetry_state_unpack(idx, &prev_level, &sym_len, &sym_bits, &xor_acc);
+
+            for (int choice = 0; choice < 2; choice++) {
+                uint8_t level = (choice == 0) ? even[pos] : odd[pos];
+                uint8_t gcr_bit = level ^ (uint8_t)prev_level;
+
+                int next_prev = level;
+                int next_sym_len;
+                int next_sym_bits;
+                int next_xor = xor_acc;
+
+                if (sym_len == 4) {
+                    uint8_t symbol = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x1F);
+                    uint8_t nibble = gcr_decode_table[symbol];
+                    if (nibble == 0xFF) {
+                        continue;
+                    }
+
+                    int symbol_index = pos / 5;
+                    if (symbol_index < 3) {
+                        next_xor = xor_acc ^ nibble;
+                    } else {
+                        uint8_t expected_crc = (uint8_t)(~xor_acc) & 0x0F;
+                        if (nibble != expected_crc) {
+                            continue;
+                        }
+                    }
+
+                    next_sym_len = 0;
+                    next_sym_bits = 0;
+                } else {
+                    next_sym_len = sym_len + 1;
+                    next_sym_bits = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x0F);
+                }
+
+                int next_idx = telemetry_state_index(next_prev, next_sym_len, next_sym_bits, next_xor);
+                reachable[pos + 1][next_idx] = 1;
+            }
+        }
+    }
+
+    for (int prev_level = 0; prev_level < 2; prev_level++) {
+        for (int xor_acc = 0; xor_acc < 16; xor_acc++) {
+            int end_idx = telemetry_state_index(prev_level, 0, 0, xor_acc);
+            if (!reachable[POS_COUNT][end_idx]) {
+                continue;
+            }
+
+            int current = end_idx;
+            bool backtrack_ok = true;
+
+            for (int pos = POS_COUNT; pos > 0; pos--) {
+                int bit = pos - 1;
+                bool found = false;
+
+                for (int idx = 0; idx < STATE_COUNT; idx++) {
+                    if (!reachable[pos - 1][idx]) {
+                        continue;
+                    }
+
+                    int prev_state_level;
+                    int sym_len;
+                    int sym_bits;
+                    int xor_state;
+                    telemetry_state_unpack(idx, &prev_state_level, &sym_len, &sym_bits, &xor_state);
+
+                    for (int choice = 0; choice < 2; choice++) {
+                        uint8_t level = (choice == 0) ? even[bit] : odd[bit];
+                        uint8_t gcr_bit = level ^ (uint8_t)prev_state_level;
+
+                        int next_prev = level;
+                        int next_sym_len;
+                        int next_sym_bits;
+                        int next_xor = xor_state;
+
+                        if (sym_len == 4) {
+                            uint8_t symbol = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x1F);
+                            uint8_t nibble = gcr_decode_table[symbol];
+                            if (nibble == 0xFF) {
+                                continue;
+                            }
+
+                            int symbol_index = bit / 5;
+                            if (symbol_index < 3) {
+                                next_xor = xor_state ^ nibble;
+                            } else {
+                                uint8_t expected_crc = (uint8_t)(~xor_state) & 0x0F;
+                                if (nibble != expected_crc) {
+                                    continue;
+                                }
+                            }
+
+                            next_sym_len = 0;
+                            next_sym_bits = 0;
+                        } else {
+                            next_sym_len = sym_len + 1;
+                            next_sym_bits = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x0F);
+                        }
+
+                        int next_idx = telemetry_state_index(next_prev, next_sym_len, next_sym_bits, next_xor);
+                        if (next_idx == current) {
+                            choices[bit] = (uint8_t)choice;
+                            current = idx;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found) {
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    backtrack_ok = false;
+                    break;
+                }
+            }
+
+            if (!backtrack_ok) {
+                continue;
+            }
+
+            int start_prev;
+            int sym_len;
+            int sym_bits;
+            int xor_state;
+            telemetry_state_unpack(current, &start_prev, &sym_len, &sym_bits, &xor_state);
+            (void)sym_len;
+            (void)sym_bits;
+            (void)xor_state;
+
+            uint32_t gcr_stream = 0;
+            uint8_t prev = (uint8_t)start_prev;
+            for (int i = 0; i < POS_COUNT; i++) {
+                uint8_t level = (choices[i] == 0) ? even[i] : odd[i];
+                uint8_t gcr_bit = level ^ prev;
+                gcr_stream = (gcr_stream << 1) | (gcr_bit & 0x01);
+                prev = level;
+            }
+
+            if (decode_edt_payload(gcr_stream, telemetry)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemetry) {
+    if (telemetry == NULL) {
+        return false;
+    }
+
+    uint8_t samples[40];
+    uint8_t even[20];
+    uint8_t odd[20];
+
+    for (int order = 0; order < 2; order++) {
+        extract_oversample_bits(raw_samples, order == 0, samples);
+        for (int invert = 0; invert < 2; invert++) {
+            for (int i = 0; i < 20; i++) {
+                uint8_t even_level = samples[i * 2];
+                uint8_t odd_level = samples[(i * 2) + 1];
+                if (invert) {
+                    even_level ^= 1;
+                    odd_level ^= 1;
+                }
+                even[i] = even_level;
+                odd[i] = odd_level;
+            }
+
+            if (decode_oversampled_choices(even, odd, telemetry)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // Initialize DShot for a motor
@@ -380,8 +594,10 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         pio_program_refcount_bidir++;
         mutex_exit(&pio_refcount_mutex);
 
+        float clk_div = calculate_clk_div(config->speed);
+        clk_div *= DSHOT_BIDIR_CLKDIV_SCALE;
         dshot_bidirectional_program_init(state->pio, state->sm, state->pio_offset,
-                                         config->gpio_pin, calculate_clk_div(config->speed));
+                                         config->gpio_pin, clk_div);
     } else {
         if (pio_program_refcount_tx == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_tx_program);
@@ -630,6 +846,27 @@ bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd) {
     return true;
 }
 
+// Read raw EDT telemetry frame (bidirectional mode only)
+bool dshot_read_telemetry_raw(motor_channel_t motor, uint64_t* raw_data) {
+    if (motor >= MAX_DSHOT_MOTORS || raw_data == NULL) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || !state->config.bidirectional) {
+        return false;
+    }
+
+    if (pio_sm_get_rx_fifo_level(state->pio, state->sm) < 2) {
+        return false;
+    }
+
+    uint32_t word0 = pio_sm_get(state->pio, state->sm);
+    uint32_t word1 = pio_sm_get(state->pio, state->sm);
+    *raw_data = ((uint64_t)word0 << 32) | (uint64_t)word1;
+    return true;
+}
+
 // Read EDT telemetry (bidirectional mode only)
 bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
     // SAFETY: Validate parameters
@@ -644,12 +881,14 @@ bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
     }
 
     // Check if telemetry is available in PIO RX FIFO
-    if (pio_sm_is_rx_fifo_empty(state->pio, state->sm)) {
+    if (pio_sm_get_rx_fifo_level(state->pio, state->sm) < 2) {
         return false;  // No telemetry available
     }
 
     // Read telemetry frame from PIO (non-blocking since we verified FIFO has data)
-    uint32_t raw_data = pio_sm_get(state->pio, state->sm);
+    uint32_t word0 = pio_sm_get(state->pio, state->sm);
+    uint32_t word1 = pio_sm_get(state->pio, state->sm);
+    uint64_t raw_data = ((uint64_t)word0 << 32) | (uint64_t)word1;
 
     // Parse EDT frame
     if (parse_edt_telemetry(raw_data, &state->last_telemetry)) {
