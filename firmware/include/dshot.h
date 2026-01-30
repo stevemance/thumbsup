@@ -50,6 +50,8 @@ typedef enum {
     DSHOT_CMD_3D_MODE_ON        = 10,    // Enable 3D mode
     DSHOT_CMD_SETTINGS_REQUEST  = 11,    // Request settings
     DSHOT_CMD_SAVE_SETTINGS     = 12,    // Save settings to EEPROM
+    DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE  = 13, // Enable extended telemetry
+    DSHOT_CMD_EXTENDED_TELEMETRY_DISABLE = 14, // Disable extended telemetry
     DSHOT_CMD_SPIN_DIRECTION_NORMAL   = 20,  // Normal rotation
     DSHOT_CMD_SPIN_DIRECTION_REVERSED = 21,  // Reversed rotation
     DSHOT_CMD_LED0_ON           = 22,    // LED 0 on
@@ -101,6 +103,14 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config);
  * @return true on success
  */
 bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_telemetry);
+
+/**
+ * Override CRC inversion for bidirectional bring-up.
+ *
+ * @param motor Motor channel
+ * @param invert -1 = use config, 0 = normal CRC, 1 = inverted CRC
+ */
+void dshot_set_crc_invert_override(motor_channel_t motor, int8_t invert);
 
 /**
  * Send DShot special command

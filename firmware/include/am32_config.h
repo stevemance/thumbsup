@@ -3,6 +3,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "config.h"
+
+#ifndef AM32_ONEWIRE
+#define AM32_ONEWIRE 0
+#endif
 
 // AM32 Serial Protocol Constants
 #define AM32_BAUD_RATE          19200
@@ -12,7 +17,7 @@
 // 100ms should be sufficient for most operations, but slow ESCs or operations
 // like EEPROM read/write may require longer timeouts. Monitor actual response
 // times during hardware testing and increase if timeouts occur frequently.
-#define AM32_REPLY_TIMEOUT      100     // ms (may need increase for slow operations)
+#define AM32_REPLY_TIMEOUT      300     // ms (may need increase for slow operations)
 
 // AM32 Protocol Commands
 #define AM32_CMD_KEEPALIVE      0xFF

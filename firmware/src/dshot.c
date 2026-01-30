@@ -27,7 +27,8 @@ typedef struct {
     uint pio_offset;            // PIO program offset
     int dma_chan;               // DMA channel for transmission
     dshot_telemetry_t last_telemetry;
-    uint16_t last_packet;       // Last transmitted packet
+    uint32_t last_packet;       // Last transmitted packet (left-aligned for MSB-first shift)
+    int8_t crc_invert_override; // -1 = use config, 0 = normal, 1 = invert
 } dshot_motor_state_t;
 
 static dshot_motor_state_t motor_states[MAX_DSHOT_MOTORS] = {0};
@@ -42,23 +43,10 @@ static uint8_t pio_program_refcount_bidir = 0;
 static mutex_t pio_refcount_mutex;
 static bool pio_mutex_initialized = false;
 
-// CRC-4 calculation for DShot packets
+// CRC-4 calculation for DShot packets (xor of three nibbles)
 uint8_t dshot_calculate_crc(uint16_t packet) {
-    // CRC-4 with polynomial 0x19 (x^4 + x^3 + x + 1)
-    uint16_t crc = 0;
-    uint16_t data = packet;
-
-    for (int i = 0; i < 12; i++) {
-        crc ^= (data & 0x800) ? 0x8 : 0;
-        data <<= 1;
-        crc <<= 1;
-
-        if (crc & 0x10) {
-            crc ^= 0x19;
-        }
-    }
-
-    return crc & 0x0F;
+    // DShot checksum is XOR of the 3 nibbles in the 12-bit payload
+    return (packet ^ (packet >> 4) ^ (packet >> 8)) & 0x0F;
 }
 
 // Convert percent (-100 to +100) to DShot throttle value
@@ -89,7 +77,7 @@ uint16_t dshot_throttle_from_percent(int8_t percent) {
 }
 
 // Encode DShot packet with CRC
-static uint16_t encode_dshot_packet(uint16_t throttle, bool telemetry_request) {
+static uint16_t encode_dshot_packet(uint16_t throttle, bool telemetry_request, bool invert_crc) {
     // Packet format (16 bits transmitted MSB first):
     // [15:5] = 11-bit throttle (0-2047)
     // [4]    = 1-bit telemetry request
@@ -105,6 +93,9 @@ static uint16_t encode_dshot_packet(uint16_t throttle, bool telemetry_request) {
     // CRITICAL FIX #5: Calculate CRC on the 12-bit payload (bits [15:4])
     // Shift right by 4 to get payload into [11:0] for CRC function
     uint8_t crc = dshot_calculate_crc(packet >> 4);
+    if (invert_crc) {
+        crc = (uint8_t)(~crc) & 0x0F;
+    }
 
     // Add CRC to bits [3:0]
     packet |= (crc & 0x0F);
@@ -126,32 +117,32 @@ static float calculate_clk_div(dshot_speed_t speed) {
         default: bit_period_ns = 3330; break;
     }
 
-    // CRITICAL FIX #1 (Iteration 2): PIO program uses 15 cycles per bit, not 13
+    // CRITICAL FIX #1 (Iteration 2): PIO program uses 16 cycles per bit
     // Each bit in dshot.pio consists of:
     //   1. out y, 1              = 1 cycle
     //   2. jmp !y, bit_zero      = 1 cycle
     //   3. set pins, 1 [7 or 3]  = 8 or 4 cycles
     //   4. set pins, 0 [3 or 7]  = 4 or 8 cycles
     //   5. jmp x--, bitloop      = 1 cycle
-    //   Total: 1+1+8+4+1 = 15 cycles (or 1+1+4+8+1 = 15 cycles)
-    // Previous calculation of 13 cycles was missing out y,1 and jmp !y,bit_zero
-    uint32_t cycles_per_bit = 15;
+    //   Total: 1+1+12+1+1 = 16 cycles (bit 1)
+    //   Total: 1+1+6+7+1  = 16 cycles (bit 0)
+    uint32_t cycles_per_bit = 16;
 
     // Calculate required PIO frequency to achieve desired bit timing
     // Formula: pio_freq = (1 MHz * cycles_per_bit * 1000) / bit_period_ns
     //
-    // CRITICAL FIX #1: Updated calculations for 15 cycles per bit
-    // DShot150 (6670ns):  pio_freq = (1,000,000 * 15 * 1000) / 6670 = 2,249,625 Hz (~2.25 MHz)
-    //                     clk_div = 125 MHz / 2.25 MHz = 55.56
-    // DShot300 (3330ns):  pio_freq = (1,000,000 * 15 * 1000) / 3330 = 4,504,505 Hz (~4.5 MHz)
-    //                     clk_div = 125 MHz / 4.5 MHz = 27.78
-    // DShot600 (1670ns):  pio_freq = (1,000,000 * 15 * 1000) / 1670 = 8,982,036 Hz (~9.0 MHz)
-    //                     clk_div = 125 MHz / 9.0 MHz = 13.89
-    // DShot1200 (830ns):  pio_freq = (1,000,000 * 15 * 1000) / 830 = 18,072,289 Hz (~18.1 MHz)
-    //                     clk_div = 125 MHz / 18.1 MHz = 6.91
+    // CRITICAL FIX #1: Updated calculations for 16 cycles per bit
+    // DShot150 (6670ns):  pio_freq = (1,000,000 * 16 * 1000) / 6670 = 2,398,801 Hz (~2.40 MHz)
+    //                     clk_div = 125 MHz / 2.40 MHz = 52.10
+    // DShot300 (3330ns):  pio_freq = (1,000,000 * 16 * 1000) / 3330 = 4,801,920 Hz (~4.80 MHz)
+    //                     clk_div = 125 MHz / 4.80 MHz = 26.03
+    // DShot600 (1670ns):  pio_freq = (1,000,000 * 16 * 1000) / 1670 = 9,580,838 Hz (~9.58 MHz)
+    //                     clk_div = 125 MHz / 9.58 MHz = 13.05
+    // DShot1200 (830ns):  pio_freq = (1,000,000 * 16 * 1000) / 830 = 19,277,108 Hz (~19.3 MHz)
+    //                     clk_div = 125 MHz / 19.3 MHz = 6.48
     //
     // IMPORTANT: Use uint64_t to prevent overflow
-    //   Max intermediate: 1,000,000 * 15 * 1000 = 15,000,000,000 (fits in uint64_t)
+    //   Max intermediate: 1,000,000 * 16 * 1000 = 16,000,000,000 (fits in uint64_t)
     //   Would overflow uint32_t (max 4,294,967,295)
     uint64_t pio_freq_hz = (1000000ULL * cycles_per_bit * 1000ULL) / bit_period_ns;
 
@@ -239,19 +230,14 @@ static bool parse_edt_telemetry(uint32_t raw_data, dshot_telemetry_t* telemetry)
     // MAJOR FIX #2 (Iteration 2): Document bit extraction positions
     // EDT frame structure (MSB first):
     //   [20]=start, [19:15]=GCR0, [14:10]=GCR1, [9:5]=GCR2, [4:0]=GCR3
-    // Start bit at position 20 is used for sync but not extracted into raw_data
-    //
-    // NOTE: This assumes PIO shifts data such that start bit is NOT in raw_data.
-    // If start bit IS included in raw_data, positions would be off by one.
-    // TODO: Hardware validation required - verify bit positions with logic analyzer
-    //       to confirm start bit handling matches this extraction pattern.
+    // PIO sampling includes the start bit at bit 20; decode uses bits 19..0.
 
     // Extract 4 GCR symbols (5 bits each)
     uint8_t gcr[4];
-    gcr[0] = (raw_data >> 16) & 0x1F;  // Bits 20-16 (assuming no start bit in raw_data)
-    gcr[1] = (raw_data >> 11) & 0x1F;  // Bits 15-11
-    gcr[2] = (raw_data >> 6) & 0x1F;   // Bits 10-6
-    gcr[3] = (raw_data >> 1) & 0x1F;   // Bits 5-1
+    gcr[0] = (raw_data >> 15) & 0x1F;  // Bits 19-15
+    gcr[1] = (raw_data >> 10) & 0x1F;  // Bits 14-10
+    gcr[2] = (raw_data >> 5) & 0x1F;   // Bits 9-5
+    gcr[3] = raw_data & 0x1F;          // Bits 4-0
 
     // Decode GCR to 4-bit nibbles
     uint8_t nibbles[4];
@@ -467,7 +453,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
 
     // Configure DMA for PIO TX FIFO
     dma_channel_config dma_config = dma_channel_get_default_config(state->dma_chan);
-    channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_16);  // 16-bit transfers
+    channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32);  // 32-bit transfers
     channel_config_set_read_increment(&dma_config, false);            // Read from same location (packet)
     channel_config_set_write_increment(&dma_config, false);           // Write to PIO FIFO
     channel_config_set_dreq(&dma_config, pio_get_dreq(state->pio, state->sm, true));  // Paced by PIO TX
@@ -483,6 +469,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
 
     // Initialize telemetry
     state->last_telemetry.valid = false;
+    state->crc_invert_override = -1;
     state->initialized = true;
 
     DEBUG_PRINT("DShot initialized: motor=%d, GPIO=%d, speed=%d, bidir=%d, PIO=%p, SM=%d, DMA=%d\n",
@@ -522,8 +509,13 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     }
 
     // Encode packet
-    uint16_t packet = encode_dshot_packet(throttle, request_telemetry);
-    state->last_packet = packet;
+    bool invert_crc = state->config.bidirectional;
+    if (state->crc_invert_override >= 0) {
+        invert_crc = (state->crc_invert_override != 0);
+    }
+    uint16_t packet = encode_dshot_packet(throttle, request_telemetry, invert_crc);
+    // Left-align 16-bit packet so MSB shifts out first with left-shift OSR.
+    state->last_packet = ((uint32_t)packet) << 16;
 
     // MAJOR FIX #1: Validate PIO FIFO state before transfer
     // Check if previous transfer is still active
@@ -748,6 +740,22 @@ void dshot_deinit(motor_channel_t motor) {
     // Clear state
     memset(state, 0, sizeof(dshot_motor_state_t));
     state->dma_chan = -1;
+    state->crc_invert_override = -1;
 
     DEBUG_PRINT("DShot deinitialized for motor %d\n", motor);
+}
+
+void dshot_set_crc_invert_override(motor_channel_t motor, int8_t invert) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized) {
+        return;
+    }
+
+    if (invert < -1) invert = -1;
+    if (invert > 1) invert = 1;
+    state->crc_invert_override = invert;
 }

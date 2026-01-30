@@ -64,3 +64,72 @@ target_link_libraries(dshot_spin_test
 pico_enable_stdio_usb(dshot_spin_test 1)
 pico_enable_stdio_uart(dshot_spin_test 0)
 pico_add_extra_outputs(dshot_spin_test)
+
+# --- DShot telemetry spin test ---
+add_executable(dshot_telemetry_spin_test
+    ${TESTS_SRC_DIR}/dshot_telemetry_spin_test.c
+    ${FIRMWARE_SRC_DIR}/dshot.c
+)
+
+pico_generate_pio_header(dshot_telemetry_spin_test ${FIRMWARE_SRC_DIR}/dshot.pio)
+
+target_include_directories(dshot_telemetry_spin_test PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(dshot_telemetry_spin_test
+    pico_stdlib
+    pico_sync
+    hardware_clocks
+    hardware_dma
+    hardware_gpio
+    hardware_irq
+    hardware_pio
+)
+
+pico_enable_stdio_usb(dshot_telemetry_spin_test 1)
+pico_enable_stdio_uart(dshot_telemetry_spin_test 0)
+pico_add_extra_outputs(dshot_telemetry_spin_test)
+
+# --- AM32 one-wire config probe ---
+add_executable(am32_onewire_probe
+    ${TESTS_SRC_DIR}/am32_onewire_probe.c
+    ${FIRMWARE_SRC_DIR}/am32_config.c
+)
+
+target_compile_definitions(am32_onewire_probe PRIVATE AM32_ONEWIRE=1)
+
+target_include_directories(am32_onewire_probe PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(am32_onewire_probe
+    pico_stdlib
+    hardware_gpio
+    hardware_pwm
+    hardware_sync
+    hardware_timer
+    hardware_uart
+    hardware_watchdog
+)
+
+pico_enable_stdio_usb(am32_onewire_probe 1)
+pico_enable_stdio_uart(am32_onewire_probe 0)
+pico_add_extra_outputs(am32_onewire_probe)
+
+# --- AM32 bootloader EEPROM probe ---
+add_executable(am32_bootloader_probe
+    ${TESTS_SRC_DIR}/am32_bootloader_probe.c
+    ${FIRMWARE_SRC_DIR}/am32_bootloader.c
+)
+
+pico_generate_pio_header(am32_bootloader_probe ${FIRMWARE_SRC_DIR}/pio_uart.pio)
+
+target_include_directories(am32_bootloader_probe PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(am32_bootloader_probe
+    pico_stdlib
+    hardware_clocks
+    hardware_gpio
+    hardware_pio
+)
+
+pico_enable_stdio_usb(am32_bootloader_probe 1)
+pico_enable_stdio_uart(am32_bootloader_probe 0)
+pico_add_extra_outputs(am32_bootloader_probe)

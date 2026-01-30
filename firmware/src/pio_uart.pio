@@ -1,0 +1,81 @@
+; PIO UART TX/RX for AM32 bootloader communication
+; 19200 baud, 8N1, half-duplex on single pin
+
+.program pio_uart_tx
+.side_set 1 opt
+
+; TX UART - sideset controls the output pin
+; Autopull, threshold 8
+; Each bit time = 8 cycles
+
+    pull       side 1 [7]  ; Stall with line high (idle), pull when data available
+    set x, 7   side 0 [7]  ; Start bit (low)
+bitloop:
+    out pins, 1        [6] ; Shift out data bit, 8 cycles per bit
+    jmp x-- bitloop
+    nop        side 1 [6]  ; Stop bit (high)
+
+
+.program pio_uart_rx
+
+; RX UART - shift in 8 bits after start bit
+; Autopush, threshold 8
+
+    wait 0 pin 0           ; Wait for start bit
+    set x, 7   [10]        ; Delay to middle of first data bit (1.5 bit times = 12 cycles)
+bitloop:
+    in pins, 1             ; Sample data bit
+    jmp x-- bitloop [6]    ; Loop 8 times, 8 cycles per bit
+
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+static inline void pio_uart_tx_program_init(PIO pio, uint sm, uint offset, uint pin, uint baud) {
+    pio_sm_config c = pio_uart_tx_program_get_default_config(offset);
+
+    // Map OUT and sideset to the same pin
+    sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_sideset_pins(&c, pin);
+
+    // OUT shifts right, autopull at 8 bits
+    sm_config_set_out_shift(&c, true, true, 8);
+
+    // Clock divider: 8 cycles per bit
+    float div = (float)clock_get_hz(clk_sys) / (8 * baud);
+    sm_config_set_clkdiv(&c, div);
+
+    // Set pin as output and initialize high (idle)
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    pio_gpio_init(pio, pin);
+    gpio_put(pin, 1);
+
+    // Initialize SM
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void pio_uart_rx_program_init(PIO pio, uint sm, uint offset, uint pin, uint baud) {
+    pio_sm_config c = pio_uart_rx_program_get_default_config(offset);
+
+    // Set IN pin base
+    sm_config_set_in_pins(&c, pin);
+
+    // IN shifts right, autopush at 8 bits
+    sm_config_set_in_shift(&c, true, true, 8);
+
+    // Clock divider: 8 cycles per bit
+    float div = (float)clock_get_hz(clk_sys) / (8 * baud);
+    sm_config_set_clkdiv(&c, div);
+
+    // Set pin as input with pull-up
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+    pio_gpio_init(pio, pin);
+    gpio_pull_up(pin);
+
+    // Initialize SM
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}

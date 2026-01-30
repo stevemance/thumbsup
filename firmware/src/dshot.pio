@@ -31,16 +31,17 @@ bitloop:
     jmp !y, bit_zero        ; Jump to bit_zero handler if Y=0
 
 bit_one:
-    ; Bit 1: 2T/3 high, T/3 low (8:4 cycles = 2:1 ratio)
-    set pins, 1     [7]     ; 8 cycles HIGH (1 + 7 delay)
-    set pins, 0     [3]     ; 4 cycles LOW (1 + 3 delay)
+    ; Bit 1: ~75% high, ~25% low (12:4 cycles)
+    ; Total bit time is 16 cycles (includes 2 cycles of overhead before set pins)
+    set pins, 1     [11]    ; 12 cycles HIGH (1 + 11 delay)
+    set pins, 0     [0]     ; 1 cycle LOW (1 + 0 delay)
     jmp x--, bitloop        ; Decrement counter and loop
     jmp done                ; All bits sent
 
 bit_zero:
-    ; Bit 0: T/3 high, 2T/3 low (4:8 cycles = 1:2 ratio)
-    set pins, 1     [3]     ; 4 cycles HIGH (1 + 3 delay)
-    set pins, 0     [7]     ; 8 cycles LOW (1 + 7 delay)
+    ; Bit 0: ~37.5% high, ~62.5% low (6:10 cycles)
+    set pins, 1     [5]     ; 6 cycles HIGH (1 + 5 delay)
+    set pins, 0     [6]     ; 7 cycles LOW (1 + 6 delay)
     jmp x--, bitloop        ; Decrement counter and loop
 
 done:
@@ -64,11 +65,11 @@ done:
     wait 1 pin 0            ; Wait for line to go high (start bit)
 
     ; Delay to center of first data bit
-    set x, 20       [15]    ; 21 bits total, delay to bit center
+    set x, 20       [7]     ; 21 bits total, delay to bit center
 
 bitloop:
     ; Sample bit in center of bit period
-    in pins, 1      [7]     ; Sample pin, delay for next bit
+    in pins, 1      [14]    ; Sample pin, delay for next bit
     jmp x--, bitloop        ; Continue for all bits
 
     ; Push received data to RX FIFO
@@ -79,11 +80,13 @@ bitloop:
 ; Combined DShot TX/RX for bidirectional mode
 ; First transmits DShot packet, then receives EDT telemetry
 
+; Bidirectional DShot uses inverted signal levels (idle high).
 .program dshot_bidirectional
 
 .wrap_target
     ; === TRANSMIT PHASE ===
     pull block              ; Pull 16-bit DShot packet from FIFO
+    set pins, 1             ; Ensure idle high before enabling output
     set pindirs, 1          ; Set pin as output
     set x, 15               ; Set bit counter
 
@@ -92,39 +95,50 @@ tx_bitloop:
     jmp !y, tx_bit_zero     ; Handle bit 0
 
 tx_bit_one:
-    set pins, 1     [7]     ; 8 cycles HIGH (2T/3)
-    set pins, 0     [3]     ; 4 cycles LOW (T/3)
+    ; Inverted DShot: '1' is low for ~75% of the bit period.
+    set pins, 0     [11]    ; 12 cycles LOW (~75%)
+    set pins, 1     [0]     ; 1 cycle HIGH (~25% incl. overhead)
     jmp x--, tx_bitloop
     jmp tx_done
 
 tx_bit_zero:
-    set pins, 1     [3]     ; 4 cycles HIGH (T/3)
-    set pins, 0     [7]     ; 8 cycles LOW (2T/3)
+    ; Inverted DShot: '0' is low for ~37.5% of the bit period.
+    set pins, 0     [5]     ; 6 cycles LOW (~37.5%)
+    set pins, 1     [6]     ; 7 cycles HIGH (~62.5%)
     jmp x--, tx_bitloop
 
 tx_done:
-    set pins, 0             ; Ensure line low
-    nop             [31]    ; Wait for telemetry
+    set pins, 1     [31]    ; Hold line high briefly for ESC invert detect
+    nop             [31]    ; Keep driving high a bit longer
+    set pindirs, 0          ; Release line (idle high via pull-up)
+    ; Allow turnaround before telemetry arrives.
+    nop             [31]
+    nop             [31]
 
     ; === RECEIVE PHASE ===
-    set pindirs, 0          ; Set pin as input (with pull-up)
+    ; Wait for telemetry start bit (falling edge to low), then sample mid-bit.
+    set x, 31
+wait_low:
+    jmp pin, wait_low_dec
+    jmp got_low
+wait_low_dec:
+    jmp x--, wait_low [7]
+    jmp rx_timeout
 
-    ; Wait for telemetry start bit
-    wait 0 pin 0    [3]     ; Wait for line low
-    wait 1 pin 0    [3]     ; Wait for line high (start)
-
-    set x, 20       [7]     ; 21 bits, delay to center
+got_low:
+    ; Telemetry bit rate is 5/4 of DShot, so use shorter sample spacing.
+    set x, 20       [5]     ; 21 bits incl. start, delay to mid-bit (~13-cycle bit)
 
 rx_bitloop:
-    in pins, 1      [7]     ; Sample bit, delay for next
+    in pins, 1      [11]    ; Sample bit, delay for next (~13-cycle bit)
     jmp x--, rx_bitloop
 
     ; Push telemetry data
     push block
 
-    ; Restore output mode for next packet
-    set pindirs, 1
-    set pins, 0
+rx_timeout:
+    ; Stay released between frames (idle high)
+    set pindirs, 0
 .wrap
 
 
@@ -174,8 +188,8 @@ static inline void dshot_bidirectional_program_init(PIO pio, uint sm, uint offse
     // Initialize GPIO
     pio_gpio_init(pio, pin);
 
-    // Start as output, will switch during operation
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    // Start released (input); PIO will drive output during TX phase.
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
 
     // Enable pull-up for input phase
     gpio_pull_up(pin);

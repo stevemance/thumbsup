@@ -8,22 +8,22 @@
  * HARDWARE REQUIREMENTS - READ THIS BEFORE USING AM32 CONFIG MODE
  * ============================================================================
  *
- * AM32 configuration mode requires BIDIRECTIONAL UART communication.
- * This means you MUST have both TX and RX lines connected:
+ * AM32 configuration supports two wiring modes:
  *
+ * 1) Two-wire UART (default):
  *   GP4 (UART1 TX) ---> ESC signal wire (data TO ESC)
  *   GP5 (UART1 RX) <--- ESC signal wire (data FROM ESC)
  *
- * IMPORTANT WIRING NOTES:
- * 1. Standard ESC wiring uses ONE signal wire - this is NOT sufficient!
- * 2. For AM32 config to work, you need SEPARATE TX and RX connections
- * 3. Options for wiring:
- *    a) Use ESC with dedicated TX/RX pads (bench testing setup)
- *    b) Use special bidirectional adapter cable
- *    c) Wire ESC signal pad to GP4, find ESC's MCU UART RX pad and wire to GP5
+ * 2) One-wire half-duplex (define AM32_ONEWIRE=1):
+ *   GP4 (single wire) <-> ESC signal wire (shared TX/RX)
+ *   - Pico emulates open-drain: drives low for '0', releases for '1'
+ *   - Uses internal pull-up to idle high
+ *   - No GP5 required
  *
- * WARNING: If only GP4 is connected, AM32 config mode will FAIL silently!
- * The code will send commands but never receive responses.
+ * IMPORTANT WIRING NOTES:
+ * - If AM32_ONEWIRE is disabled, standard single-wire ESC wiring is NOT sufficient.
+ * - If AM32_ONEWIRE is enabled, GP4 + GND is sufficient for config mode.
+ * - For two-wire mode, use a proper bidirectional adapter or add a dedicated RX wire.
  *
  * PRODUCTION USE:
  * For production robots, it's recommended to configure the ESC once on the bench
@@ -99,6 +99,8 @@
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "hardware/sync.h"
+#include "hardware/timer.h"
 #include "hardware/watchdog.h"
 #include "hardware/structs/watchdog.h"
 #include <stdio.h>
@@ -109,11 +111,21 @@
 #define AM32_TX_PIN 4   // GP4 - UART1 TX (dedicated AM32 serial)
 #define AM32_RX_PIN 5   // GP5 - UART1 RX (for bidirectional communication)
 
+#ifndef AM32_ONEWIRE
+#define AM32_ONEWIRE 0
+#endif
+
+#if AM32_ONEWIRE
+#define AM32_ONEWIRE_PIN AM32_SIGNAL_PIN
+#define AM32_BITTIME_US  52u  // 1e6 / 19200 ~= 52us
+#define AM32_HALFBIT_US  26u
+#endif
+
 // AM32 config entry signal timing (in microseconds)
 #define AM32_CONFIG_ENTRY_PULSE_US   100   // High pulse width
 #define AM32_CONFIG_ENTRY_GAP_US     900   // Low gap between pulses
 #define AM32_CONFIG_ENTRY_PULSES     10    // Number of pulses to send
-#define AM32_CONFIG_ENTRY_TIMEOUT_MS 100   // Wait time after signal
+#define AM32_CONFIG_ENTRY_TIMEOUT_MS 300   // Wait time after signal
 
 // AM32 calibration timing
 #define AM32_CALIBRATION_MAX_DELAY_MS  3000  // Max throttle hold time
@@ -134,8 +146,95 @@ static bool am32_configured = false;
 static bool am32_in_config_mode = false;
 static am32_config_t current_config;
 
-// Convert to UART mode for AM32 communication
-static bool switch_to_uart_mode(void) {
+// Serial helpers (hardware UART or one-wire bit-bang)
+#if AM32_ONEWIRE
+static inline void am32_onewire_drive_low(void) {
+    gpio_set_dir(AM32_ONEWIRE_PIN, GPIO_OUT);
+    gpio_put(AM32_ONEWIRE_PIN, 0);
+}
+
+static inline void am32_onewire_release(void) {
+    gpio_set_dir(AM32_ONEWIRE_PIN, GPIO_IN);
+    gpio_pull_up(AM32_ONEWIRE_PIN);
+}
+
+static void am32_serial_init(void) {
+    gpio_init(AM32_ONEWIRE_PIN);
+    gpio_set_function(AM32_ONEWIRE_PIN, GPIO_FUNC_SIO);
+    am32_onewire_release();
+}
+
+static void am32_serial_deinit(void) {
+    gpio_set_dir(AM32_ONEWIRE_PIN, GPIO_IN);
+}
+
+static void am32_serial_write_byte(uint8_t byte) {
+    uint32_t irq_state = save_and_disable_interrupts();
+
+    // Start bit (low)
+    am32_onewire_drive_low();
+    busy_wait_us_32(AM32_BITTIME_US);
+
+    // Data bits (LSB first)
+    for (int i = 0; i < 8; i++) {
+        if ((byte >> i) & 1u) {
+            am32_onewire_release();  // open-drain high
+        } else {
+            am32_onewire_drive_low();
+        }
+        busy_wait_us_32(AM32_BITTIME_US);
+    }
+
+    // Stop bit (high), then release line
+    am32_onewire_release();
+    busy_wait_us_32(AM32_BITTIME_US);
+
+    restore_interrupts(irq_state);
+}
+
+static bool am32_serial_read_byte(uint8_t* out, uint32_t timeout_us) {
+    if (out == NULL) {
+        return false;
+    }
+
+    am32_onewire_release();
+
+    if (timeout_us == 0) {
+        if (gpio_get(AM32_ONEWIRE_PIN)) {
+            return false;
+        }
+    } else {
+        uint32_t start = time_us_32();
+        while (gpio_get(AM32_ONEWIRE_PIN)) {
+            if ((time_us_32() - start) > timeout_us) {
+                return false;
+            }
+            tight_loop_contents();
+        }
+    }
+
+    uint32_t irq_state = save_and_disable_interrupts();
+
+    // Sample in the middle of the first data bit.
+    busy_wait_us_32(AM32_BITTIME_US + AM32_HALFBIT_US);
+
+    uint8_t byte = 0;
+    for (int i = 0; i < 8; i++) {
+        if (gpio_get(AM32_ONEWIRE_PIN)) {
+            byte |= (uint8_t)(1u << i);
+        }
+        busy_wait_us_32(AM32_BITTIME_US);
+    }
+
+    // Stop bit
+    busy_wait_us_32(AM32_BITTIME_US);
+
+    restore_interrupts(irq_state);
+    *out = byte;
+    return true;
+}
+#else
+static void am32_serial_init(void) {
     // Configure pins for UART (GP4=TX, GP5=RX)
     gpio_set_function(AM32_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(AM32_RX_PIN, GPIO_FUNC_UART);
@@ -144,12 +243,9 @@ static bool switch_to_uart_mode(void) {
     uart_init(AM32_UART, AM32_BAUD_RATE);
     uart_set_format(AM32_UART, 8, 1, UART_PARITY_NONE);
     uart_set_fifo_enabled(AM32_UART, true);
-
-    return true;
 }
 
-// Disable UART mode
-static bool switch_to_pwm_mode(void) {
+static void am32_serial_deinit(void) {
     // De-init UART
     uart_deinit(AM32_UART);
 
@@ -158,7 +254,51 @@ static bool switch_to_pwm_mode(void) {
     gpio_set_function(AM32_RX_PIN, GPIO_FUNC_SIO);
     gpio_set_dir(AM32_TX_PIN, GPIO_IN);
     gpio_set_dir(AM32_RX_PIN, GPIO_IN);
+}
 
+static void am32_serial_write_byte(uint8_t byte) {
+    uart_putc_raw(AM32_UART, byte);
+}
+
+static bool am32_serial_read_byte(uint8_t* out, uint32_t timeout_us) {
+    if (out == NULL) {
+        return false;
+    }
+
+    if (timeout_us == 0) {
+        if (!uart_is_readable(AM32_UART)) {
+            return false;
+        }
+        *out = uart_getc(AM32_UART);
+        return true;
+    }
+
+    uint32_t start = time_us_32();
+    while (!uart_is_readable(AM32_UART)) {
+        if ((time_us_32() - start) > timeout_us) {
+            return false;
+        }
+        tight_loop_contents();
+    }
+
+    *out = uart_getc(AM32_UART);
+    return true;
+}
+#endif
+
+static bool am32_serial_try_read_byte(uint8_t* out) {
+    return am32_serial_read_byte(out, 0);
+}
+
+// Convert to UART mode for AM32 communication
+static bool switch_to_uart_mode(void) {
+    am32_serial_init();
+    return true;
+}
+
+// Disable UART mode
+static bool switch_to_pwm_mode(void) {
+    am32_serial_deinit();
     return true;
 }
 
@@ -179,6 +319,11 @@ static bool send_config_entry_signal(void) {
         gpio_put(PIN_WEAPON_PWM, 0);
         sleep_us(AM32_CONFIG_ENTRY_GAP_US);
     }
+
+#if AM32_ONEWIRE
+    // Release line after entry pulses for one-wire UART.
+    am32_onewire_release();
+#endif
 
     // Wait for ESC to enter config mode
     sleep_ms(AM32_CONFIG_ENTRY_TIMEOUT_MS);
@@ -211,41 +356,69 @@ bool am32_enter_config_mode(void) {
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
     sleep_ms(AM32_MODE_SWITCH_DELAY_MS);
 
-    // Send special signal to enter config mode
-    send_config_entry_signal();
+    bool link_ok = false;
+    uint8_t response[8];
+    uint16_t resp_len = sizeof(response);
 
-    // Switch pin to UART mode
+    // Attempt direct UART probe first (some ESCs don't require entry pulses).
     if (!switch_to_uart_mode()) {
         DEBUG_PRINT("Failed to switch to UART mode\n");
         return false;
     }
-
-    // Send keepalive to verify connection
-    uint8_t keepalive = AM32_CMD_KEEPALIVE;
-    if (!am32_send_command(keepalive, NULL, 0)) {
-        DEBUG_PRINT("Failed to establish AM32 connection\n");
-        switch_to_pwm_mode();
-        return false;
+    am32_in_config_mode = true;
+    if (am32_send_command(AM32_CMD_KEEPALIVE, NULL, 0) &&
+        am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
+        link_ok = true;
+    } else {
+        uint8_t info_buf[32];
+        uint16_t info_len = sizeof(info_buf);
+        if (am32_send_command(AM32_CMD_GET_INFO, NULL, 0) &&
+            am32_receive_response(info_buf, &info_len, AM32_REPLY_TIMEOUT)) {
+            link_ok = true;
+        }
     }
 
-    // CRITICAL FIX #3 (Iteration 2): Verify bidirectional communication works
-    // MAJOR FIX #3 (Iteration 3): This validation is MANDATORY - config mode entry
-    // will FAIL if bidirectional communication is not working. This prevents
-    // silent failures where commands are sent but never acknowledged.
-    uint8_t response[4];
-    uint16_t resp_len = sizeof(response);
-    if (!am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
-        DEBUG_PRINT("ERROR: No response from ESC - check GP5 RX wiring!\n");
+    if (!link_ok) {
+        // Retry with config entry pulses.
+        am32_in_config_mode = false;
+        switch_to_pwm_mode();
+        send_config_entry_signal();
+        if (!switch_to_uart_mode()) {
+            DEBUG_PRINT("Failed to switch to UART mode\n");
+            return false;
+        }
+        am32_in_config_mode = true;
+        resp_len = sizeof(response);
+        if (am32_send_command(AM32_CMD_KEEPALIVE, NULL, 0) &&
+            am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
+            link_ok = true;
+        } else {
+            uint8_t info_buf[32];
+            uint16_t info_len = sizeof(info_buf);
+            if (am32_send_command(AM32_CMD_GET_INFO, NULL, 0) &&
+                am32_receive_response(info_buf, &info_len, AM32_REPLY_TIMEOUT)) {
+                link_ok = true;
+            }
+        }
+    }
+
+    if (!link_ok) {
+        DEBUG_PRINT("ERROR: No response from ESC - check wiring!\n");
+#if AM32_ONEWIRE
+        DEBUG_PRINT("AM32 one-wire mode enabled on GP4\n");
+        DEBUG_PRINT("Verify signal and ground are connected and ESC is powered\n");
+#else
         DEBUG_PRINT("AM32 config requires BIDIRECTIONAL UART communication:\n");
         DEBUG_PRINT("  GP4 (TX) -> ESC signal input\n");
         DEBUG_PRINT("  GP5 (RX) <- ESC signal output\n");
         DEBUG_PRINT("Standard single-wire ESC connection is NOT sufficient.\n");
         DEBUG_PRINT("See file header for wiring options.\n");
+#endif
+        am32_in_config_mode = false;
         switch_to_pwm_mode();
         return false;
     }
 
-    am32_in_config_mode = true;
     DEBUG_PRINT("AM32 config mode active (bidirectional link verified)\n");
 
     return true;
@@ -279,30 +452,28 @@ bool am32_send_command(uint8_t cmd, const uint8_t* data, uint16_t len) {
         return false;
     }
 
-    // Send command byte
-    uart_putc_raw(AM32_UART, cmd);
+    // CRITICAL FIX #1: Standard AM32/MSP checksum - simple XOR of all bytes
+    // Protocol format: [CMD] [LEN_L] [LEN_H] [DATA...] [CHECKSUM]
+    // Checksum = CMD ^ LEN_L ^ LEN_H ^ DATA[0] ^ DATA[1] ^ ... ^ DATA[n-1]
+    uint8_t checksum = cmd;
+    checksum ^= (len & 0xFF);
+    checksum ^= ((len >> 8) & 0xFF);
 
-    // Send length if data present
+    // Send command + length
+    am32_serial_write_byte(cmd);
+    am32_serial_write_byte(len & 0xFF);
+    am32_serial_write_byte((len >> 8) & 0xFF);
+
+    // Send data (if present)
     if (data && len > 0) {
-        uart_putc_raw(AM32_UART, len & 0xFF);
-        uart_putc_raw(AM32_UART, (len >> 8) & 0xFF);
-
-        // Send data
         for (uint16_t i = 0; i < len; i++) {
-            uart_putc_raw(AM32_UART, data[i]);
-        }
-
-        // CRITICAL FIX #1: Standard AM32/MSP checksum - simple XOR of all bytes
-        // Protocol format: [CMD] [LEN_L] [LEN_H] [DATA...] [CHECKSUM]
-        // Checksum = CMD ^ LEN_L ^ LEN_H ^ DATA[0] ^ DATA[1] ^ ... ^ DATA[n-1]
-        uint8_t checksum = cmd;
-        checksum ^= (len & 0xFF);
-        checksum ^= ((len >> 8) & 0xFF);
-        for (uint16_t i = 0; i < len; i++) {
+            am32_serial_write_byte(data[i]);
             checksum ^= data[i];
         }
-        uart_putc_raw(AM32_UART, checksum);
     }
+
+    // Send checksum (always)
+    am32_serial_write_byte(checksum);
 
     return true;
 }
@@ -327,63 +498,65 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
     uint16_t max_buffer_size = *len; // Store original buffer size
 
     while ((to_ms_since_boot(get_absolute_time()) - start_time) < timeout_ms) {
-        if (uart_is_readable(AM32_UART)) {
-            uint8_t byte = uart_getc(AM32_UART);
+        uint32_t elapsed_ms = to_ms_since_boot(get_absolute_time()) - start_time;
+        uint32_t remaining_ms = (elapsed_ms < timeout_ms) ? (timeout_ms - elapsed_ms) : 0;
+        uint8_t byte = 0;
 
-            if (!got_header) {
-                // First two bytes are length
-                if (received == 0) {
-                    expected_len = byte;
-                } else if (received == 1) {
-                    expected_len |= (byte << 8);
-                    // MAJOR FIX #5 (Iteration 2): Check actual buffer size FIRST, then sanity check
-                    // This ensures we protect against buffer overflow before other validations
-                    if (expected_len > max_buffer_size) {
-                        DEBUG_PRINT("ERROR: Response too large for buffer (%u > %u)\n",
-                                   expected_len, max_buffer_size);
-                        return false;
-                    }
-                    // MAJOR FIX #1: Validate max length to prevent timeout on huge values
-                    // Maximum reasonable response is 512 bytes (prevents waiting for len=65535)
-                    #define AM32_MAX_RESPONSE_LEN 512
-                    if (expected_len > AM32_MAX_RESPONSE_LEN) {
-                        DEBUG_PRINT("ERROR: Response exceeds maximum (%u > %u)\n",
-                                   expected_len, AM32_MAX_RESPONSE_LEN);
-                        return false;
-                    }
-                    got_header = true;
-                }
-                received++;
-            } else {
-                // SAFETY: Strict bounds checking
-                // MAJOR FIX #6 (Iteration 3): Upgrade truncation to ERROR level and fail
-                uint16_t data_index = received - 2;
-                if (data_index < expected_len && data_index < max_buffer_size) {
-                    buffer[data_index] = byte;
-                } else if (data_index >= max_buffer_size) {
-                    // CRITICAL: Buffer would overflow - this is a serious error
-                    DEBUG_PRINT("ERROR: AM32 buffer overflow detected (index=%u, max=%u)\n",
-                               data_index, max_buffer_size);
-                    *len = max_buffer_size;  // Report actual data written
-                    return false;  // Fail the operation
-                }
-                received++;
-
-                if (received >= expected_len + 2) {
-                    // MAJOR FIX #6 (Iteration 3): Ensure *len reflects actual data written
-                    *len = (expected_len < max_buffer_size) ? expected_len : max_buffer_size;
-                    // Return false if truncation occurred
-                    if (expected_len > max_buffer_size) {
-                        DEBUG_PRINT("ERROR: Response truncated (%u bytes truncated)\n",
-                                   expected_len - max_buffer_size);
-                        return false;
-                    }
-                    return true;
-                }
-            }
+        if (!am32_serial_read_byte(&byte, remaining_ms * 1000)) {
+            break;
         }
 
-        sleep_ms(1);
+        if (!got_header) {
+            // First two bytes are length
+            if (received == 0) {
+                expected_len = byte;
+            } else if (received == 1) {
+                expected_len |= (byte << 8);
+                // MAJOR FIX #5 (Iteration 2): Check actual buffer size FIRST, then sanity check
+                // This ensures we protect against buffer overflow before other validations
+                if (expected_len > max_buffer_size) {
+                    DEBUG_PRINT("ERROR: Response too large for buffer (%u > %u)\n",
+                               expected_len, max_buffer_size);
+                    return false;
+                }
+                // MAJOR FIX #1: Validate max length to prevent timeout on huge values
+                // Maximum reasonable response is 512 bytes (prevents waiting for len=65535)
+                #define AM32_MAX_RESPONSE_LEN 512
+                if (expected_len > AM32_MAX_RESPONSE_LEN) {
+                    DEBUG_PRINT("ERROR: Response exceeds maximum (%u > %u)\n",
+                               expected_len, AM32_MAX_RESPONSE_LEN);
+                    return false;
+                }
+                got_header = true;
+            }
+            received++;
+        } else {
+            // SAFETY: Strict bounds checking
+            // MAJOR FIX #6 (Iteration 3): Upgrade truncation to ERROR level and fail
+            uint16_t data_index = received - 2;
+            if (data_index < expected_len && data_index < max_buffer_size) {
+                buffer[data_index] = byte;
+            } else if (data_index >= max_buffer_size) {
+                // CRITICAL: Buffer would overflow - this is a serious error
+                DEBUG_PRINT("ERROR: AM32 buffer overflow detected (index=%u, max=%u)\n",
+                           data_index, max_buffer_size);
+                *len = max_buffer_size;  // Report actual data written
+                return false;  // Fail the operation
+            }
+            received++;
+
+            if (received >= expected_len + 2) {
+                // MAJOR FIX #6 (Iteration 3): Ensure *len reflects actual data written
+                *len = (expected_len < max_buffer_size) ? expected_len : max_buffer_size;
+                // Return false if truncation occurred
+                if (expected_len > max_buffer_size) {
+                    DEBUG_PRINT("ERROR: Response truncated (%u bytes truncated)\n",
+                               expected_len - max_buffer_size);
+                    return false;
+                }
+                return true;
+            }
+        }
     }
 
     DEBUG_PRINT("AM32 receive timeout after %ums\n", timeout_ms);
@@ -622,6 +795,10 @@ void am32_apply_weapon_defaults(am32_config_t* config) {
 }
 
 bool am32_passthrough_mode(void) {
+#if AM32_ONEWIRE
+    DEBUG_PRINT("AM32 passthrough mode not supported in one-wire mode\n");
+    return false;
+#else
     DEBUG_PRINT("Entering AM32 passthrough mode for external configurator\n");
     DEBUG_PRINT("Connect external configurator to USB serial\n");
     DEBUG_PRINT("Press ESC to exit passthrough mode\n");
@@ -664,6 +841,7 @@ bool am32_passthrough_mode(void) {
 
     am32_passthrough_exit();
     return true;
+#endif
 }
 
 void am32_passthrough_exit(void) {
@@ -759,6 +937,10 @@ bool am32_reset_to_defaults(void) {
 }
 
 bool am32_enter_bootloader(void) {
+#if AM32_ONEWIRE
+    DEBUG_PRINT("AM32 bootloader mode not supported in one-wire mode\n");
+    return false;
+#else
     if (!am32_in_config_mode) {
         if (!am32_enter_config_mode()) {
             return false;
@@ -785,6 +967,7 @@ bool am32_enter_bootloader(void) {
     DEBUG_PRINT("Ready for firmware flashing\n");
 
     return true;
+#endif
 }
 
 bool am32_read_telemetry(am32_telemetry_t* telemetry) {
@@ -916,7 +1099,7 @@ bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len) {
     msp_buffer[idx++] = checksum;
 
     for (uint16_t i = 0; i < idx; i++) {
-        uart_putc_raw(AM32_UART, msp_buffer[i]);
+        am32_serial_write_byte(msp_buffer[i]);
     }
 
     return true;
@@ -938,12 +1121,11 @@ bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint
     uint16_t idx = 0;
 
     while ((to_ms_since_boot(get_absolute_time()) - start_time) < AM32_REPLY_TIMEOUT) {
-        if (!uart_is_readable(AM32_UART)) {
+        uint8_t byte = 0;
+        if (!am32_serial_try_read_byte(&byte)) {
             sleep_ms(1);
             continue;
         }
-
-        uint8_t byte = uart_getc(AM32_UART);
 
         switch (state) {
             case 0:  // Wait for '$'
@@ -1036,7 +1218,7 @@ bool am32_flash_firmware(const uint8_t* firmware_data, uint32_t size) {
         memcpy(&flash_cmd[4], &firmware_data[offset], page_size);
 
         for (uint16_t i = 0; i < page_size + 4; i++) {
-            uart_putc_raw(AM32_UART, flash_cmd[i]);
+            am32_serial_write_byte(flash_cmd[i]);
         }
 
         uint8_t response[2];

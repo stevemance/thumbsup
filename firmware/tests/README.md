@@ -10,7 +10,7 @@ export PICO_SDK_PATH=/path/to/pico-sdk
 cd firmware/tests
 mkdir -p build && cd build
 cmake ..
-make dshot_beep_test dshot_spin_test
+make dshot_beep_test dshot_spin_test dshot_telemetry_spin_test am32_onewire_probe
 ```
 
 ## Flash (example)
@@ -24,3 +24,5 @@ picotool load -x firmware/tests/build/dshot_spin_test.uf2
 
 - DShot tests use GP4 (PIN_WEAPON_PWM) and DShot300.
 - Bidirectional telemetry is disabled in the spin test for stability.
+- Use `dshot_telemetry_spin_test` for bidirectional telemetry experiments.
+- Use `am32_onewire_probe` to read AM32 settings over the single signal wire.
