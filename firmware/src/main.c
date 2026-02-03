@@ -16,6 +16,7 @@
 #include "am32_config.h"
 #include "safety_test.h"
 #include "integration_test.h"
+#include "serial_gamepad.h"
 
 // Competition mode (Bluetooth) - diagnostic mode removed
 #include <btstack_run_loop.h>
@@ -158,11 +159,15 @@ int main() {
 
     init_hardware();
 
-#if INTEGRATION_TEST_AUTO
+#if INTEGRATION_TEST_AUTO || SERIAL_GAMEPAD
     printf("\n=================================\n");
+#if SERIAL_GAMEPAD
+    printf("  SERIAL GAMEPAD BUILD\n");
+#else
     printf("  INTEGRATION TEST BUILD\n");
+#endif
     printf("=================================\n\n");
-    printf("Skipping Bluetooth/WiFi init for integration test\n");
+    printf("Skipping Bluetooth/WiFi init\n");
 #else
     #if BUILD_MODE_DIAGNOSTIC
         // DIAGNOSTIC MODE BUILD
@@ -242,6 +247,7 @@ int main() {
         }
         printf("Safety tests passed - system ready\n");
 
+#if !SERIAL_GAMEPAD
         if (integration_test_run_if_requested(5000)) {
             printf("Integration test complete - halting normal startup\n");
             while (true) {
@@ -249,6 +255,25 @@ int main() {
                 sleep_ms(100);
             }
         }
+#endif
+
+#if SERIAL_GAMEPAD
+        printf("\n=================================\n");
+        printf("  SERIAL GAMEPAD MODE\n");
+        printf("=================================\n\n");
+        serial_gamepad_init();
+
+        while (true) {
+            bool handled = serial_gamepad_poll();
+            if (!handled) {
+                motor_control_update();
+                weapon_update();
+                status_update();
+                safety_update();
+            }
+            sleep_ms(MAIN_LOOP_DELAY);
+        }
+#endif
 
         // Must be called before uni_init()
         uni_platform_set_custom(get_my_platform());

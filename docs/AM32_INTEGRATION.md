@@ -96,6 +96,7 @@ docs/
 - [x] EDT bidirectional telemetry decoding
 - [x] Telemetry polling in weapon control loop
 - [x] Automated integration test (DShot telemetry rate + RPM monotonicity)
+- [x] Serial gamepad HITL input (USB CDC, no Bluetooth required)
 
 ### 🚧 Partial / TODO
 - [ ] Telemetry integration with status display/safety thresholds
@@ -103,6 +104,31 @@ docs/
 - [ ] Automatic ESC detection
 
 ## Using AM32 Features
+
+### Serial Gamepad HITL (USB)
+
+Build the serial-input firmware and feed gamepad-like commands over USB to
+exercise the real control stack without a physical controller:
+
+```bash
+cd firmware
+mkdir -p build && cd build
+cmake ..
+make thumbsup_serial
+picotool reboot -f -u
+picotool load -f -x thumbsup_serial.uf2
+```
+
+Example commands (USB serial, 115200):
+
+```
+ARM
+THROTTLE 30
+THROTTLE 60
+THROTTLE 0
+ESTOP
+CLEAR_ESTOP
+```
 
 ### Read ESC Information
 
