@@ -130,6 +130,12 @@ ESTOP
 CLEAR_ESTOP
 ```
 
+Automated HITL throttle ramp (host-side):
+
+```bash
+python3 tools/serial_hitl.py --auto --steps 20,40,60,80 --hold 3
+```
+
 ### Read ESC Information
 
 ```c

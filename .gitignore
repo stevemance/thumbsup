@@ -76,6 +76,7 @@ docs/_build/
 # Local bench artifacts
 calibration_logs/
 integration_logs/
+hitl_logs/
 CLAUDE.md
 2026-01-27_16-10-47_screenshot.png
 2026-01-29_08-23-41_screenshot.png

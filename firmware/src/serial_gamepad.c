@@ -7,6 +7,8 @@
 
 #include "bluetooth_platform.h"
 #include "config.h"
+#include "system_status.h"
+#include "weapon.h"
 #include "pico/stdlib.h"
 
 #define SERIAL_LINE_MAX 160
@@ -57,6 +59,54 @@ static void print_state(void) {
            (long)gp_state.axis_rx,
            gp_state.buttons,
            gp_state.dpad);
+}
+
+static const char* weapon_state_label(weapon_state_t state) {
+    switch (state) {
+        case WEAPON_STATE_DISARMED:
+            return "DISARMED";
+        case WEAPON_STATE_ARMING:
+            return "ARMING";
+        case WEAPON_STATE_ARMED:
+            return "ARMED";
+        case WEAPON_STATE_SPINNING:
+            return "SPINNING";
+        case WEAPON_STATE_EMERGENCY_STOP:
+            return "ESTOP";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static void print_sys_status(void) {
+    uint32_t batt_mv = read_battery_voltage();
+    printf("SYS armed=%u failsafe=%u weapon=%s speed=%u batt_mv=%lu dshot_fail=%lu\n",
+           system_is_armed() ? 1u : 0u,
+           system_failsafe_active() ? 1u : 0u,
+           weapon_state_label(weapon_get_state()),
+           weapon_get_speed(),
+           (unsigned long)batt_mv,
+           (unsigned long)weapon_get_dshot_failures());
+}
+
+static void print_telemetry(void) {
+    weapon_telemetry_t telem;
+    uint32_t age = weapon_get_telemetry_age_ms();
+    if (weapon_get_telemetry(&telem)) {
+        printf("TELEM valid=1 age=%lu erpm=%lu rpm=%lu V=%.2f I=%.2f T=%u\n",
+               (unsigned long)age,
+               (unsigned long)telem.erpm,
+               (unsigned long)telem.rpm,
+               telem.voltage_cV / 100.0f,
+               telem.current_cA / 100.0f,
+               telem.temperature_C);
+    } else {
+        if (age == UINT32_MAX) {
+            printf("TELEM valid=0 age=--\n");
+        } else {
+            printf("TELEM valid=0 age=%lu\n", (unsigned long)age);
+        }
+    }
 }
 
 static void inject_state(void) {
@@ -130,6 +180,8 @@ static void print_help(void) {
     printf("  ARM                (toggle weapon via B press)\n");
     printf("  ESTOP              (L1+R1)\n");
     printf("  CLEAR_ESTOP        (hold A to clear)\n");
+    printf("  SYS                (system status)\n");
+    printf("  TELEM              (latest ESC telemetry)\n");
     printf("  RESET              (zero axes/buttons)\n");
     printf("  STATE              (print current state)\n");
     printf("  HELP\n\n");
@@ -249,6 +301,14 @@ static bool handle_line(char* line) {
     }
     if (streq_case(cmd, "STATE")) {
         print_state();
+        return true;
+    }
+    if (streq_case(cmd, "SYS")) {
+        print_sys_status();
+        return true;
+    }
+    if (streq_case(cmd, "TELEM")) {
+        print_telemetry();
         return true;
     }
     if (streq_case(cmd, "RESET")) {
