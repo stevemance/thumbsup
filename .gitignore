@@ -73,6 +73,27 @@ docs/_build/
 *.tlog
 *.lastbuildstate
 
+# Local bench artifacts
+calibration_logs/
+integration_logs/
+CLAUDE.md
+2026-01-27_16-10-47_screenshot.png
+2026-01-29_08-23-41_screenshot.png
+firmware/config/
+firmware/tools/
+vendor/
+firmware/src/am32_config_test.c
+firmware/src/am32_onewire_probe.c
+firmware/src/dshot_beep_test.c
+firmware/src/dshot_scope_loop.c
+firmware/src/dshot_spin_test.c
+firmware/src/esc_test.c
+firmware/src/phase2_dshot_verify.c
+firmware/src/phase3_motor_spin.c
+firmware/src/phase4_telemetry_test.c
+firmware/src/phase5_pwm_test.c
+firmware/src/phase6_am32_config.c
+
 # Debug files
 *.dSYM/
 *.su
