@@ -59,7 +59,13 @@ void safety_update(void) {
         // Check for safety violations
         bool violation = false;
 
-        if (!safety_check_battery(battery_mv)) {
+#if INTEGRATION_TEST_AUTO
+        bool check_battery = false;
+#else
+        bool check_battery = true;
+#endif
+
+        if (check_battery && !safety_check_battery(battery_mv)) {
             DEBUG_PRINT("SAFETY VIOLATION: Low battery %umV\n", battery_mv);
             violation = true;
         }

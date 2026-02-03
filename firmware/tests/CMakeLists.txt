@@ -89,6 +89,102 @@ pico_enable_stdio_usb(dshot_telemetry_spin_test 1)
 pico_enable_stdio_uart(dshot_telemetry_spin_test 0)
 pico_add_extra_outputs(dshot_telemetry_spin_test)
 
+# --- DShot telemetry hold test ---
+add_executable(dshot_telemetry_hold_test
+    ${TESTS_SRC_DIR}/dshot_telemetry_hold_test.c
+    ${FIRMWARE_SRC_DIR}/dshot.c
+)
+
+pico_generate_pio_header(dshot_telemetry_hold_test ${FIRMWARE_SRC_DIR}/dshot.pio)
+
+target_include_directories(dshot_telemetry_hold_test PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(dshot_telemetry_hold_test
+    pico_stdlib
+    pico_sync
+    hardware_clocks
+    hardware_dma
+    hardware_gpio
+    hardware_irq
+    hardware_pio
+)
+
+pico_enable_stdio_usb(dshot_telemetry_hold_test 1)
+pico_enable_stdio_uart(dshot_telemetry_hold_test 0)
+pico_add_extra_outputs(dshot_telemetry_hold_test)
+
+# --- DShot telemetry single RPM test ---
+add_executable(dshot_telemetry_single_rpm_test
+    ${TESTS_SRC_DIR}/dshot_telemetry_single_rpm_test.c
+    ${FIRMWARE_SRC_DIR}/dshot.c
+)
+
+pico_generate_pio_header(dshot_telemetry_single_rpm_test ${FIRMWARE_SRC_DIR}/dshot.pio)
+
+target_include_directories(dshot_telemetry_single_rpm_test PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(dshot_telemetry_single_rpm_test
+    pico_stdlib
+    pico_sync
+    hardware_clocks
+    hardware_dma
+    hardware_gpio
+    hardware_irq
+    hardware_pio
+)
+
+pico_enable_stdio_usb(dshot_telemetry_single_rpm_test 1)
+pico_enable_stdio_uart(dshot_telemetry_single_rpm_test 0)
+pico_add_extra_outputs(dshot_telemetry_single_rpm_test)
+
+# --- DShot telemetry calibration test ---
+add_executable(dshot_telemetry_calibration_test
+    ${TESTS_SRC_DIR}/dshot_telemetry_calibration_test.c
+    ${FIRMWARE_SRC_DIR}/dshot.c
+)
+
+pico_generate_pio_header(dshot_telemetry_calibration_test ${FIRMWARE_SRC_DIR}/dshot.pio)
+
+target_include_directories(dshot_telemetry_calibration_test PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(dshot_telemetry_calibration_test
+    pico_stdlib
+    pico_sync
+    hardware_clocks
+    hardware_dma
+    hardware_gpio
+    hardware_irq
+    hardware_pio
+)
+
+pico_enable_stdio_usb(dshot_telemetry_calibration_test 1)
+pico_enable_stdio_uart(dshot_telemetry_calibration_test 0)
+pico_add_extra_outputs(dshot_telemetry_calibration_test)
+
+# --- DShot single RPM test ---
+add_executable(dshot_single_rpm_test
+    ${TESTS_SRC_DIR}/dshot_single_rpm_test.c
+    ${FIRMWARE_SRC_DIR}/dshot.c
+)
+
+pico_generate_pio_header(dshot_single_rpm_test ${FIRMWARE_SRC_DIR}/dshot.pio)
+
+target_include_directories(dshot_single_rpm_test PRIVATE ${FIRMWARE_DIR}/include)
+
+target_link_libraries(dshot_single_rpm_test
+    pico_stdlib
+    pico_sync
+    hardware_clocks
+    hardware_dma
+    hardware_gpio
+    hardware_irq
+    hardware_pio
+)
+
+pico_enable_stdio_usb(dshot_single_rpm_test 1)
+pico_enable_stdio_uart(dshot_single_rpm_test 0)
+pico_add_extra_outputs(dshot_single_rpm_test)
+
 # --- AM32 one-wire config probe ---
 add_executable(am32_onewire_probe
     ${TESTS_SRC_DIR}/am32_onewire_probe.c

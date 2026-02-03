@@ -19,6 +19,17 @@ typedef enum {
     WEAPON_MODE_CONFIG    // AM32 configuration mode (UART)
 } weapon_control_mode_t;
 
+typedef struct {
+    uint32_t erpm;           // Electrical RPM from ESC telemetry
+    uint32_t rpm;            // Mechanical RPM (ERPM / pole pairs)
+    uint16_t voltage_cV;     // Voltage in centi-volts
+    uint16_t current_cA;     // Current in centi-amps
+    uint8_t temperature_C;   // Temperature in Celsius
+    uint8_t crc;             // CRC from ESC telemetry
+    bool valid;              // True if telemetry is valid
+    uint32_t timestamp_ms;   // When telemetry was received
+} weapon_telemetry_t;
+
 // Core weapon control functions
 bool weapon_init(void);
 void weapon_update(void);
@@ -29,6 +40,11 @@ weapon_state_t weapon_get_state(void);
 uint8_t weapon_get_speed(void);
 bool weapon_is_armed(void);
 void weapon_emergency_stop(void);
+bool weapon_get_telemetry(weapon_telemetry_t* telemetry);
+uint32_t weapon_get_dshot_failures(void);
+void weapon_get_dshot_telemetry_counts(uint32_t* requests, uint32_t* responses);
+void weapon_reset_dshot_telemetry_counts(void);
+uint32_t weapon_get_telemetry_age_ms(void);
 
 // Mode switching functions (Critical Fix #2 & #6)
 bool weapon_enable_dshot(void);

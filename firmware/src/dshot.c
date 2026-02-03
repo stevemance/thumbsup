@@ -257,12 +257,9 @@ static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry
         uint32_t period_us = (uint32_t)mantissa << exponent;
         if (period_us > 0) {
             uint32_t erpm = 60000000u / period_us;
-            if (erpm > 0xFFFFu) {
-                erpm = 0xFFFFu;
-            }
-            telemetry->erpm = (uint16_t)erpm;
+            telemetry->erpm = erpm;
         } else {
-            return false;
+            telemetry->erpm = 0;
         }
     }
 
@@ -273,19 +270,19 @@ static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry
     return true;
 }
 
-static void extract_oversample_bits(uint64_t raw_samples, bool msb_first, uint8_t samples[40]) {
+static void extract_oversample_bits(uint64_t raw_samples, bool msb_first, uint8_t samples[42]) {
     if (msb_first) {
         for (int i = 0; i < 32; i++) {
             samples[i] = (raw_samples >> (63 - i)) & 1;
         }
-        for (int i = 0; i < 8; i++) {
-            samples[32 + i] = (raw_samples >> (7 - i)) & 1;
+        for (int i = 0; i < 10; i++) {
+            samples[32 + i] = (raw_samples >> (9 - i)) & 1;
         }
     } else {
         for (int i = 0; i < 32; i++) {
             samples[i] = (raw_samples >> i) & 1;
         }
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 10; i++) {
             samples[32 + i] = (raw_samples >> (32 + i)) & 1;
         }
     }
@@ -304,6 +301,21 @@ static inline void telemetry_state_unpack(int idx, int* prev_level, int* sym_len
     rem %= (16 * 16);
     *sym_bits = rem / 16;
     *xor_acc = rem % 16;
+}
+
+static uint32_t build_gcr_stream(const uint8_t even[20], const uint8_t odd[20],
+                                 const uint8_t choices[20], uint8_t start_prev) {
+    uint32_t gcr_stream = 0;
+    uint8_t prev = start_prev;
+
+    for (int i = 0; i < 20; i++) {
+        uint8_t level = (choices[i] == 0) ? even[i] : odd[i];
+        uint8_t gcr_bit = level ^ prev;
+        gcr_stream = (gcr_stream << 1) | (gcr_bit & 0x01);
+        prev = level;
+    }
+
+    return gcr_stream;
 }
 
 static bool decode_oversampled_choices(const uint8_t even[20], const uint8_t odd[20],
@@ -485,31 +497,78 @@ static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemet
         return false;
     }
 
-    uint8_t samples[40];
+    uint8_t samples[42];
     uint8_t even[20];
     uint8_t odd[20];
+    uint8_t choices[20];
+    const uint8_t offsets[] = {0, 2};
 
     for (int order = 0; order < 2; order++) {
         extract_oversample_bits(raw_samples, order == 0, samples);
-        for (int invert = 0; invert < 2; invert++) {
-            for (int i = 0; i < 20; i++) {
-                uint8_t even_level = samples[i * 2];
-                uint8_t odd_level = samples[(i * 2) + 1];
-                if (invert) {
-                    even_level ^= 1;
-                    odd_level ^= 1;
-                }
-                even[i] = even_level;
-                odd[i] = odd_level;
+        for (size_t offset_index = 0; offset_index < sizeof(offsets) / sizeof(offsets[0]);
+             offset_index++) {
+            uint8_t offset = offsets[offset_index];
+            if ((offset + 40) > sizeof(samples)) {
+                continue;
             }
+            for (int invert = 0; invert < 2; invert++) {
+                for (int i = 0; i < 20; i++) {
+                    uint8_t even_level = samples[offset + (i * 2)];
+                    uint8_t odd_level = samples[offset + (i * 2) + 1];
+                    if (invert) {
+                        even_level ^= 1;
+                        odd_level ^= 1;
+                    }
+                    even[i] = even_level;
+                    odd[i] = odd_level;
+                }
 
-            if (decode_oversampled_choices(even, odd, telemetry)) {
-                return true;
+                memset(choices, 0, sizeof(choices));
+                for (int start = 0; start < 2; start++) {
+                    uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
+                    if (decode_edt_payload(gcr_stream, telemetry)) {
+                        return true;
+                    }
+                }
+
+                memset(choices, 1, sizeof(choices));
+                for (int start = 0; start < 2; start++) {
+                    uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
+                    if (decode_edt_payload(gcr_stream, telemetry)) {
+                        return true;
+                    }
+                }
+
+                if (decode_oversampled_choices(even, odd, telemetry)) {
+                    return true;
+                }
             }
         }
     }
 
     return false;
+}
+
+bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
+                                dshot_telemetry_t* telemetry) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || !state->config.bidirectional) {
+        return false;
+    }
+
+    if (!parse_edt_telemetry(raw_samples, &state->last_telemetry)) {
+        return false;
+    }
+
+    if (telemetry != NULL) {
+        memcpy(telemetry, &state->last_telemetry, sizeof(dshot_telemetry_t));
+    }
+
+    return true;
 }
 
 // Initialize DShot for a motor
@@ -890,13 +949,7 @@ bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
     uint32_t word1 = pio_sm_get(state->pio, state->sm);
     uint64_t raw_data = ((uint64_t)word0 << 32) | (uint64_t)word1;
 
-    // Parse EDT frame
-    if (parse_edt_telemetry(raw_data, &state->last_telemetry)) {
-        memcpy(telemetry, &state->last_telemetry, sizeof(dshot_telemetry_t));
-        return true;
-    }
-
-    return false;
+    return dshot_decode_telemetry_raw(motor, raw_data, telemetry);
 }
 
 // Get last valid telemetry
@@ -925,7 +978,7 @@ bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
 }
 
 // Convert eRPM to actual RPM
-uint16_t dshot_erpm_to_rpm(uint16_t erpm, uint8_t pole_pairs) {
+uint32_t dshot_erpm_to_rpm(uint32_t erpm, uint8_t pole_pairs) {
     if (pole_pairs == 0) {
         DEBUG_PRINT("WARNING: Invalid pole_pairs=0 in dshot_erpm_to_rpm\n");
         return 0;

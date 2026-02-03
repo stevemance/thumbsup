@@ -68,7 +68,7 @@ typedef enum {
 
 // EDT (Extended DShot Telemetry) frame structure
 typedef struct {
-    uint16_t erpm;              // Electrical RPM (mechanical RPM × pole pairs)
+    uint32_t erpm;              // Electrical RPM (mechanical RPM × pole pairs)
     uint16_t voltage_cV;        // Voltage in centi-volts (12.6V = 1260)
     uint16_t current_cA;        // Current in centi-amps (10.5A = 1050)
     uint8_t temperature_C;      // Temperature in Celsius
@@ -133,7 +133,7 @@ bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd);
 bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 
 /**
- * Read raw EDT telemetry samples (40 samples, 2x oversampled).
+ * Read raw EDT telemetry samples (42 samples, 2x oversampled).
  *
  * @param motor Motor channel
  * @param raw_data Output raw frame bits
@@ -142,13 +142,24 @@ bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 bool dshot_read_telemetry_raw(motor_channel_t motor, uint64_t* raw_data);
 
 /**
+ * Decode raw EDT telemetry samples and update last telemetry.
+ *
+ * @param motor Motor channel
+ * @param raw_samples Raw 64-bit samples from dshot_read_telemetry_raw
+ * @param telemetry Output decoded telemetry (optional)
+ * @return true if telemetry decoded successfully
+ */
+bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
+                                dshot_telemetry_t* telemetry);
+
+/**
  * Convert electrical RPM to mechanical RPM
  *
  * @param erpm Electrical RPM from telemetry
  * @param pole_pairs Number of motor pole pairs (poles / 2)
  * @return Mechanical RPM
  */
-uint16_t dshot_erpm_to_rpm(uint16_t erpm, uint8_t pole_pairs);
+uint32_t dshot_erpm_to_rpm(uint32_t erpm, uint8_t pole_pairs);
 
 /**
  * Get latest telemetry for motor

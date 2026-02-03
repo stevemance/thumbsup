@@ -5,12 +5,17 @@
 #include "dshot.h"
 
 #define DSHOT_TEST_SPEED DSHOT_SPEED_300
-#define TELEMETRY_LOG_INTERVAL_MS 500
+#define TELEMETRY_LOG_INTERVAL_MS 1000
 #define MOTOR_POLE_PAIRS 7
 #define TELEMETRY_REQUEST_PERIOD 1
 #define CRC_OVERRIDE_MODE -1  // -1 = use config, 0 = normal, 1 = inverted
 #define MAX_UNIQUE_VALUES 32
-#define RAW_DUMP_LIMIT 60
+#define RAW_DUMP_LIMIT 0
+#define LOG_UNIQUE_FRAMES 0
+#define LOG_RAW_DUMP 0
+#define LOG_STATS 0
+#define HOLD_THROTTLE 1500
+#define HOLD_MS 30000
 
 typedef enum {
     EDT_KIND_ERPM = 0,
@@ -596,7 +601,7 @@ static void telemetry_drain(telemetry_stats_t* stats) {
     while (dshot_read_telemetry_raw(MOTOR_WEAPON, &raw)) {
         stats->packets++;
 
-        if (stats->raw_dump_remaining > 0) {
+        if (LOG_RAW_DUMP && stats->raw_dump_remaining > 0) {
             printf("EDT raw=0x%010llx\n", (unsigned long long)raw);
             stats->raw_dump_remaining--;
         }
@@ -628,7 +633,7 @@ static void telemetry_drain(telemetry_stats_t* stats) {
         stats->last_by_kind[frame.kind] = frame;
         stats->last_valid[frame.kind] = true;
 
-        if (value_set_add(&stats->unique[frame.kind], frame.value)) {
+        if (LOG_UNIQUE_FRAMES && value_set_add(&stats->unique[frame.kind], frame.value)) {
             log_frame(&frame, MOTOR_POLE_PAIRS);
         }
     }
@@ -723,12 +728,17 @@ static void telemetry_maybe_log(telemetry_stats_t* stats, uint8_t pole_pairs) {
     printf("\n");
 }
 
+static void telemetry_log_summary(telemetry_stats_t* stats, uint8_t pole_pairs) {
+    stats->last_log_ms = 0;
+    telemetry_maybe_log(stats, pole_pairs);
+}
+
 static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms,
                                  telemetry_stats_t* stats) {
     const uint32_t step_ms = 2;  // 500 Hz update rate
-    uint32_t steps = duration_ms / step_ms;
+    uint32_t start_ms = to_ms_since_boot(get_absolute_time());
 
-    for (uint32_t i = 0; i < steps; i++) {
+    while ((to_ms_since_boot(get_absolute_time()) - start_ms) < duration_ms) {
         telemetry_drain(stats);
         bool request = telemetry_request_due(stats);
         if (!dshot_send_throttle(MOTOR_WEAPON, throttle, request)) {
@@ -736,14 +746,17 @@ static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms,
         }
         sleep_ms(step_ms);
         telemetry_drain(stats);
-        telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        if (LOG_STATS) {
+            telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        }
     }
 }
 
 static void send_command_repeat(dshot_command_t cmd, const char* label, int repeats,
                                 telemetry_stats_t* stats) {
     printf("Command: %s (cmd=%u) x%d\n", label, (unsigned)cmd, repeats);
-    if (cmd == DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE && stats->raw_dump_remaining == 0) {
+    if (LOG_RAW_DUMP && cmd == DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE &&
+        stats->raw_dump_remaining == 0 && RAW_DUMP_LIMIT > 0) {
         stats->raw_dump_remaining = RAW_DUMP_LIMIT;
         printf("EDT raw dump enabled (%u frames)\n", (unsigned)RAW_DUMP_LIMIT);
     }
@@ -754,7 +767,9 @@ static void send_command_repeat(dshot_command_t cmd, const char* label, int repe
         }
         sleep_ms(2);
         telemetry_drain(stats);
-        telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        if (LOG_STATS) {
+            telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        }
     }
 }
 
@@ -763,13 +778,18 @@ int main() {
     sleep_ms(2000);
 
     printf("\n========================================\n");
-    printf("  DShot Telemetry Spin Test (Raw EDT)\n");
+    printf("  DShot Telemetry Hold Test (Raw EDT)\n");
     printf("========================================\n\n");
     printf("Target: DShot%u on GP%d (bidirectional)\n",
            (unsigned)DSHOT_TEST_SPEED, PIN_WEAPON_PWM);
-    printf("Sequence: bidir DShot -> EDT enable -> 3D off -> dir normal -> throttle ramp\n");
+    printf("Sequence: bidir DShot -> EDT enable -> 3D off -> dir normal -> hold throttle\n");
     printf("Telemetry requests enabled (request bit set every frame)\n");
-    printf("Unique frame logging capped at %u per type\n\n", (unsigned)MAX_UNIQUE_VALUES);
+    printf("Hold throttle=%u for %ums\n", HOLD_THROTTLE, HOLD_MS);
+    if (LOG_UNIQUE_FRAMES) {
+        printf("Unique frame logging capped at %u per type\n\n", (unsigned)MAX_UNIQUE_VALUES);
+    } else {
+        printf("Unique frame logging disabled\n\n");
+    }
 
     dshot_config_t config = {
         .gpio_pin = PIN_WEAPON_PWM,
@@ -803,12 +823,12 @@ int main() {
         send_command_repeat(DSHOT_CMD_3D_MODE_OFF, "3D_MODE_OFF", 6, &stats);
         send_command_repeat(DSHOT_CMD_SPIN_DIRECTION_NORMAL, "SPIN_DIR_NORMAL", 6, &stats);
 
-        printf("Throttle ramp (2s per step)\n");
-        send_throttle_for_ms(200, 2000, &stats);
-        send_throttle_for_ms(500, 2000, &stats);
-        send_throttle_for_ms(1000, 2000, &stats);
-        send_throttle_for_ms(1500, 2000, &stats);
-        send_throttle_for_ms(1800, 2000, &stats);
+    printf("Hold (throttle=%u, %ums)\n", HOLD_THROTTLE, HOLD_MS);
+    uint32_t hold_start = to_ms_since_boot(get_absolute_time());
+    send_throttle_for_ms(HOLD_THROTTLE, HOLD_MS, &stats);
+    uint32_t hold_end = to_ms_since_boot(get_absolute_time());
+    printf("Hold complete: elapsed=%lums\n", (unsigned long)(hold_end - hold_start));
+    telemetry_log_summary(&stats, MOTOR_POLE_PAIRS);
 
         printf("Stop (throttle=0, 4s)\n");
         send_throttle_for_ms(0, 4000, &stats);

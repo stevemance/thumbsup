@@ -181,6 +181,10 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         // Now check if controller state changed - skip normal processing if unchanged
         // Used to prevent spamming the log, but should be removed in production.
         if (memcmp(&prev, ctl, sizeof(*ctl)) == 0) {
+            motor_control_update();
+            weapon_update();
+            status_update();
+            safety_update();
             return;
         }
         prev = *ctl;

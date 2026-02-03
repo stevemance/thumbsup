@@ -5,12 +5,21 @@
 #include "dshot.h"
 
 #define DSHOT_TEST_SPEED DSHOT_SPEED_300
-#define TELEMETRY_LOG_INTERVAL_MS 500
+#define TELEMETRY_LOG_INTERVAL_MS 1000
 #define MOTOR_POLE_PAIRS 7
 #define TELEMETRY_REQUEST_PERIOD 1
 #define CRC_OVERRIDE_MODE -1  // -1 = use config, 0 = normal, 1 = inverted
 #define MAX_UNIQUE_VALUES 32
-#define RAW_DUMP_LIMIT 60
+#define RAW_DUMP_LIMIT 0
+#define LOG_UNIQUE_FRAMES 0
+#define LOG_STATS 0
+
+#define RPM_SAMPLE_INTERVAL_MS 1000
+
+#define STEP_HOLD_MS 20000
+#define STEP_GAP_MS 10000
+static const uint16_t throttle_steps[] = { 1000, 1300, 1600, 1900, 2047 };
+#define STEP_COUNT (sizeof(throttle_steps) / sizeof(throttle_steps[0]))
 
 typedef enum {
     EDT_KIND_ERPM = 0,
@@ -628,7 +637,7 @@ static void telemetry_drain(telemetry_stats_t* stats) {
         stats->last_by_kind[frame.kind] = frame;
         stats->last_valid[frame.kind] = true;
 
-        if (value_set_add(&stats->unique[frame.kind], frame.value)) {
+        if (LOG_UNIQUE_FRAMES && value_set_add(&stats->unique[frame.kind], frame.value)) {
             log_frame(&frame, MOTOR_POLE_PAIRS);
         }
     }
@@ -723,12 +732,60 @@ static void telemetry_maybe_log(telemetry_stats_t* stats, uint8_t pole_pairs) {
     printf("\n");
 }
 
-static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms,
-                                 telemetry_stats_t* stats) {
-    const uint32_t step_ms = 2;  // 500 Hz update rate
-    uint32_t steps = duration_ms / step_ms;
+static void log_rpm_sample(uint16_t throttle, telemetry_stats_t* stats, uint8_t pole_pairs) {
+    printf("RPM_SAMPLE throttle=%u ", throttle);
 
-    for (uint32_t i = 0; i < steps; i++) {
+    if (stats->last_valid[EDT_KIND_ERPM]) {
+        const edt_frame_t* frame = &stats->last_by_kind[EDT_KIND_ERPM];
+        uint32_t rpm = (pole_pairs > 0) ? frame->erpm / pole_pairs : 0;
+        const char* pick_label = "mixed";
+        if (frame->choice_mask == 0x1) {
+            pick_label = "even";
+        } else if (frame->choice_mask == 0x2) {
+            pick_label = "odd";
+        }
+        printf("erpm=%lu rpm=%lu path=%s inv=%u pick=%s off=%u ",
+               (unsigned long)frame->erpm,
+               (unsigned long)rpm,
+               frame->msb_first ? "msb" : "lsb",
+               frame->inverted ? 1u : 0u,
+               pick_label,
+               frame->sample_offset);
+    } else {
+        printf("erpm=-- rpm=-- ");
+    }
+
+    if (stats->last_valid[EDT_KIND_VOLTAGE]) {
+        const edt_frame_t* frame = &stats->last_by_kind[EDT_KIND_VOLTAGE];
+        printf("V=%u.%02u ", frame->voltage_cV / 100, frame->voltage_cV % 100);
+    } else {
+        printf("V=-- ");
+    }
+
+    if (stats->last_valid[EDT_KIND_CURRENT]) {
+        const edt_frame_t* frame = &stats->last_by_kind[EDT_KIND_CURRENT];
+        printf("I=%u.%02u ", frame->current_cA / 100, frame->current_cA % 100);
+    } else {
+        printf("I=-- ");
+    }
+
+    if (stats->last_valid[EDT_KIND_TEMP]) {
+        const edt_frame_t* frame = &stats->last_by_kind[EDT_KIND_TEMP];
+        printf("T=%u", frame->temperature_C);
+    } else {
+        printf("T=--");
+    }
+
+    printf("\n");
+}
+
+static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms,
+                                 telemetry_stats_t* stats, bool sample, uint8_t pole_pairs) {
+    const uint32_t step_ms = 2;  // 500 Hz update rate
+    uint32_t start_ms = to_ms_since_boot(get_absolute_time());
+    uint32_t next_sample_ms = start_ms;
+
+    while ((to_ms_since_boot(get_absolute_time()) - start_ms) < duration_ms) {
         telemetry_drain(stats);
         bool request = telemetry_request_due(stats);
         if (!dshot_send_throttle(MOTOR_WEAPON, throttle, request)) {
@@ -736,14 +793,25 @@ static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms,
         }
         sleep_ms(step_ms);
         telemetry_drain(stats);
-        telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        if (LOG_STATS) {
+            telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        }
+
+        if (sample) {
+            uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+            if (now_ms >= next_sample_ms) {
+                log_rpm_sample(throttle, stats, pole_pairs);
+                next_sample_ms = now_ms + RPM_SAMPLE_INTERVAL_MS;
+            }
+        }
     }
 }
 
 static void send_command_repeat(dshot_command_t cmd, const char* label, int repeats,
                                 telemetry_stats_t* stats) {
     printf("Command: %s (cmd=%u) x%d\n", label, (unsigned)cmd, repeats);
-    if (cmd == DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE && stats->raw_dump_remaining == 0) {
+    if (cmd == DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE && stats->raw_dump_remaining == 0 &&
+        RAW_DUMP_LIMIT > 0) {
         stats->raw_dump_remaining = RAW_DUMP_LIMIT;
         printf("EDT raw dump enabled (%u frames)\n", (unsigned)RAW_DUMP_LIMIT);
     }
@@ -754,7 +822,23 @@ static void send_command_repeat(dshot_command_t cmd, const char* label, int repe
         }
         sleep_ms(2);
         telemetry_drain(stats);
-        telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        if (LOG_STATS) {
+            telemetry_maybe_log(stats, MOTOR_POLE_PAIRS);
+        }
+    }
+}
+
+static void run_step_sequence(telemetry_stats_t* stats) {
+    for (size_t i = 0; i < STEP_COUNT; i++) {
+        uint16_t throttle = throttle_steps[i];
+        printf("\nSTEP_START index=%u throttle=%u hold=%ums\n",
+               (unsigned)(i + 1), throttle, STEP_HOLD_MS);
+        send_throttle_for_ms(throttle, STEP_HOLD_MS, stats, true, MOTOR_POLE_PAIRS);
+        printf("STEP_END index=%u throttle=%u\n", (unsigned)(i + 1), throttle);
+        if (i + 1 < STEP_COUNT) {
+            printf("GAP throttle=0 duration=%ums\n", STEP_GAP_MS);
+            send_throttle_for_ms(0, STEP_GAP_MS, stats, false, MOTOR_POLE_PAIRS);
+        }
     }
 }
 
@@ -763,12 +847,18 @@ int main() {
     sleep_ms(2000);
 
     printf("\n========================================\n");
-    printf("  DShot Telemetry Spin Test (Raw EDT)\n");
+    printf("  DShot Telemetry Calibration Test (Raw EDT)\n");
     printf("========================================\n\n");
     printf("Target: DShot%u on GP%d (bidirectional)\n",
            (unsigned)DSHOT_TEST_SPEED, PIN_WEAPON_PWM);
-    printf("Sequence: bidir DShot -> EDT enable -> 3D off -> dir normal -> throttle ramp\n");
+    printf("Sequence: bidir DShot -> EDT enable -> 3D off -> dir normal -> ramp -> step holds\n");
     printf("Telemetry requests enabled (request bit set every frame)\n");
+    printf("Step hold=%ums, gap=%ums\n", STEP_HOLD_MS, STEP_GAP_MS);
+    printf("Throttle steps:");
+    for (size_t i = 0; i < STEP_COUNT; i++) {
+        printf(" %u", throttle_steps[i]);
+    }
+    printf("\n");
     printf("Unique frame logging capped at %u per type\n\n", (unsigned)MAX_UNIQUE_VALUES);
 
     dshot_config_t config = {
@@ -797,20 +887,22 @@ int main() {
         dshot_set_crc_invert_override(MOTOR_WEAPON, crc_mode);
 
         printf("Arming (throttle=0, 5s)\n");
-        send_throttle_for_ms(0, 5000, &stats);
+        send_throttle_for_ms(0, 5000, &stats, false, MOTOR_POLE_PAIRS);
 
         send_command_repeat(DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE, "EDT_ENABLE", 6, &stats);
         send_command_repeat(DSHOT_CMD_3D_MODE_OFF, "3D_MODE_OFF", 6, &stats);
         send_command_repeat(DSHOT_CMD_SPIN_DIRECTION_NORMAL, "SPIN_DIR_NORMAL", 6, &stats);
 
         printf("Throttle ramp (2s per step)\n");
-        send_throttle_for_ms(200, 2000, &stats);
-        send_throttle_for_ms(500, 2000, &stats);
-        send_throttle_for_ms(1000, 2000, &stats);
-        send_throttle_for_ms(1500, 2000, &stats);
-        send_throttle_for_ms(1800, 2000, &stats);
+        send_throttle_for_ms(200, 2000, &stats, false, MOTOR_POLE_PAIRS);
+        send_throttle_for_ms(500, 2000, &stats, false, MOTOR_POLE_PAIRS);
+        send_throttle_for_ms(1000, 2000, &stats, false, MOTOR_POLE_PAIRS);
+        send_throttle_for_ms(1500, 2000, &stats, false, MOTOR_POLE_PAIRS);
+        send_throttle_for_ms(1800, 2000, &stats, false, MOTOR_POLE_PAIRS);
+
+        run_step_sequence(&stats);
 
         printf("Stop (throttle=0, 4s)\n");
-        send_throttle_for_ms(0, 4000, &stats);
+        send_throttle_for_ms(0, 4000, &stats, false, MOTOR_POLE_PAIRS);
     }
 }

@@ -15,6 +15,7 @@
 #include "status.h"
 #include "am32_config.h"
 #include "safety_test.h"
+#include "integration_test.h"
 
 // Competition mode (Bluetooth) - diagnostic mode removed
 #include <btstack_run_loop.h>
@@ -157,41 +158,48 @@ int main() {
 
     init_hardware();
 
-#if BUILD_MODE_DIAGNOSTIC
-    // DIAGNOSTIC MODE BUILD
-
-    // Wait for USB serial connection
-    for (int i = 0; i < 3; i++) {
-        printf("Starting diagnostic mode in %d...\n", 3-i);
-        sleep_ms(1000);
-    }
-
+#if INTEGRATION_TEST_AUTO
     printf("\n=================================\n");
-    printf("  DIAGNOSTIC MODE BUILD\n");
+    printf("  INTEGRATION TEST BUILD\n");
     printf("=================================\n\n");
-
-    // Initialize for WiFi (diagnostic mode)
-    if (cyw43_arch_init_with_country(CYW43_COUNTRY_USA)) {
-        printf("Failed to initialize WiFi\n");
-        return -1;
-    }
-    printf("WiFi initialized for diagnostic mode\n");
+    printf("Skipping Bluetooth/WiFi init for integration test\n");
 #else
-    // COMPETITION MODE BUILD
-    printf("\n=================================\n");
-    printf("  COMPETITION MODE BUILD\n");
-    printf("=================================\n\n");
+    #if BUILD_MODE_DIAGNOSTIC
+        // DIAGNOSTIC MODE BUILD
 
-    // Initialize for Bluetooth (competition mode)
-    if (cyw43_arch_init()) {
-        printf("Failed to initialize Bluetooth\n");
-        return -1;
-    }
-    printf("Bluetooth initialized for competition mode\n");
-#endif
+        // Wait for USB serial connection
+        for (int i = 0; i < 3; i++) {
+            printf("Starting diagnostic mode in %d...\n", 3-i);
+            sleep_ms(1000);
+        }
+
+        printf("\n=================================\n");
+        printf("  DIAGNOSTIC MODE BUILD\n");
+        printf("=================================\n\n");
+
+        // Initialize for WiFi (diagnostic mode)
+        if (cyw43_arch_init_with_country(CYW43_COUNTRY_USA)) {
+            printf("Failed to initialize WiFi\n");
+            return -1;
+        }
+        printf("WiFi initialized for diagnostic mode\n");
+    #else
+        // COMPETITION MODE BUILD
+        printf("\n=================================\n");
+        printf("  COMPETITION MODE BUILD\n");
+        printf("=================================\n\n");
+
+        // Initialize for Bluetooth (competition mode)
+        if (cyw43_arch_init()) {
+            printf("Failed to initialize Bluetooth\n");
+            return -1;
+        }
+        printf("Bluetooth initialized for competition mode\n");
+    #endif
 
     // Turn-on LED. Turn it off once init is done.
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+#endif
 
     // COMPETITION MODE - Run Bluetooth gamepad control
         printf("\n*** COMPETITION MODE ***\n");
@@ -213,7 +221,9 @@ int main() {
         weapon_init();
         drive_init();
         safety_init();
+        #if !INTEGRATION_TEST_AUTO
         status_init();
+        #endif
 
         // SAFETY: Run comprehensive safety tests
         printf("Running safety validation tests...\n");
@@ -231,6 +241,14 @@ int main() {
             }
         }
         printf("Safety tests passed - system ready\n");
+
+        if (integration_test_run_if_requested(5000)) {
+            printf("Integration test complete - halting normal startup\n");
+            while (true) {
+                status_update();
+                sleep_ms(100);
+            }
+        }
 
         // Must be called before uni_init()
         uni_platform_set_custom(get_my_platform());

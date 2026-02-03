@@ -117,24 +117,24 @@ tx_done:
 
     ; === RECEIVE PHASE ===
     ; Wait for telemetry start bit (falling edge to low), then sample mid-bit.
-    ; Allow a longer wait window for ESC telemetry turnaround.
+    ; Use a tighter polling loop with a bounded timeout.
     set x, 31
 wait_low:
     jmp pin, wait_low_dec
     jmp got_low
 wait_low_dec:
-    jmp x--, wait_low [31]
+    jmp x--, wait_low [4]
     jmp rx_timeout
 
 got_low:
-    ; Telemetry oversampling: 2 samples per data bit (40 total samples).
-    set x, 31       [2]     ; Delay before first sample, then capture 32 samples
+    ; Telemetry oversampling: 42 samples (21 bits @ 2x).
+    set x, 31       [2]     ; Delay to mid-bit before sampling (2x oversample)
 
 rx_bitloop0:
     in pins, 1      [4]     ; Sample at ~1.25us cadence (2x oversample)
     jmp x--, rx_bitloop0
 
-    set x, 7
+    set x, 9
 rx_bitloop1:
     in pins, 1      [4]
     jmp x--, rx_bitloop1

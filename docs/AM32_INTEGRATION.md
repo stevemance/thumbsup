@@ -13,7 +13,7 @@ AM32 is open-source firmware for brushless ESC (Electronic Speed Controllers). I
 - Firmware updates via serial bootloader
 - MSP protocol compatibility for configurators
 
-**Project**: https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware
+**Project**: https://github.com/am32-firmware/AM32
 
 ## Integration Architecture
 
@@ -23,20 +23,20 @@ ThumbsUp Firmware
 Motor Control Layer (motor_control.c)
     ↓
 Protocol Selection
-    ├─→ PWM Mode (default)
-    │   └─→ Standard 1000-2000μs servo signals
-    ├─→ DShot Mode (future)
+    ├─→ DShot Mode (default)
     │   └─→ Digital protocol with telemetry
+    ├─→ PWM Mode (fallback)
+    │   └─→ Standard 1000-2000μs servo signals
     └─→ Configuration Mode
         └─→ UART serial for ESC setup
 ```
 
 ## Communication Modes
 
-### 1. PWM Control Mode (Active)
+### 1. PWM Control Mode (Fallback)
 
 **Normal operation** - Standard servo PWM signals:
-- Pin: `GP2` (PIN_WEAPON_PWM)
+- Pin: `GP4` (PIN_WEAPON_PWM)
 - Frequency: 50Hz
 - Pulse width: 1000-2000μs
 - No special wiring required
@@ -44,18 +44,18 @@ Protocol Selection
 ### 2. Configuration Mode (Serial)
 
 **For ESC setup** - UART communication:
-- Pin: Same `GP2` (dynamically switched)
+- Pin: Same `GP4` (dynamically switched)
 - Baud rate: 19200 (config), 115200 (bootloader)
 - Protocol: AM32 native + MSP compatibility
 - Activated programmatically via `am32_enter_config_mode()`
 
-### 3. DShot Mode (Future)
+### 3. DShot Mode (Active)
 
 **Digital control with telemetry**:
-- Pin: `GP2` (PIO-based)
+- Pin: `GP4` (PIO-based)
 - Speed: DShot300 recommended (300kbit/s)
 - Benefits:
-  - Faster response (8kHz update rate vs 50Hz PWM)
+  - Faster response (up to 8kHz update rate vs 50Hz PWM)
   - Bidirectional telemetry (EDT)
   - More reliable digital protocol
   - No calibration needed
@@ -66,10 +66,10 @@ Protocol Selection
 firmware/
   include/
     am32_config.h          # AM32 protocol definitions
-    dshot.h                # DShot protocol (future)
+    dshot.h                # DShot protocol
   src/
     am32_config.c          # Serial configuration implementation
-    dshot.c                # DShot implementation (future)
+    dshot.c                # DShot implementation
     motor_control.c        # Integrates all protocols
 
 config/am32/
@@ -92,13 +92,15 @@ docs/
 - [x] Passthrough mode for external configurators
 - [x] Bootloader entry (for firmware updates)
 - [x] Factory reset
+- [x] PIO-based DShot control (weapon motor)
+- [x] EDT bidirectional telemetry decoding
+- [x] Telemetry polling in weapon control loop
+- [x] Automated integration test (DShot telemetry rate + RPM monotonicity)
 
 ### 🚧 Partial / TODO
-- [ ] Complete PIO-based DShot implementation
-- [ ] EDT bidirectional telemetry parsing
+- [ ] Telemetry integration with status display/safety thresholds
 - [ ] MSP protocol wrapper (optional)
 - [ ] Automatic ESC detection
-- [ ] Telemetry integration with status display
 
 ## Using AM32 Features
 
@@ -193,7 +195,7 @@ See `config/am32/weapon_esc_config.json` for complete configuration.
 
 ⚠️ **Calibrate throttle range** - Ensure ESC knows 1000μs = stop, 2000μs = full speed.
 
-## DShot Protocol (Future)
+## DShot Protocol (Active)
 
 ### Why DShot?
 
@@ -207,60 +209,76 @@ DShot offers several advantages over PWM:
 | Telemetry | Separate wire | Bidirectional |
 | Response | ~20ms | ~0.125ms |
 
-### DShot Implementation Plan
+### DShot Implementation Notes
 
-1. **PIO Program**: Use RP2040's PIO to generate precise DShot waveforms
-2. **DMA Transfer**: Efficient bit streaming without CPU load
-3. **EDT Parser**: Decode bidirectional telemetry frames
-4. **Integration**: Fallback to PWM if DShot not supported
+- **PIO Program**: RP2040 PIO generates precise DShot waveforms
+- **DMA Transfer**: TX uses DMA to minimize CPU load
+- **EDT Parser**: Bidirectional telemetry decoding is enabled
+- **Integration**: Falls back to PWM if DShot init fails
 
 ### Telemetry Data (EDT)
 
 When DShot telemetry is enabled:
 ```c
-dshot_telemetry_t telem;
-if (dshot_read_telemetry(MOTOR_WEAPON, &telem)) {
-    uint16_t rpm = dshot_erpm_to_rpm(telem.erpm, 7);  // 14 poles = 7 pairs
+weapon_telemetry_t telem;
+if (weapon_get_telemetry(&telem)) {
     float voltage = telem.voltage_cV / 100.0f;
     float current = telem.current_cA / 100.0f;
 
     printf("Weapon: %d RPM, %.1fV, %.1fA, %d°C\n",
-           rpm, voltage, current, telem.temperature_C);
+           telem.rpm, voltage, current, telem.temperature_C);
 }
 ```
 
 ## Hardware Connections
 
-### Current Setup (PWM)
+### Current Setup (DShot + telemetry)
 
+Signal wiring (single wire, bidirectional):
+```
+RP2040 Pico W          AM32 ESC
+┌──────────┐          ┌────────┐
+│   GP4────┼─────────→│ Signal │
+│  3.3V─[2.2k]───────→│ Signal │
+│   GND────┼─────────→│  GND   │
+└──────────┘          └────────┘
+```
+
+Power + motor wiring:
 ```
 RP2040 Pico W          AM32 ESC            Brushless Motor
 ┌──────────┐          ┌────────┐          ┌──────┐
 │          │          │        │          │      │
-│   GP2────┼─────────→│ Signal │          │  A   │
+│  VSYS────┼──(BEC)──→│  5V    │          │  A   │
 │          │          │        ├─────────→│  B   │
 │   GND────┼─────────→│  GND   │          │  C   │
-│          │          │        │          └──────┘
-│  VSYS────┼──(BEC)──→│  5V    │
-└──────────┘          │        │
+└──────────┘          │        │          └──────┘
                       │  BAT+──┼───── 3S LiPo +
                       │  BAT───┼───── 3S LiPo -
                       └────────┘
 ```
 
-### Future DShot + Telemetry
+### PWM Fallback
 
+PWM uses the same GP4 signal line without telemetry pull-up.
+
+## Automated Integration Test
+
+Use the integration build to validate DShot telemetry reliability without a controller.
+
+```bash
+python3 tools/run_integration_test.py --voltage 12.6 --current 3.0 --channel 1
 ```
-RP2040 Pico W          AM32 ESC
-┌──────────┐          ┌────────┐
-│          │          │        │
-│   GP2────┼────┬────→│ Signal │  (DShot out)
-│          │    │     │        │
-│          │    └────→│  T-RX  │  (Telemetry in, future)
-│          │          │        │
-│   GND────┼─────────→│  GND   │
-└──────────┘          └────────┘
-```
+
+What it does:
+- Builds + flashes `thumbsup_integration.uf2`
+- Powers the PSU via `labctl` and logs voltage/current
+- Auto-runs the DShot integration sequence over USB serial
+- Reports telemetry request/response rate and RPM monotonicity
+
+Notes:
+- The integration test attempts to enter AM32 config mode and enable telemetry/bidirectional flags if needed.
+- Telemetry voltage/current/temperature are ESC-calibrated values; some ESCs require calibration or may report scaled values.
 
 ## Debugging
 
@@ -292,15 +310,14 @@ if (am32_enter_config_mode()) {
 
 ## Reference Documentation
 
-- **AM32 Project**: https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware
-- **AM32 Wiki**: https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware/wiki
-- **Serial Protocol**: https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware/wiki/Serial-Protocol
+- **AM32 Project**: https://github.com/am32-firmware/AM32
+- **AM32 DeepWiki**: https://deepwiki.com/am32-firmware/AM32
 - **DShot Specification**: https://github.com/betaflight/betaflight/wiki/DSHOT-ESC-Protocol
 - **AM32 Discord**: https://discord.gg/h4QNyGd
 
 ## Contributing
 
-If you implement additional features (e.g., complete DShot telemetry):
+If you implement additional features (e.g., telemetry-driven safety thresholds):
 
 1. Update this documentation
 2. Add examples to `config/am32/`
@@ -310,4 +327,4 @@ If you implement additional features (e.g., complete DShot telemetry):
 ## Version History
 
 - **v1.0** (2024-11-18): Initial AM32 integration with PWM control
-- **v1.1** (future): DShot implementation with bidirectional telemetry
+- **v1.1** (2026-02-02): DShot control with bidirectional telemetry decode/polling

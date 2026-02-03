@@ -69,6 +69,8 @@
 #define MAX_DRIVE_SPEED     75    // Maximum drive speed percentage (75% of max for better control)
 #define MAX_TURN_SPEED      70    // Maximum turn rate percentage (70% turn sensitivity)
 #define MAX_WEAPON_SPEED    100   // Maximum weapon speed percentage
+#define WEAPON_MOTOR_POLES  14    // Weapon motor pole count
+#define WEAPON_POLE_PAIRS   (WEAPON_MOTOR_POLES / 2)
 
 // Exponential Curve Parameters
 // NOTE: Increased from 30% to 70% for better low-speed control
@@ -91,6 +93,19 @@
 #define FAILSAFE_TIMEOUT    1500  // Connection loss failsafe timeout (ms) - increased for reliability
 #define WEAPON_SPINUP_TIME  2000  // Weapon ramp-up time (ms)
 #define WEAPON_RAMP_STEPS   50    // Number of steps for smooth ramping
+#define WEAPON_DSHOT_UPDATE_MS     10  // Minimum DShot update interval (ms)
+#define WEAPON_DSHOT_TELEMETRY_MS  20  // Telemetry request interval (ms)
+
+#ifndef INTEGRATION_TEST_AUTO
+#define INTEGRATION_TEST_AUTO 0
+#endif
+
+#if INTEGRATION_TEST_AUTO
+#undef WEAPON_DSHOT_UPDATE_MS
+#undef WEAPON_DSHOT_TELEMETRY_MS
+#define WEAPON_DSHOT_UPDATE_MS     3
+#define WEAPON_DSHOT_TELEMETRY_MS  3
+#endif
 #define SAFETY_CHECK_INTERVAL 10  // Safety check interval (ms)
 #define EMERGENCY_STOP_HOLD_TIME 2000  // Time emergency stop must be held to clear (ms)
 
