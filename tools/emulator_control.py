@@ -33,6 +33,19 @@ def resolve_port(args):
         return args.port
     if not args.auto:
         return None
+    if args.product:
+        hint = args.product.lower()
+        if "gamepad" in hint:
+            hitl = Path("/dev/ttyHITL_GAMEPAD")
+            if hitl.exists():
+                return str(hitl)
+        if "robot" in hint:
+            hitl = Path("/dev/ttyHITL_ROBOT")
+            if hitl.exists():
+                return str(hitl)
+    hitl = Path("/dev/ttyHITL_GAMEPAD")
+    if hitl.exists():
+        return str(hitl)
     matches = find_pico_ports(args.product)
     if len(matches) == 1:
         return matches[0]

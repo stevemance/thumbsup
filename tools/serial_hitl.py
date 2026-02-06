@@ -26,6 +26,10 @@ TELEM_RE = re.compile(
 
 
 def find_pico_port(product_hint=None):
+    if product_hint is None:
+        hitl = Path("/dev/ttyHITL_ROBOT")
+        if hitl.exists():
+            return str(hitl)
     ports = serial.tools.list_ports.comports()
     for port in ports:
         if product_hint:
