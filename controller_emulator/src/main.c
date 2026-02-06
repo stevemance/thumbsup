@@ -213,16 +213,19 @@ static void send_report(void) {
         return;
     }
 
-    uint8_t report[7];
-    report[0] = (uint8_t)(gp_state.buttons & 0xFF);
-    report[1] = (uint8_t)((gp_state.buttons >> 8) & 0xFF);
-    report[2] = (uint8_t)(gp_state.hat & 0x0F);
-    report[3] = (uint8_t)gp_state.lx;
-    report[4] = (uint8_t)gp_state.ly;
-    report[5] = (uint8_t)gp_state.rx;
-    report[6] = (uint8_t)gp_state.ry;
+    // HIDP interrupt channel expects a HID message header byte.
+    // 0xA1 = Input Report (no Report ID in our descriptor).
+    uint8_t message[8];
+    message[0] = 0xA1;
+    message[1] = (uint8_t)(gp_state.buttons & 0xFF);
+    message[2] = (uint8_t)((gp_state.buttons >> 8) & 0xFF);
+    message[3] = (uint8_t)(gp_state.hat & 0x0F);
+    message[4] = (uint8_t)gp_state.lx;
+    message[5] = (uint8_t)gp_state.ly;
+    message[6] = (uint8_t)gp_state.rx;
+    message[7] = (uint8_t)gp_state.ry;
 
-    hid_device_send_interrupt_message(hid_cid, report, sizeof(report));
+    hid_device_send_interrupt_message(hid_cid, message, sizeof(message));
     send_pending = false;
     state_dirty = false;
     last_report_ms = btstack_run_loop_get_time_ms();
@@ -248,6 +251,9 @@ static void print_state(void) {
 
 static void print_help(void) {
     printf("Commands:\n");
+    printf("  CONNECT <bt_addr>\n");
+    printf("  DISCONNECT\n");
+    printf("  KEYS CLEAR\n");
     printf("  BTN <name> <0|1>\n");
     printf("  AXIS <LX|LY|RX|RY> <value -127..127>\n");
     printf("  STICK <L|R> <x> <y>\n");
@@ -257,10 +263,80 @@ static void print_help(void) {
     printf("  HELP\n");
 }
 
+static void clear_link_keys(void) {
+    bd_addr_t addr;
+    link_key_t key;
+    link_key_type_t type;
+    btstack_link_key_iterator_t it;
+
+    int ok = gap_link_key_iterator_init(&it);
+    if (!ok) {
+        printf("ERR KEYS iterator not implemented\n");
+        return;
+    }
+    while (gap_link_key_iterator_get_next(&it, addr, key, &type)) {
+        gap_drop_link_key_for_bd_addr(addr);
+    }
+    gap_link_key_iterator_done(&it);
+    printf("KEYS cleared\n");
+}
+
 static void handle_line(char* line) {
     char* save = NULL;
     char* cmd = strtok_r(line, " \t", &save);
     if (cmd == NULL) {
+        return;
+    }
+
+    if (streq_case(cmd, "KEYS")) {
+        char* sub = strtok_r(NULL, " \t", &save);
+        if (sub == NULL) {
+            printf("ERR KEYS expects CLEAR\n");
+            return;
+        }
+        if (streq_case(sub, "CLEAR")) {
+            clear_link_keys();
+            return;
+        }
+        printf("ERR KEYS unknown: %s\n", sub);
+        return;
+    }
+
+    if (streq_case(cmd, "CONNECT")) {
+        char* addr_str = strtok_r(NULL, " \t", &save);
+        if (addr_str == NULL) {
+            printf("ERR CONNECT expects <bt_addr>\n");
+            return;
+        }
+        bd_addr_t addr;
+        if (!sscanf_bd_addr(addr_str, addr)) {
+            printf("ERR CONNECT invalid address: %s\n", addr_str);
+            return;
+        }
+        if (hid_cid) {
+            hid_device_disconnect(hid_cid);
+            hid_cid = 0;
+            send_pending = false;
+        }
+        uint16_t new_cid = 0;
+        uint8_t status = hid_device_connect(addr, &new_cid);
+        if (status) {
+            printf("ERR CONNECT status=0x%02x\n", status);
+            return;
+        }
+        hid_cid = new_cid;
+        printf("CONNECT requested addr=%s\n", bd_addr_to_str(addr));
+        return;
+    }
+
+    if (streq_case(cmd, "DISCONNECT")) {
+        if (hid_cid) {
+            hid_device_disconnect(hid_cid);
+        }
+        hid_cid = 0;
+        send_pending = false;
+        state_dirty = true;
+        printf("DISCONNECT requested\n");
         return;
     }
 
@@ -457,6 +533,9 @@ int btstack_main(int argc, const char* argv[]) {
     gamepad_reset();
 
     gap_discoverable_control(1);
+    // Bluepad32 (robot) initiates the HID connection. Ensure we are explicitly
+    // connectable (page scan enabled), not just discoverable.
+    gap_connectable_control(1);
     gap_set_class_of_device(0x2508);
     gap_set_local_name("ThumbsUp HITL Gamepad 00:00:00:00:00:00");
     gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH | LM_LINK_POLICY_ENABLE_SNIFF_MODE);

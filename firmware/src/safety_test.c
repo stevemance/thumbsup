@@ -208,9 +208,12 @@ static bool test_emergency_stops(void) {
         passed = false;
     }
 
-    // Re-initialize systems for continued testing
+    // Restore systems for continued testing / normal startup.
+    // weapon_init() is intentionally idempotent and won't reset state once initialized, so
+    // explicitly disarm and re-enable DShot to recover from the emergency-stop test.
     motor_control_init();
-    weapon_init();
+    weapon_disarm();
+    weapon_enable_dshot();
 
     return passed;
 }

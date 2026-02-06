@@ -19,6 +19,7 @@
 #include "trim_mode.h"
 #include "calibration_mode.h"
 #include "motor_linearization.h"
+#include "hitl_overrides.h"
 
 // Competition mode (Bluetooth) - diagnostic mode removed
 #if !SERIAL_GAMEPAD
@@ -57,6 +58,11 @@ static void init_hardware(void) {
 }
 
 uint32_t read_battery_voltage(void) {
+    uint32_t override_mv = 0;
+    if (hitl_overrides_get_battery_mv(&override_mv)) {
+        return override_mv;
+    }
+
     uint16_t adc_raw = adc_read();
 
     // SAFETY: Validate ADC reading and prevent overflow

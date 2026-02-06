@@ -49,6 +49,8 @@ set(CORE_SOURCES
     src/motor_linearization.c
     src/am32_config.c
     src/dshot.c
+    src/hitl_overrides.c
+    src/hitl_console.c
     src/safety_test.c
     src/integration_test.c
     src/serial_gamepad.c
@@ -57,6 +59,12 @@ set(CORE_SOURCES
 # Competition mode (Bluetooth) - diagnostic mode removed
 message(STATUS "Building for COMPETITION MODE (Bluetooth)")
 add_executable(thumbsup
+    ${CORE_SOURCES}
+    src/bluetooth_platform.c
+    src/test_mode.c
+)
+
+add_executable(thumbsup_hitl
     ${CORE_SOURCES}
     src/bluetooth_platform.c
     src/test_mode.c
@@ -77,6 +85,8 @@ add_executable(thumbsup_serial
 # Generate PIO headers
 pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
+pico_generate_pio_header(thumbsup_hitl ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
+pico_generate_pio_header(thumbsup_hitl ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 pico_generate_pio_header(thumbsup_integration ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 pico_generate_pio_header(thumbsup_integration ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 pico_generate_pio_header(thumbsup_serial ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
@@ -84,6 +94,9 @@ pico_generate_pio_header(thumbsup_serial ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio
 
 # Include directories (competition mode - Bluetooth/Bluepad32)
 target_include_directories(thumbsup PRIVATE
+    include
+    ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
+target_include_directories(thumbsup_hitl PRIVATE
     include
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
 target_include_directories(thumbsup_integration PRIVATE
@@ -103,6 +116,23 @@ include_directories(${BTSTACK_ROOT}/3rd-party/bluedroid/decoder/include)
 
 # Link libraries (competition mode - Bluetooth)
 target_link_libraries(thumbsup PUBLIC
+    pico_stdlib
+    pico_cyw43_arch_none  # Bluetooth support
+    pico_btstack_classic
+    pico_btstack_cyw43
+    hardware_pwm
+    hardware_adc
+    hardware_gpio
+    hardware_uart
+    hardware_watchdog
+    hardware_pio
+    hardware_dma
+    hardware_flash
+    hardware_sync
+    bluepad32
+)
+
+target_link_libraries(thumbsup_hitl PUBLIC
     pico_stdlib
     pico_cyw43_arch_none  # Bluetooth support
     pico_btstack_classic
@@ -196,7 +226,25 @@ target_compile_definitions(thumbsup PRIVATE
 pico_enable_stdio_usb(thumbsup 1)
 pico_enable_stdio_uart(thumbsup 0)
 
+target_compile_definitions(thumbsup_hitl PRIVATE
+    HITL_CONSOLE=1
+    AM32_ONEWIRE=1
+    PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=0
+    PICO_STDIO_USB_ENABLE_TINYUSB_INIT=1
+    PICO_STDIO_USB_ENABLE_IRQ_BACKGROUND_TASK=1
+    PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_BOOTSEL=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_FLASH_BOOT=1
+    USBD_MANUFACTURER=\"${THUMBSUP_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_USB_PRODUCT}\"
+)
+
+pico_enable_stdio_usb(thumbsup_hitl 1)
+pico_enable_stdio_uart(thumbsup_hitl 0)
+
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(thumbsup)
+pico_add_extra_outputs(thumbsup_hitl)
 pico_add_extra_outputs(thumbsup_integration)
 pico_add_extra_outputs(thumbsup_serial)

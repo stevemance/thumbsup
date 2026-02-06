@@ -9,6 +9,7 @@
 #include <hardware/watchdog.h>
 #if !SERIAL_GAMEPAD
 #include <pico/cyw43_arch.h>
+#include <btstack_run_loop.h>
 #include <uni.h>
 #include "sdkconfig.h"
 #else
@@ -25,6 +26,7 @@
 #include "trim_mode.h"
 #include "calibration_mode.h"
 #include "motor_linearization.h"
+#include "hitl_console.h"
 
 #if SERIAL_GAMEPAD
 #undef logi
@@ -57,6 +59,17 @@ static uint32_t last_button_change_time = 0;
 // Declarations
 #if !SERIAL_GAMEPAD
 static void trigger_event_on_gamepad(uni_hid_device_t *d);
+
+// HITL support: keep printing status / processing commands even when there is no controller input.
+static btstack_timer_source_t hitl_timer;
+static uni_gamepad_t hitl_last_gp;
+static bool hitl_last_gp_valid = false;
+
+static void hitl_timer_handler(btstack_timer_source_t* ts) {
+    hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
+    btstack_run_loop_set_timer(ts, 20);
+    btstack_run_loop_add_timer(ts);
+}
 #endif
 
 //
@@ -82,6 +95,14 @@ static void my_platform_init(int argc, const char **argv) {
     drive_init();
     weapon_init();
     status_init();
+
+    hitl_console_init();
+
+    hitl_last_gp_valid = false;
+    memset(&hitl_last_gp, 0, sizeof(hitl_last_gp));
+    hitl_timer.process = &hitl_timer_handler;
+    btstack_run_loop_set_timer(&hitl_timer, 20);
+    btstack_run_loop_add_timer(&hitl_timer);
 }
 
 static void my_platform_on_init_complete(void) {
@@ -93,10 +114,10 @@ static void my_platform_on_init_complete(void) {
     uni_bt_enable_new_connections_unsafe(true);
 
     // Based on runtime condition, you can delete or list the stored BT keys.
-    if (1)
-        uni_bt_del_keys_unsafe();
-    else
-        uni_bt_list_keys_unsafe();
+    // Keep stored keys so HITL pairing can be stable across reboots.
+    // If you need to reset pairing, add an explicit action/command instead of
+    // wiping keys on every boot.
+    uni_bt_list_keys_unsafe();
 
     // Turn off LED once init is done.
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
@@ -122,6 +143,7 @@ static void my_platform_on_device_connected(uni_hid_device_t *d) {
     logi("thumbsup_platform: device connected: %p\n", d);
     // Device connected - update status LED
     status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
+    hitl_console_set_controller_connected(true);
 }
 
 static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
@@ -136,6 +158,12 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
 
     // Update system status LED
     status_set_system(SYSTEM_STATUS_FAILSAFE, LED_EFFECT_BLINK_FAST);
+
+    hitl_console_set_controller_ready(false);
+    hitl_console_set_controller_connected(false);
+
+    hitl_last_gp_valid = false;
+    memset(&hitl_last_gp, 0, sizeof(hitl_last_gp));
 }
 
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
@@ -151,6 +179,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
         watchdog_enabled = true;
     }
 
+    hitl_console_set_controller_ready(true);
     return UNI_ERROR_SUCCESS;
 }
 #endif
@@ -185,16 +214,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         motor_control_update();  // Update motors with calibration commands
         status_update();  // Update LED indicators
         return;  // Block all other inputs during calibration
-    }
-
-    // Now check if controller state changed - skip normal processing if unchanged
-    // Used to prevent spamming the log, but should be removed in production.
-    if (!state_changed) {
-        motor_control_update();
-        weapon_update();
-        status_update();
-        safety_update();
-        return;
     }
 
     // Check for trim mode activation
@@ -287,6 +306,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         logi("EMERGENCY STOP TRIGGERED\n");
         status_set_system(SYSTEM_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
         status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
+        last_buttons = gp->buttons;
         return;
     }
 
@@ -315,6 +335,19 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         }
     }
 
+    // Now check if controller state changed - skip normal processing if unchanged.
+    // Emergency-stop handling (including the hold-to-clear timer above) must run even
+    // while inputs are held steady.
+    if (!state_changed) {
+        last_buttons = gp->buttons;
+        motor_control_update();
+        weapon_update();
+        status_update();
+        safety_update();
+        hitl_console_on_gamepad(gp);
+        return;
+    }
+
     // Weapon arm/disarm with B button (only if not emergency stopped)
     // Only trigger on button press transition (not while held)
     uint32_t current_time = to_ms_since_boot(get_absolute_time());
@@ -323,12 +356,17 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     if (!emergency_stop && b_pressed) {
         // Check debounce timing
         if (current_time - last_button_change_time > DEBOUNCE_TIME_MS) {
-            armed_state = !armed_state;
-            if (armed_state) {
-                weapon_arm();
-                logi("Weapon ARMED\n");
+            if (!armed_state) {
+                if (weapon_arm()) {
+                    armed_state = true;
+                    logi("Weapon ARMED\n");
+                } else {
+                    armed_state = false;
+                    logi("Weapon arm rejected (safety)\n");
+                }
             } else {
                 weapon_disarm();
+                armed_state = false;
                 logi("Weapon DISARMED\n");
             }
             last_button_change_time = current_time;
@@ -340,16 +378,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         // Drive control using left stick with proper deadzone handling
         int32_t raw_forward = gp->axis_y; // Forward stick push is negative
         int32_t raw_turn = gp->axis_x;
-
-        // DEBUG: Print raw axis values every 500ms
-#if !SERIAL_GAMEPAD
-        static uint32_t last_debug = 0;
-        uint32_t now_debug = to_ms_since_boot(get_absolute_time());
-        if (now_debug - last_debug > 500) {
-            printf("RAW: Y=%d X=%d\n", (int)gp->axis_y, (int)gp->axis_x);
-            last_debug = now_debug;
-        }
-#endif
 
         // SAFETY: Validate input ranges from controller
         raw_forward = CLAMP(raw_forward, -512, 511);
@@ -422,6 +450,8 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
 
     // CRITICAL: Run continuous safety monitoring (battery, safety button)
     safety_update();
+
+    hitl_console_on_gamepad(gp);
 }
 
 #if !SERIAL_GAMEPAD
@@ -436,6 +466,8 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
     switch (ctl->klass) {
     case UNI_CONTROLLER_CLASS_GAMEPAD:
         gp = &ctl->gamepad;
+        hitl_last_gp = *gp;
+        hitl_last_gp_valid = true;
 
         state_changed = memcmp(&prev, ctl, sizeof(*ctl)) != 0;
         if (state_changed) {
