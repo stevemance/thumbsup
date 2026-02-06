@@ -83,6 +83,12 @@ Run:
 python3 tools/hitl_orchestrator.py --suite smoke
 ```
 
+Active weapon spin suite:
+
+```bash
+python3 tools/hitl_orchestrator.py --suite weapon_spin
+```
+
 Artifacts:
 
 - `hitl_logs/orchestrator_*/robot_serial.log`
@@ -136,4 +142,3 @@ Design principles:
 - Prefer adding **introspection** and **override hooks** behind `HITL_CONSOLE` to keep production behavior unchanged.
 - Keep suites **safe by default** (PSU off, no spin) and require explicit flags for “active” tests.
 - Treat lab equipment interactions as best-effort (don’t fail a suite because a scope/PSU is offline).
-

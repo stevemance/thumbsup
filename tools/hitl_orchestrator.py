@@ -516,13 +516,192 @@ def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> s
     return "smoke passed"
 
 
+@step("Weapon Spin Test")
+def do_weapon_spin(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    spin_axis: int,
+    spin_hold_s: float,
+) -> str:
+    if psu_channel is not None and psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start the suite from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    # Power ESC supply (best-effort; suite will still fail if motor never produces telemetry).
+    if psu_channel is not None:
+        try:
+            labctl_psu_set(psu_channel, psu_voltage, psu_current)
+        except Exception:
+            pass
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+                # Toggle B to try to disarm if we're armed.
+                gamepad_log.send_line("BTN B 1")
+                time.sleep(0.15)
+                gamepad_log.send_line("BTN B 0")
+            except Exception:
+                pass
+            if psu_channel is not None and not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            # Put both devices into a deterministic state.
+            gamepad_log.send_line("RESET")
+
+            # Wait for at least one status sample so we know the HITL console tick is alive.
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s)
+
+            # Force a safe, deterministic battery voltage for HITL.
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=3.0,
+                predicate=lambda s: s.get("batt_mv") == "12500",
+            )
+
+            # Ensure controller connects (gamepad initiates).
+            robot_log.send_line("HITL BTADDR")
+            btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
+            gamepad_log.send_line(f"CONNECT {btaddr}")
+            try:
+                wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=20.0,
+                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
+                )
+            except RuntimeError:
+                robot_log.send_line("HITL BTKEYS CLEAR")
+                gamepad_log.send_line("KEYS CLEAR")
+                time.sleep(0.5)
+                gamepad_log.send_line(f"CONNECT {btaddr}")
+                wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=40.0,
+                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
+                )
+
+            # Arm toggle with B.
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1")
+
+            # Wait for weapon state machine to finish arming (DShot setup can take a few seconds).
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=20.0,
+                predicate=lambda s: s.get("weapon") in ("ARMED", "SPINNING"),
+            )
+
+            # Spin at a safe low command for a short hold.
+            spin_axis = max(-127, min(127, int(spin_axis)))
+            if spin_axis < 0:
+                spin_axis = 0
+            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+
+            def telemetry_rpm_ok(s: dict[str, str]) -> bool:
+                if s.get("telem") != "1":
+                    return False
+                rpm_s = s.get("rpm")
+                if not rpm_s:
+                    return False
+                try:
+                    rpm = int(rpm_s)
+                except ValueError:
+                    return False
+                return rpm > 0
+
+            wait_for_robot_condition(robot_log, timeout_s=10.0, predicate=telemetry_rpm_ok)
+
+            # Hold spin.
+            time.sleep(max(0.0, float(spin_hold_s)))
+
+            # Stop.
+            gamepad_log.send_line("AXIS RY 0")
+            wait_for_robot_condition(robot_log, timeout_s=10.0, predicate=lambda s: s.get("speed") == "0")
+
+            # Disarm.
+            time.sleep(0.2)  # Respect debounce timing in firmware.
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("armed") == "0")
+
+            # Explicit telemetry snapshot for the logs.
+            robot_log.send_line("HITL TELEMSTATS")
+            robot_log.send_line("HITL TELEM")
+            time.sleep(0.5)
+            for _ in range(50):
+                robot_log.read_line()
+
+            # PSU snapshot, if available (best-effort).
+            if psu_channel is not None:
+                try:
+                    payload = labctl_psu_snapshot(psu_channel)
+                except Exception as exc:
+                    payload = {"ok": False, "error": str(exc)}
+                (out_dir / "psu_snapshot.json").write_text(
+                    json.dumps(payload, indent=2, sort_keys=True),
+                    encoding="utf-8",
+                )
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "weapon spin passed"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="ThumbsUp HITL orchestrator")
     parser.add_argument("--no-build", action="store_true", help="skip firmware builds")
     parser.add_argument("--no-flash", action="store_true", help="skip flashing")
     parser.add_argument("--no-psu-off", action="store_true", help="do not force PSU off at start")
     parser.add_argument("--psu-channel", type=int, default=1, help="PSU channel (Rigol DP832)")
-    parser.add_argument("--suite", choices=["smoke"], default="smoke")
+    parser.add_argument("--psu-voltage", type=float, default=12.6, help="PSU voltage for active motor tests")
+    parser.add_argument("--psu-current", type=float, default=5.0, help="PSU current limit for active motor tests")
+    parser.add_argument("--leave-psu-on", action="store_true", help="leave PSU output enabled after suite")
+    parser.add_argument("--spin-axis", type=int, default=20, help="Weapon spin command (RY axis -127..127)")
+    parser.add_argument("--spin-hold-s", type=float, default=5.0, help="Seconds to hold weapon command")
+    parser.add_argument("--suite", choices=["smoke", "weapon_spin"], default="smoke")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -551,6 +730,19 @@ def main() -> None:
 
     if args.suite == "smoke":
         results.append(do_smoke(repo_root, args.psu_channel, psu_off_first=not args.no_psu_off))
+    elif args.suite == "weapon_spin":
+        results.append(
+            do_weapon_spin(
+                repo_root,
+                args.psu_channel,
+                args.psu_voltage,
+                args.psu_current,
+                psu_off_first=not args.no_psu_off,
+                leave_psu_on=args.leave_psu_on,
+                spin_axis=args.spin_axis,
+                spin_hold_s=args.spin_hold_s,
+            )
+        )
 
     report = {
         "started_at": now_iso(),
