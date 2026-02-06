@@ -2,6 +2,7 @@
 build/
 *.build/
 cmake-build-*/
+controller_emulator/build/
 
 # Pico SDK
 pico-sdk/
