@@ -9,8 +9,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-// Only include uni.h in competition mode (when Bluepad32 is available)
-#if !DIAGNOSTIC_MODE_BUILD
+#if SERIAL_GAMEPAD
+#include <controller/uni_gamepad.h>
+#elif !DIAGNOSTIC_MODE_BUILD
 #include <uni.h>
 #endif
 

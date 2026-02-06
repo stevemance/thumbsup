@@ -94,7 +94,11 @@
 #define WEAPON_SPINUP_TIME  2000  // Weapon ramp-up time (ms)
 #define WEAPON_RAMP_STEPS   50    // Number of steps for smooth ramping
 #define WEAPON_DSHOT_UPDATE_MS     10  // Minimum DShot update interval (ms)
-#define WEAPON_DSHOT_TELEMETRY_MS  20  // Telemetry request interval (ms)
+#define WEAPON_DSHOT_TELEMETRY_MS  50  // Telemetry request interval (ms)
+#define WEAPON_DSHOT_TELEMETRY_MAX_PENDING 1  // Max outstanding telemetry responses
+#define WEAPON_DSHOT_TELEMETRY_TIMEOUT_MS 20  // Timeout before clearing pending telemetry (ms)
+#define WEAPON_DSHOT_SETUP_RETRY_MS 500  // Retry interval for DShot setup commands (ms)
+#define WEAPON_DSHOT_SETUP_MAX_ATTEMPTS 5  // Max setup retries before arming anyway
 
 #ifndef INTEGRATION_TEST_AUTO
 #define INTEGRATION_TEST_AUTO 0
@@ -103,8 +107,15 @@
 #if INTEGRATION_TEST_AUTO
 #undef WEAPON_DSHOT_UPDATE_MS
 #undef WEAPON_DSHOT_TELEMETRY_MS
-#define WEAPON_DSHOT_UPDATE_MS     3
-#define WEAPON_DSHOT_TELEMETRY_MS  3
+#define WEAPON_DSHOT_UPDATE_MS     2
+#define WEAPON_DSHOT_TELEMETRY_MS  20
+#endif
+
+#if SERIAL_GAMEPAD
+#undef WEAPON_DSHOT_UPDATE_MS
+#undef WEAPON_DSHOT_TELEMETRY_MS
+#define WEAPON_DSHOT_UPDATE_MS     2
+#define WEAPON_DSHOT_TELEMETRY_MS  4
 #endif
 #define SAFETY_CHECK_INTERVAL 10  // Safety check interval (ms)
 #define EMERGENCY_STOP_HOLD_TIME 2000  // Time emergency stop must be held to clear (ms)
@@ -190,6 +201,11 @@
 
 // Timing Constants
 #define MAIN_LOOP_DELAY     10     // Main loop delay in ms (100Hz update)
+
+#if SERIAL_GAMEPAD
+#undef MAIN_LOOP_DELAY
+#define MAIN_LOOP_DELAY     2      // Faster loop for HITL telemetry capture
+#endif
 #define PWM_UPDATE_RATE     20     // PWM update rate in ms (50Hz)
 #define STATUS_UPDATE_RATE  100    // Status LED update rate
 

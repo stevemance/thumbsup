@@ -124,13 +124,15 @@ def send_trigger(ser, duration_s):
         ser.flush()
         time.sleep(0.2)
 
-def run_serial_capture(port, baud, log_path, timeout_s, send_prompt):
+def run_serial_capture(port, baud, log_path, timeout_s, send_prompt,
+                       psu_on_pattern=None, psu_on_callback=None):
     summary = {
         "telemetry": None,
         "rpm": None,
     }
     summary_seen = False
     last_output = time.time()
+    psu_on_armed = psu_on_pattern is not None and psu_on_callback is not None
 
     telem_re = re.compile(r"Telemetry rate: (PASS|FAIL)")
     rpm_re = re.compile(r"RPM monotonicity: (PASS|FAIL)")
@@ -154,6 +156,10 @@ def run_serial_capture(port, baud, log_path, timeout_s, send_prompt):
             print(line)
             log.write(line + "\n")
             log.flush()
+
+            if psu_on_armed and psu_on_pattern in line:
+                psu_on_callback()
+                psu_on_armed = False
 
             if "Integration Summary" in line:
                 summary_seen = True
@@ -184,6 +190,10 @@ def main():
     parser.add_argument("--no-flash", action="store_true")
     parser.add_argument("--no-reboot", action="store_true")
     parser.add_argument("--no-psu", action="store_true")
+    parser.add_argument("--psu-sync", dest="psu_sync", action="store_true", default=True,
+                        help="Delay PSU power-on until the integration test arms")
+    parser.add_argument("--no-psu-sync", dest="psu_sync", action="store_false",
+                        help="Power PSU immediately instead of syncing to arming")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TEST_TIMEOUT_S)
     args = parser.parse_args()
 
@@ -201,6 +211,7 @@ def main():
     psu_duration_s = max(args.timeout, expected_duration_s)
 
     psu_proc = None
+    psu_on = False
     try:
         if not args.no_build:
             build_firmware(repo_root)
@@ -214,7 +225,12 @@ def main():
             flash_firmware(uf2_path)
 
         if not args.no_psu:
-            psu_set(args.channel, args.voltage, args.current)
+            if args.psu_sync:
+                psu_off(args.channel)
+                psu_on = False
+            else:
+                psu_set(args.channel, args.voltage, args.current)
+                psu_on = True
             psu_proc = start_psu_log(repo_root, args.channel, psu_duration_s, args.psu_interval, psu_log)
 
         if not args.no_reboot:
@@ -228,7 +244,23 @@ def main():
             raise RuntimeError("could not find Pico serial port")
 
         print(f"Using serial port: {port}")
-        summary = run_serial_capture(port, DEFAULT_SERIAL_BAUD, serial_log, args.timeout, not use_auto)
+        def maybe_power_on():
+            nonlocal psu_on
+            if psu_on or args.no_psu:
+                return
+            psu_set(args.channel, args.voltage, args.current)
+            psu_on = True
+
+        psu_pattern = "DShot send throttle=" if (args.psu_sync and not args.no_psu) else None
+        summary = run_serial_capture(
+            port,
+            DEFAULT_SERIAL_BAUD,
+            serial_log,
+            args.timeout,
+            not use_auto,
+            psu_on_pattern=psu_pattern,
+            psu_on_callback=maybe_power_on,
+        )
 
         print("\nIntegration test summary:")
         print(f"  Telemetry rate: {summary['telemetry'] or 'UNKNOWN'}")

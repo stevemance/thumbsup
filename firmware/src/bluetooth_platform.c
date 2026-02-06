@@ -5,12 +5,15 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <pico/cyw43_arch.h>
 #include <pico/time.h>
 #include <hardware/watchdog.h>
+#if !SERIAL_GAMEPAD
+#include <pico/cyw43_arch.h>
 #include <uni.h>
-
 #include "sdkconfig.h"
+#else
+#include <controller/uni_gamepad.h>
+#endif
 #include "config.h"
 #include "motor_control.h"
 #include "drive.h"
@@ -23,9 +26,18 @@
 #include "calibration_mode.h"
 #include "motor_linearization.h"
 
+#if SERIAL_GAMEPAD
+#undef logi
+#undef loge
+#define logi(...) ((void)0)
+#define loge(...) ((void)0)
+#endif
+
 // Sanity check
+#if !SERIAL_GAMEPAD
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
 #error "Pico W must use BLUEPAD32_PLATFORM_CUSTOM"
+#endif
 #endif
 
 // Robot state tracking
@@ -43,11 +55,14 @@ static uint32_t last_button_change_time = 0;
 #define DEBOUNCE_TIME_MS 100  // Minimum time between button state changes
 
 // Declarations
+#if !SERIAL_GAMEPAD
 static void trigger_event_on_gamepad(uni_hid_device_t *d);
+#endif
 
 //
 // Platform Overrides
 //
+#if !SERIAL_GAMEPAD
 static void my_platform_init(int argc, const char **argv) {
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
@@ -138,6 +153,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
 
     return UNI_ERROR_SUCCESS;
 }
+#endif
 
 static void note_controller_activity(void) {
     last_controller_input = to_ms_since_boot(get_absolute_time());
@@ -326,12 +342,14 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         int32_t raw_turn = gp->axis_x;
 
         // DEBUG: Print raw axis values every 500ms
+#if !SERIAL_GAMEPAD
         static uint32_t last_debug = 0;
         uint32_t now_debug = to_ms_since_boot(get_absolute_time());
         if (now_debug - last_debug > 500) {
             printf("RAW: Y=%d X=%d\n", (int)gp->axis_y, (int)gp->axis_x);
             last_debug = now_debug;
         }
+#endif
 
         // SAFETY: Validate input ranges from controller
         raw_forward = CLAMP(raw_forward, -512, 511);
@@ -406,6 +424,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     safety_update();
 }
 
+#if !SERIAL_GAMEPAD
 static void my_platform_on_controller_data(uni_hid_device_t *d,
                                            uni_controller_t *ctl) {
     static uni_controller_t prev = {0};
@@ -488,6 +507,7 @@ static void trigger_event_on_gamepad(uni_hid_device_t *d) {
         d->report_parser.set_lightbar_color(d, red, green, blue);
     }
 }
+#endif
 
 // Function to check for failsafe conditions
 bool bluetooth_platform_failsafe_active(void) {
@@ -539,6 +559,7 @@ void bluetooth_platform_inject_gamepad(const uni_gamepad_t* gp) {
 //
 // Entry Point
 //
+#if !SERIAL_GAMEPAD
 struct uni_platform *get_my_platform(void) {
     static struct uni_platform plat = {
         .name = "ThumbsUp Robot Platform",
@@ -555,3 +576,4 @@ struct uni_platform *get_my_platform(void) {
 
     return &plat;
 }
+#endif

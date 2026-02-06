@@ -2,7 +2,11 @@
 #include "status.h"
 #include <stdio.h>
 #include "pico/time.h"
+#if SERIAL_GAMEPAD
+#include <controller/uni_gamepad.h>
+#else
 #include <uni.h>  // For full gamepad structure definition
+#endif
 
 // ANSI escape codes for terminal control
 #define ANSI_CLEAR_SCREEN "\033[2J"

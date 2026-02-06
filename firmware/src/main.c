@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pico/cyw43_arch.h>
 #include <pico/stdlib.h>
 #include <hardware/gpio.h>
 #include <hardware/adc.h>
 #include <hardware/watchdog.h>
-
 #include "config.h"
 #include "motor_control.h"
 #include "drive.h"
@@ -17,8 +15,14 @@
 #include "safety_test.h"
 #include "integration_test.h"
 #include "serial_gamepad.h"
+#include "test_mode.h"
+#include "trim_mode.h"
+#include "calibration_mode.h"
+#include "motor_linearization.h"
 
 // Competition mode (Bluetooth) - diagnostic mode removed
+#if !SERIAL_GAMEPAD
+#include <pico/cyw43_arch.h>
 #include <btstack_run_loop.h>
 #include <uni.h>
 #include "sdkconfig.h"
@@ -28,6 +32,7 @@
 #endif
 // Defined in bluetooth_platform.c
 struct uni_platform* get_my_platform(void);
+#endif
 
 // Robot state is now managed in bluetooth_platform.c
 
@@ -42,10 +47,12 @@ static void init_hardware(void) {
     gpio_set_dir(PIN_SAFETY_BUTTON, GPIO_IN);
     gpio_pull_up(PIN_SAFETY_BUTTON);
 
+#if !SERIAL_GAMEPAD
     printf("\n=================================\n");
     printf("  %s Combat Robot\n", ROBOT_NAME);
     printf("  Firmware v%s\n", FIRMWARE_VERSION);
     printf("=================================\n\n");
+#endif
 
 }
 
@@ -147,27 +154,26 @@ static void check_config_mode_entry(void) {
 }
 
 int main() {
-    // Initialize stdio first for debugging
     stdio_init_all();
 
     // Wait a bit for USB connection
     sleep_ms(2000);
 
+#if !SERIAL_GAMEPAD
     printf("\n\n*** MAIN STARTING ***\n");
     printf("Build mode: COMPETITION\n");
     printf("Motor output disabled: %d\n", DISABLE_MOTOR_OUTPUT);
+#endif
 
     init_hardware();
 
-#if INTEGRATION_TEST_AUTO || SERIAL_GAMEPAD
+#if INTEGRATION_TEST_AUTO
     printf("\n=================================\n");
-#if SERIAL_GAMEPAD
-    printf("  SERIAL GAMEPAD BUILD\n");
-#else
     printf("  INTEGRATION TEST BUILD\n");
-#endif
     printf("=================================\n\n");
     printf("Skipping Bluetooth/WiFi init\n");
+#elif SERIAL_GAMEPAD
+    // SERIAL_GAMEPAD build: skip Bluetooth/WiFi init quietly to avoid blocking USB output.
 #else
     #if BUILD_MODE_DIAGNOSTIC
         // DIAGNOSTIC MODE BUILD
@@ -207,20 +213,36 @@ int main() {
 #endif
 
     // COMPETITION MODE - Run Bluetooth gamepad control
+#if !SERIAL_GAMEPAD
         printf("\n*** COMPETITION MODE ***\n");
         printf("Starting Bluetooth initialization...\n");
+#endif
 
         // Check if we should enter AM32 config mode
+#if !SERIAL_GAMEPAD
         printf("Checking for config mode...\n");
         check_config_mode_entry();
+#endif
 
         // Initialize AM32 config
+#if !SERIAL_GAMEPAD
         printf("Initializing AM32...\n");
+#endif
         am32_init();
 
         // Initialize motor control system before safety tests
+#if !SERIAL_GAMEPAD
         printf("Initializing motor control system...\n");
+#endif
+        #if SERIAL_GAMEPAD
+        test_mode_init();
+        trim_mode_init();
+        calibration_mode_init();
+        #endif
         motor_control_init();
+        #if SERIAL_GAMEPAD
+        motor_linearization_init();
+        #endif
 
         // Initialize other subsystems needed for tests
         weapon_init();
@@ -231,6 +253,7 @@ int main() {
         #endif
 
         // SAFETY: Run comprehensive safety tests
+#if !SERIAL_GAMEPAD
         printf("Running safety validation tests...\n");
         if (!run_safety_tests()) {
             printf("\n*** CRITICAL SAFETY FAILURE ***\n");
@@ -246,6 +269,7 @@ int main() {
             }
         }
         printf("Safety tests passed - system ready\n");
+#endif
 
 #if !SERIAL_GAMEPAD
         if (integration_test_run_if_requested(5000)) {
@@ -258,23 +282,22 @@ int main() {
 #endif
 
 #if SERIAL_GAMEPAD
-        printf("\n=================================\n");
-        printf("  SERIAL GAMEPAD MODE\n");
-        printf("=================================\n\n");
         serial_gamepad_init();
+        uint32_t last_status_ms = 0;
 
         while (true) {
-            bool handled = serial_gamepad_poll();
-            if (!handled) {
-                motor_control_update();
-                weapon_update();
+            serial_gamepad_poll();
+            motor_control_update();
+            weapon_update();
+            uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+            if ((now_ms - last_status_ms) >= STATUS_UPDATE_RATE) {
                 status_update();
-                safety_update();
+                last_status_ms = now_ms;
             }
+            safety_update();
             sleep_ms(MAIN_LOOP_DELAY);
         }
-#endif
-
+#else
         // Must be called before uni_init()
         uni_platform_set_custom(get_my_platform());
 
@@ -294,6 +317,7 @@ int main() {
 
         // Does not return - BTstack takes over
         btstack_run_loop_execute();
+#endif
 
     return 0;
 }

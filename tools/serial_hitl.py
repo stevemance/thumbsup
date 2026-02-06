@@ -79,20 +79,26 @@ def handle_rx(line, t_s, log_handle, telem_writer, throttle):
     ])
 
 
-def pump_serial(ser, log_handle, telem_writer, throttle):
-    while True:
+def pump_serial(ser, log_handle, telem_writer, throttle, max_time_s=0.05, max_lines=50):
+    start = time.monotonic()
+    lines = 0
+    while (time.monotonic() - start) < max_time_s and lines < max_lines:
         raw = ser.readline()
         if not raw:
             return
         text = raw.decode("utf-8", errors="replace").rstrip()
         now = time.monotonic() - START_MONO
         handle_rx(text, now, log_handle, telem_writer, throttle)
+        lines += 1
 
 
 def send_line(ser, log_handle, line):
     now = time.monotonic() - START_MONO
-    ser.write((line + "\n").encode("utf-8"))
-    ser.flush()
+    try:
+        ser.write((line + "\n").encode("utf-8"))
+    except serial.SerialTimeoutException:
+        time.sleep(0.2)
+        ser.write((line + "\n").encode("utf-8"))
     write_tx(log_handle, now, line)
 
 
@@ -129,8 +135,16 @@ def main():
                         help="seconds between TELEM polls (0 to disable)")
     parser.add_argument("--keepalive-interval", type=float, default=0.1,
                         help="seconds between command re-sends")
+    parser.add_argument("--arm-direct", action="store_true",
+                        help="use ARM_ON/ARM_OFF instead of ARM")
+    parser.add_argument("--weapon-direct", action="store_true",
+                        help="use WEAPON_SPEED instead of THROTTLE")
+    parser.add_argument("--arm-delay", type=float, default=9.0,
+                        help="seconds to hold throttle 0 after arming")
     parser.add_argument("--out-dir", default="hitl_logs", help="output directory root")
     parser.add_argument("--label", default="serial_hitl", help="output label prefix")
+    parser.add_argument("--warmup", type=float, default=2.0,
+                        help="seconds to drain startup output before sending commands")
     args = parser.parse_args()
 
     port = args.port
@@ -157,10 +171,9 @@ def main():
     START_MONO = time.monotonic()
     START_WALL = datetime.now()
 
-    with serial.Serial(port, args.baud, timeout=0.05) as ser, \
+    with serial.Serial(port, args.baud, timeout=0.05, write_timeout=1.0) as ser, \
             open(serial_log_path, "w", encoding="utf-8") as log_handle, \
             open(telemetry_path, "w", newline="") as telem_handle:
-        ser.reset_input_buffer()
         telem_writer = csv.writer(telem_handle)
         telem_writer.writerow([
             "t_s",
@@ -176,12 +189,36 @@ def main():
             "raw_line",
         ])
 
+        warmup_end = time.monotonic() + args.warmup
+        while time.monotonic() < warmup_end:
+            pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
+            time.sleep(0.05)
+
         send_line(ser, log_handle, "RESET")
         send_line(ser, log_handle, "SYS")
-        pump_serial(ser, log_handle, telem_writer, 0)
+        pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
 
-        send_line(ser, log_handle, "ARM")
-        pump_serial(ser, log_handle, telem_writer, 0)
+        if args.arm_direct:
+            send_line(ser, log_handle, "ARM_OFF")
+            pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
+
+        arm_cmd = "ARM_ON" if args.arm_direct else "ARM"
+        send_line(ser, log_handle, arm_cmd)
+        pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
+        throttle_cmd = "WEAPON_SPEED" if args.weapon_direct else "THROTTLE"
+
+        if args.arm_delay > 0:
+            print(f"Holding throttle 0% for {args.arm_delay:.1f}s after arming")
+            hold_command(
+                ser,
+                log_handle,
+                telem_writer,
+                f"{throttle_cmd} 0",
+                args.arm_delay,
+                args.keepalive_interval,
+                0,
+                0,
+            )
 
         for step in steps:
             print(f"Holding throttle {step}% for {args.hold:.1f}s")
@@ -189,7 +226,7 @@ def main():
                 ser,
                 log_handle,
                 telem_writer,
-                f"THROTTLE {step}",
+                f"{throttle_cmd} {step}",
                 args.hold,
                 args.keepalive_interval,
                 args.telemetry_interval,
@@ -202,7 +239,7 @@ def main():
                 ser,
                 log_handle,
                 telem_writer,
-                "THROTTLE 0",
+                f"{throttle_cmd} 0",
                 args.cooldown,
                 args.keepalive_interval,
                 args.telemetry_interval,
@@ -212,12 +249,15 @@ def main():
         print("Triggering ESTOP")
         send_line(ser, log_handle, "ESTOP")
         time.sleep(0.2)
-        pump_serial(ser, log_handle, telem_writer, 0)
+        pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
 
         print("Clearing ESTOP")
         send_line(ser, log_handle, "CLEAR_ESTOP")
         time.sleep(0.2)
         pump_serial(ser, log_handle, telem_writer, 0)
+        if args.arm_direct:
+            send_line(ser, log_handle, "ARM_OFF")
+            pump_serial(ser, log_handle, telem_writer, 0, max_time_s=0.2, max_lines=200)
 
         send_line(ser, log_handle, "SYS")
         pump_serial(ser, log_handle, telem_writer, 0)

@@ -4,7 +4,10 @@
 #include "status.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
-#if !DIAGNOSTIC_MODE_BUILD
+#include <stdlib.h>
+#if SERIAL_GAMEPAD
+#include <controller/uni_gamepad.h>
+#elif !DIAGNOSTIC_MODE_BUILD
 #include <uni.h>  // For full gamepad structure definition (competition mode only)
 #endif
 
@@ -280,4 +283,3 @@ static void apply_current_step(void) {
 bool calibration_mode_is_active(void) {
     return calibration_active;
 }
-

@@ -115,6 +115,10 @@
 #define AM32_ONEWIRE 0
 #endif
 
+#ifndef AM32_ONEWIRE_PUSH_PULL
+#define AM32_ONEWIRE_PUSH_PULL 0
+#endif
+
 #if AM32_ONEWIRE
 #define AM32_ONEWIRE_PIN AM32_SIGNAL_PIN
 #define AM32_BITTIME_US  52u  // 1e6 / 19200 ~= 52us
@@ -153,6 +157,11 @@ static inline void am32_onewire_drive_low(void) {
     gpio_put(AM32_ONEWIRE_PIN, 0);
 }
 
+static inline void am32_onewire_drive_high(void) {
+    gpio_set_dir(AM32_ONEWIRE_PIN, GPIO_OUT);
+    gpio_put(AM32_ONEWIRE_PIN, 1);
+}
+
 static inline void am32_onewire_release(void) {
     gpio_set_dir(AM32_ONEWIRE_PIN, GPIO_IN);
     gpio_pull_up(AM32_ONEWIRE_PIN);
@@ -178,7 +187,11 @@ static void am32_serial_write_byte(uint8_t byte) {
     // Data bits (LSB first)
     for (int i = 0; i < 8; i++) {
         if ((byte >> i) & 1u) {
+            #if AM32_ONEWIRE_PUSH_PULL
+            am32_onewire_drive_high();
+            #else
             am32_onewire_release();  // open-drain high
+            #endif
         } else {
             am32_onewire_drive_low();
         }
@@ -186,8 +199,13 @@ static void am32_serial_write_byte(uint8_t byte) {
     }
 
     // Stop bit (high), then release line
+    #if AM32_ONEWIRE_PUSH_PULL
+    am32_onewire_drive_high();
+    #else
     am32_onewire_release();
+    #endif
     busy_wait_us_32(AM32_BITTIME_US);
+    am32_onewire_release();
 
     restore_interrupts(irq_state);
 }

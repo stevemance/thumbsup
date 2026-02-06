@@ -3,6 +3,7 @@
 #include "system_status.h"
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
+#include "hardware/gpio.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -50,6 +51,12 @@ static void setup_pwm_pin(uint8_t pin, uint8_t* slice, uint8_t* channel) {
     pwm_init(*slice, &cfg, false);
 }
 
+static void init_weapon_pwm_disabled(void) {
+    gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
+    gpio_set_dir(PIN_WEAPON_PWM, GPIO_IN);
+    gpio_pull_up(PIN_WEAPON_PWM);
+}
+
 bool motor_control_init(void) {
     if (initialized) {
         return true;
@@ -60,18 +67,21 @@ bool motor_control_init(void) {
     setup_pwm_pin(PIN_DRIVE_LEFT_PWM,
                   &motors[MOTOR_LEFT_DRIVE].pwm_slice,
                   &motors[MOTOR_LEFT_DRIVE].pwm_channel);
+    motors[MOTOR_LEFT_DRIVE].pwm_enabled = true;
 
     motors[MOTOR_RIGHT_DRIVE].gpio_pin = PIN_DRIVE_RIGHT_PWM;
     motors[MOTOR_RIGHT_DRIVE].reversed = true;  // Reversed because motor is mounted facing opposite direction
     setup_pwm_pin(PIN_DRIVE_RIGHT_PWM,
                   &motors[MOTOR_RIGHT_DRIVE].pwm_slice,
                   &motors[MOTOR_RIGHT_DRIVE].pwm_channel);
+    motors[MOTOR_RIGHT_DRIVE].pwm_enabled = true;
 
     motors[MOTOR_WEAPON].gpio_pin = PIN_WEAPON_PWM;
     motors[MOTOR_WEAPON].reversed = false;
-    setup_pwm_pin(PIN_WEAPON_PWM,
-                  &motors[MOTOR_WEAPON].pwm_slice,
-                  &motors[MOTOR_WEAPON].pwm_channel);
+    motors[MOTOR_WEAPON].pwm_slice = 0;
+    motors[MOTOR_WEAPON].pwm_channel = 0;
+    motors[MOTOR_WEAPON].pwm_enabled = false;
+    init_weapon_pwm_disabled();
 
     // CRITICAL SAFETY: Initialize all motors to safe states
     for (int i = 0; i < MOTOR_COUNT; i++) {
@@ -79,24 +89,20 @@ bool motor_control_init(void) {
             // Weapon motor MUST start with minimum pulse (off)
             motors[i].current_pulse_us = PWM_MIN_PULSE;
             motors[i].target_pulse_us = PWM_MIN_PULSE;
-            uint32_t pulse_cycles = (PWM_MIN_PULSE * PWM_WRAP_VALUE) / 20000;
-            #if !DISABLE_MOTOR_OUTPUT
-            pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
-            #else
-            printf("MOTOR: Would set weapon to %d cycles (DISABLED)\n", pulse_cycles);
-            #endif
         } else {
             // Drive motors start at neutral (stopped)
             motors[i].current_pulse_us = PWM_NEUTRAL_PULSE;
             motors[i].target_pulse_us = PWM_NEUTRAL_PULSE;
-            uint32_t pulse_cycles = (PWM_NEUTRAL_PULSE * PWM_WRAP_VALUE) / 20000;
+        }
+        if (motors[i].pwm_enabled) {
+            uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
             #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
             #else
-            printf("MOTOR: Would set drive %d to %d cycles (DISABLED)\n", i, pulse_cycles);
+            printf("MOTOR: Would set %d to %d cycles (DISABLED)\n", i, pulse_cycles);
             #endif
+            pwm_set_enabled(motors[i].pwm_slice, true);
         }
-        pwm_set_enabled(motors[i].pwm_slice, true);
     }
 
     initialized = true;
@@ -111,6 +117,9 @@ bool motor_control_update(void) {
     }
 
     for (int i = 0; i < MOTOR_COUNT; i++) {
+        if (!motors[i].pwm_enabled) {
+            continue;
+        }
         if (motors[i].current_pulse_us != motors[i].target_pulse_us) {
             int16_t diff = motors[i].target_pulse_us - motors[i].current_pulse_us;
             int16_t step = 10;
@@ -143,6 +152,12 @@ bool motor_control_update(void) {
 bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
     if (!initialized || channel >= MOTOR_COUNT) {
         DEBUG_PRINT("Motor control error: invalid channel %d\n", channel);
+        return false;
+    }
+
+    if (channel == MOTOR_WEAPON && !motors[channel].pwm_enabled) {
+        motors[channel].current_pulse_us = PWM_MIN_PULSE;
+        motors[channel].target_pulse_us = PWM_MIN_PULSE;
         return false;
     }
 
@@ -212,10 +227,12 @@ void motor_control_stop_all(void) {
             motors[i].current_pulse_us = PWM_NEUTRAL_PULSE;
         }
 
-        uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
-        #if !DISABLE_MOTOR_OUTPUT
-        pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
-        #endif
+        if (motors[i].pwm_enabled) {
+            uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+            #if !DISABLE_MOTOR_OUTPUT
+            pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
+            #endif
+        }
     }
 }
 
@@ -231,9 +248,45 @@ void motor_control_emergency_stop(void) {
     motor_control_stop_all();
 
     for (int i = 0; i < MOTOR_COUNT; i++) {
-        pwm_set_enabled(motors[i].pwm_slice, false);
+        if (motors[i].pwm_enabled) {
+            pwm_set_enabled(motors[i].pwm_slice, false);
+        }
     }
 
     initialized = false;
     DEBUG_PRINT("Emergency stop activated!\n");
+}
+
+bool motor_control_enable_weapon_pwm(void) {
+    if (!initialized) {
+        return false;
+    }
+    if (motors[MOTOR_WEAPON].pwm_enabled) {
+        return true;
+    }
+
+    setup_pwm_pin(PIN_WEAPON_PWM,
+                  &motors[MOTOR_WEAPON].pwm_slice,
+                  &motors[MOTOR_WEAPON].pwm_channel);
+    motors[MOTOR_WEAPON].pwm_enabled = true;
+    motors[MOTOR_WEAPON].current_pulse_us = PWM_MIN_PULSE;
+    motors[MOTOR_WEAPON].target_pulse_us = PWM_MIN_PULSE;
+
+    uint32_t pulse_cycles = (PWM_MIN_PULSE * PWM_WRAP_VALUE) / 20000;
+    #if !DISABLE_MOTOR_OUTPUT
+    pwm_set_chan_level(motors[MOTOR_WEAPON].pwm_slice,
+                       motors[MOTOR_WEAPON].pwm_channel,
+                       pulse_cycles);
+    #endif
+    pwm_set_enabled(motors[MOTOR_WEAPON].pwm_slice, true);
+    return true;
+}
+
+void motor_control_disable_weapon_pwm(void) {
+    if (!initialized) {
+        return;
+    }
+    motors[MOTOR_WEAPON].pwm_enabled = false;
+    motors[MOTOR_WEAPON].current_pulse_us = PWM_MIN_PULSE;
+    motors[MOTOR_WEAPON].target_pulse_us = PWM_MIN_PULSE;
 }

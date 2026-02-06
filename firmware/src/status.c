@@ -74,7 +74,9 @@ bool status_init(void) {
 
     // Initialize WS2812 driver
     if (!ws2812_init(PIN_STATUS_LEDS, NUM_STATUS_LEDS)) {
+#if !SERIAL_GAMEPAD
         printf("ERROR: Failed to initialize WS2812 driver\n");
+#endif
         return false;
     }
 
@@ -96,7 +98,9 @@ bool status_init(void) {
     ws2812_show();
     status_initialized = true;
 
+#if !SERIAL_GAMEPAD
     printf("Status LED system initialized (SK6812)\n");
+#endif
     return true;
 }
 

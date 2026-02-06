@@ -18,6 +18,7 @@ typedef struct {
     uint16_t current_pulse_us;
     uint16_t target_pulse_us;
     bool reversed;
+    bool pwm_enabled;
 } motor_config_t;
 
 bool motor_control_init(void);
@@ -27,6 +28,8 @@ bool motor_control_set_speed(motor_channel_t channel, int8_t speed);
 void motor_control_stop_all(void);
 uint16_t motor_control_get_pulse(motor_channel_t channel);
 void motor_control_emergency_stop(void);
+bool motor_control_enable_weapon_pwm(void);
+void motor_control_disable_weapon_pwm(void);
 
 // Utility macros moved to config.h
 

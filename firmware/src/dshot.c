@@ -18,6 +18,16 @@
 #define DSHOT_THROTTLE_MAX 2047
 #define EDT_FRAME_BITS 21        // EDT telemetry frame size
 #define DSHOT_BIDIR_CLKDIV_SCALE 1.0f
+#define DSHOT_TELEM_PATH_LOCK_HITS 1
+#define DSHOT_TELEM_PATH_LOCK_ENABLE 1
+#define DSHOT_TELEM_PATH_MAX_FAILURES 3
+#define DSHOT_TELEM_PATH_FAST_ONLY 0
+
+typedef struct {
+    bool msb_first;
+    bool inverted;
+    uint8_t offset;
+} dshot_decode_path_t;
 
 // Per-motor DShot state
 typedef struct {
@@ -30,6 +40,14 @@ typedef struct {
     dshot_telemetry_t last_telemetry;
     uint32_t last_packet;       // Last transmitted packet (left-aligned for MSB-first shift)
     int8_t crc_invert_override; // -1 = use config, 0 = normal, 1 = invert
+    bool extended_telem_active; // True when ESC is sending extended telemetry frames
+    bool extended_telem_seen;   // True after any extended telemetry frame decoded
+    bool telem_path_valid;      // True if we have a locked telemetry decode path
+    dshot_decode_path_t telem_path;
+    dshot_decode_path_t telem_path_candidate;
+    uint8_t telem_path_candidate_hits;
+    uint8_t telem_path_failures;
+    uint32_t telem_type_counts[16];
 } dshot_motor_state_t;
 
 static dshot_motor_state_t motor_states[MAX_DSHOT_MOTORS] = {0};
@@ -73,6 +91,25 @@ uint16_t dshot_throttle_from_percent(int8_t percent) {
     // Clamp to valid range (defensive, should not be needed with correct formula)
     if (value < DSHOT_THROTTLE_MIN) value = DSHOT_THROTTLE_MIN;
     if (value > DSHOT_THROTTLE_MAX) value = DSHOT_THROTTLE_MAX;
+
+    return (uint16_t)value;
+}
+
+uint16_t dshot_throttle_from_percent_unidir(uint8_t percent) {
+    if (percent == 0) {
+        return 0;
+    }
+
+    percent = (uint8_t)CLAMP(percent, 0, 100);
+    int32_t throttle_range = DSHOT_THROTTLE_MAX - DSHOT_THROTTLE_MIN;
+    int32_t value = DSHOT_THROTTLE_MIN + ((int32_t)percent * throttle_range) / 100;
+
+    if (value < DSHOT_THROTTLE_MIN) {
+        value = DSHOT_THROTTLE_MIN;
+    }
+    if (value > DSHOT_THROTTLE_MAX) {
+        value = DSHOT_THROTTLE_MAX;
+    }
 
     return (uint16_t)value;
 }
@@ -216,8 +253,56 @@ static uint8_t edt_calculate_crc(uint16_t data) {
     return crc;
 }
 
+static bool dshot_extended_frame_plausible(uint8_t type, uint8_t data);
+static uint16_t decode_throttle_hint = 0;
+
+static uint32_t dshot_candidate_score(const dshot_telemetry_t* telemetry) {
+    if (telemetry == NULL || !telemetry->valid) {
+        return 0;
+    }
+    if (telemetry->type == 0xE &&
+        (telemetry->value == 0xE00 || telemetry->value == 0xEFF)) {
+        return UINT32_MAX;
+    }
+    if (telemetry->value == 0xFFF) {
+        return 1;
+    }
+    if (decode_throttle_hint <= (DSHOT_THROTTLE_MIN + 200)) {
+        return UINT32_MAX - telemetry->erpm;
+    }
+    return telemetry->erpm;
+}
+
+typedef struct {
+    bool have;
+    uint32_t score;
+    dshot_telemetry_t telemetry;
+    dshot_decode_path_t path;
+} dshot_candidate_t;
+
+static void dshot_candidate_consider(dshot_candidate_t* best,
+                                     const dshot_telemetry_t* telemetry,
+                                     const dshot_decode_path_t* path) {
+    if (best == NULL || telemetry == NULL || path == NULL) {
+        return;
+    }
+
+    uint32_t score = dshot_candidate_score(telemetry);
+    if (score == 0) {
+        return;
+    }
+
+    if (!best->have || score > best->score) {
+        best->have = true;
+        best->score = score;
+        best->telemetry = *telemetry;
+        best->path = *path;
+    }
+}
+
 // Parse EDT telemetry frame (GCR decoded)
-static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry) {
+static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry,
+                               bool extended_active) {
     uint8_t gcr[4];
     gcr[0] = (gcr_stream >> 15) & 0x1F;
     gcr[1] = (gcr_stream >> 10) & 0x1F;
@@ -243,14 +328,26 @@ static bool decode_edt_payload(uint32_t gcr_stream, dshot_telemetry_t* telemetry
 
     uint8_t type = (value >> 8) & 0x0F;
     uint8_t data = value & 0xFF;
-    if (type == 0x2) {
-        telemetry->temperature_C = data;
-    } else if (type == 0x4) {
-        telemetry->voltage_cV = (uint16_t)data * 25;
-    } else if (type == 0x6) {
-        telemetry->current_cA = (uint16_t)data * 50;
-    } else if (type == 0xE) {
+    telemetry->type = type;
+    telemetry->value = value;
+
+    if (type == 0xE && (extended_active || value == 0xE00 || value == 0xEFF)) {
         // Event/status frame (EDT init/deinit). Accept but do not overwrite fields.
+    } else if (extended_active && type == 0x2) {
+        if (!dshot_extended_frame_plausible(type, data)) {
+            return false;
+        }
+        telemetry->temperature_C = data;
+    } else if (extended_active && type == 0x4) {
+        if (!dshot_extended_frame_plausible(type, data)) {
+            return false;
+        }
+        telemetry->voltage_cV = (uint16_t)data * 25;
+    } else if (extended_active && type == 0x6) {
+        if (!dshot_extended_frame_plausible(type, data)) {
+            return false;
+        }
+        telemetry->current_cA = (uint16_t)data * 50;
     } else {
         uint8_t exponent = (value >> 9) & 0x07;
         uint16_t mantissa = value & 0x01FF;
@@ -303,6 +400,169 @@ static inline void telemetry_state_unpack(int idx, int* prev_level, int* sym_len
     *xor_acc = rem % 16;
 }
 
+static bool dp_find_choices(const uint8_t even[20], const uint8_t odd[20],
+                            bool enforce_crc, uint8_t* start_prev,
+                            uint8_t choices[20]) {
+    enum { POS_COUNT = 20, STATE_COUNT = 2560 };
+    static uint8_t reachable[POS_COUNT + 1][STATE_COUNT];
+
+    memset(reachable, 0, sizeof(reachable));
+
+    for (int prev = 0; prev < 2; prev++) {
+        int idx = telemetry_state_index(prev, 0, 0, 0);
+        reachable[0][idx] = 1;
+    }
+
+    for (int pos = 0; pos < POS_COUNT; pos++) {
+        memset(reachable[pos + 1], 0, STATE_COUNT);
+        for (int idx = 0; idx < STATE_COUNT; idx++) {
+            if (!reachable[pos][idx]) {
+                continue;
+            }
+
+            int prev_level;
+            int sym_len;
+            int sym_bits;
+            int xor_acc;
+            telemetry_state_unpack(idx, &prev_level, &sym_len, &sym_bits, &xor_acc);
+
+            for (int choice = 0; choice < 2; choice++) {
+                uint8_t level = (choice == 0) ? even[pos] : odd[pos];
+                uint8_t gcr_bit = level ^ (uint8_t)prev_level;
+
+                int next_prev = level;
+                int next_sym_len;
+                int next_sym_bits;
+                int next_xor = xor_acc;
+
+                if (sym_len == 4) {
+                    uint8_t symbol = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x1F);
+                    uint8_t nibble = gcr_decode_table[symbol];
+                    if (nibble == 0xFF) {
+                        continue;
+                    }
+
+                    int symbol_index = pos / 5;
+                    if (symbol_index < 3) {
+                        next_xor = xor_acc ^ nibble;
+                    } else if (enforce_crc) {
+                        uint8_t expected_crc = (uint8_t)(~xor_acc) & 0x0F;
+                        if (nibble != expected_crc) {
+                            continue;
+                        }
+                    }
+
+                    next_sym_len = 0;
+                    next_sym_bits = 0;
+                } else {
+                    next_sym_len = sym_len + 1;
+                    next_sym_bits = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x0F);
+                }
+
+                int next_idx = telemetry_state_index(next_prev, next_sym_len, next_sym_bits, next_xor);
+                reachable[pos + 1][next_idx] = 1;
+            }
+        }
+    }
+
+    for (int prev_level = 0; prev_level < 2; prev_level++) {
+        for (int xor_acc = 0; xor_acc < 16; xor_acc++) {
+            int end_idx = telemetry_state_index(prev_level, 0, 0, xor_acc);
+            if (!reachable[POS_COUNT][end_idx]) {
+                continue;
+            }
+
+            int current = end_idx;
+            bool backtrack_ok = true;
+
+            for (int pos = POS_COUNT; pos > 0; pos--) {
+                int bit = pos - 1;
+                bool found = false;
+
+                for (int idx = 0; idx < STATE_COUNT; idx++) {
+                    if (!reachable[pos - 1][idx]) {
+                        continue;
+                    }
+
+                    int prev_state_level;
+                    int sym_len;
+                    int sym_bits;
+                    int xor_state;
+                    telemetry_state_unpack(idx, &prev_state_level, &sym_len, &sym_bits, &xor_state);
+
+                    for (int choice = 0; choice < 2; choice++) {
+                        uint8_t level = (choice == 0) ? even[bit] : odd[bit];
+                        uint8_t gcr_bit = level ^ (uint8_t)prev_state_level;
+
+                        int next_prev = level;
+                        int next_sym_len;
+                        int next_sym_bits;
+                        int next_xor = xor_state;
+
+                        if (sym_len == 4) {
+                            uint8_t symbol = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x1F);
+                            uint8_t nibble = gcr_decode_table[symbol];
+                            if (nibble == 0xFF) {
+                                continue;
+                            }
+
+                            int symbol_index = bit / 5;
+                            if (symbol_index < 3) {
+                                next_xor = xor_state ^ nibble;
+                            } else if (enforce_crc) {
+                                uint8_t expected_crc = (uint8_t)(~xor_state) & 0x0F;
+                                if (nibble != expected_crc) {
+                                    continue;
+                                }
+                            }
+
+                            next_sym_len = 0;
+                            next_sym_bits = 0;
+                        } else {
+                            next_sym_len = sym_len + 1;
+                            next_sym_bits = (uint8_t)(((sym_bits << 1) | gcr_bit) & 0x0F);
+                        }
+
+                        int next_idx = telemetry_state_index(next_prev, next_sym_len, next_sym_bits, next_xor);
+                        if (next_idx == current) {
+                            choices[bit] = (uint8_t)choice;
+                            current = idx;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found) {
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    backtrack_ok = false;
+                    break;
+                }
+            }
+
+            if (!backtrack_ok) {
+                continue;
+            }
+
+            int start_state;
+            int sym_len;
+            int sym_bits;
+            int xor_state;
+            telemetry_state_unpack(current, &start_state, &sym_len, &sym_bits, &xor_state);
+            (void)sym_len;
+            (void)sym_bits;
+            (void)xor_state;
+            *start_prev = (uint8_t)start_state;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static uint32_t build_gcr_stream(const uint8_t even[20], const uint8_t odd[20],
                                  const uint8_t choices[20], uint8_t start_prev) {
     uint32_t gcr_stream = 0;
@@ -319,10 +579,11 @@ static uint32_t build_gcr_stream(const uint8_t even[20], const uint8_t odd[20],
 }
 
 static bool decode_oversampled_choices(const uint8_t even[20], const uint8_t odd[20],
-                                       dshot_telemetry_t* telemetry) {
+                                       dshot_telemetry_t* telemetry, bool extended_active) {
     enum { POS_COUNT = 20, STATE_COUNT = 2560 };
     static uint8_t reachable[POS_COUNT + 1][STATE_COUNT];
     uint8_t choices[POS_COUNT] = {0};
+    dshot_candidate_t best = {0};
 
     memset(reachable, 0, sizeof(reachable));
 
@@ -483,16 +744,137 @@ static bool decode_oversampled_choices(const uint8_t even[20], const uint8_t odd
                 prev = level;
             }
 
-            if (decode_edt_payload(gcr_stream, telemetry)) {
-                return true;
+            if (decode_edt_payload(gcr_stream, telemetry, extended_active)) {
+                uint32_t score = dshot_candidate_score(telemetry);
+                if (score > 0 && (!best.have || score > best.score)) {
+                    best.have = true;
+                    best.score = score;
+                    best.telemetry = *telemetry;
+                }
             }
         }
+    }
+
+    if (best.have) {
+        *telemetry = best.telemetry;
+        return true;
     }
 
     return false;
 }
 
-static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemetry) {
+static bool decode_path_equal(const dshot_decode_path_t* a, const dshot_decode_path_t* b) {
+    return a->msb_first == b->msb_first &&
+           a->inverted == b->inverted &&
+           a->offset == b->offset;
+}
+
+static bool dshot_extended_frame_plausible(uint8_t type, uint8_t data) {
+    if (type == 0x4) {
+        uint16_t voltage_cV = (uint16_t)data * 25;
+        uint16_t max_cV = (uint16_t)(BATTERY_MAX_VOLTAGE / 10) * 2;
+        return voltage_cV > 0 && voltage_cV <= max_cV;
+    }
+    if (type == 0x6) {
+        uint16_t current_cA = (uint16_t)data * 50;
+        return current_cA <= 20000;
+    }
+    if (type == 0x2) {
+        return data <= 150;
+    }
+    return false;
+}
+
+static bool dshot_should_track_path(const dshot_motor_state_t* state,
+                                    const dshot_telemetry_t* telemetry) {
+    (void)state;
+    if (telemetry == NULL || !telemetry->valid) {
+        return false;
+    }
+    return telemetry->value != 0xFFF;
+}
+
+static void dshot_track_decode_path(dshot_motor_state_t* state, const dshot_decode_path_t* path) {
+    if (state->telem_path_valid && decode_path_equal(path, &state->telem_path)) {
+        state->telem_path_candidate_hits = 0;
+        return;
+    }
+
+    if (state->telem_path_candidate_hits == 0 ||
+        !decode_path_equal(path, &state->telem_path_candidate)) {
+        state->telem_path_candidate = *path;
+        state->telem_path_candidate_hits = 1;
+    } else if (state->telem_path_candidate_hits < UINT8_MAX) {
+        state->telem_path_candidate_hits++;
+    }
+
+    if (state->telem_path_candidate_hits >= DSHOT_TELEM_PATH_LOCK_HITS) {
+        state->telem_path = state->telem_path_candidate;
+        state->telem_path_valid = true;
+        state->telem_path_candidate_hits = 0;
+        state->telem_path_failures = 0;
+    }
+}
+
+static bool parse_edt_telemetry_with_path(uint64_t raw_samples, dshot_telemetry_t* telemetry,
+                                          bool extended_active, const dshot_decode_path_t* path) {
+    if (telemetry == NULL || path == NULL) {
+        return false;
+    }
+
+    uint8_t samples[42];
+    uint8_t even[20];
+    uint8_t odd[20];
+    uint8_t choices[20];
+
+    extract_oversample_bits(raw_samples, path->msb_first, samples);
+    if ((path->offset + 40) > sizeof(samples)) {
+        return false;
+    }
+
+    for (int i = 0; i < 20; i++) {
+        uint8_t even_level = samples[path->offset + (i * 2)];
+        uint8_t odd_level = samples[path->offset + (i * 2) + 1];
+        if (path->inverted) {
+            even_level ^= 1;
+            odd_level ^= 1;
+        }
+        even[i] = even_level;
+        odd[i] = odd_level;
+    }
+
+    memset(choices, 0, sizeof(choices));
+    for (int start = 0; start < 2; start++) {
+        uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
+        dshot_telemetry_t candidate = *telemetry;
+        if (decode_edt_payload(gcr_stream, &candidate, extended_active)) {
+            *telemetry = candidate;
+            return true;
+        }
+    }
+
+    memset(choices, 1, sizeof(choices));
+    for (int start = 0; start < 2; start++) {
+        uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
+        dshot_telemetry_t candidate = *telemetry;
+        if (decode_edt_payload(gcr_stream, &candidate, extended_active)) {
+            *telemetry = candidate;
+            return true;
+        }
+    }
+
+#if !DSHOT_TELEM_PATH_FAST_ONLY
+    dshot_telemetry_t candidate = *telemetry;
+    if (decode_oversampled_choices(even, odd, &candidate, extended_active)) {
+        *telemetry = candidate;
+        return true;
+    }
+#endif
+    return false;
+}
+
+static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemetry,
+                                bool extended_active, dshot_decode_path_t* out_path) {
     if (telemetry == NULL) {
         return false;
     }
@@ -501,17 +883,26 @@ static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemet
     uint8_t even[20];
     uint8_t odd[20];
     uint8_t choices[20];
+    uint8_t start_prev = 0;
     const uint8_t offsets[] = {0, 2};
+    const bool orders[] = {true, false};
+    for (size_t order_index = 0; order_index < sizeof(orders) / sizeof(orders[0]); order_index++) {
+        bool msb_first = orders[order_index];
+        extract_oversample_bits(raw_samples, msb_first, samples);
 
-    for (int order = 0; order < 2; order++) {
-        extract_oversample_bits(raw_samples, order == 0, samples);
         for (size_t offset_index = 0; offset_index < sizeof(offsets) / sizeof(offsets[0]);
              offset_index++) {
             uint8_t offset = offsets[offset_index];
             if ((offset + 40) > sizeof(samples)) {
                 continue;
             }
+
             for (int invert = 0; invert < 2; invert++) {
+                dshot_decode_path_t path = {
+                    .msb_first = msb_first,
+                    .inverted = (invert != 0),
+                    .offset = offset,
+                };
                 for (int i = 0; i < 20; i++) {
                     uint8_t even_level = samples[offset + (i * 2)];
                     uint8_t odd_level = samples[offset + (i * 2) + 1];
@@ -526,7 +917,12 @@ static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemet
                 memset(choices, 0, sizeof(choices));
                 for (int start = 0; start < 2; start++) {
                     uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
-                    if (decode_edt_payload(gcr_stream, telemetry)) {
+                    dshot_telemetry_t candidate = *telemetry;
+                    if (decode_edt_payload(gcr_stream, &candidate, extended_active)) {
+                        *telemetry = candidate;
+                        if (out_path != NULL) {
+                            *out_path = path;
+                        }
                         return true;
                     }
                 }
@@ -534,12 +930,34 @@ static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemet
                 memset(choices, 1, sizeof(choices));
                 for (int start = 0; start < 2; start++) {
                     uint32_t gcr_stream = build_gcr_stream(even, odd, choices, (uint8_t)start);
-                    if (decode_edt_payload(gcr_stream, telemetry)) {
+                    dshot_telemetry_t candidate = *telemetry;
+                    if (decode_edt_payload(gcr_stream, &candidate, extended_active)) {
+                        *telemetry = candidate;
+                        if (out_path != NULL) {
+                            *out_path = path;
+                        }
                         return true;
                     }
                 }
 
-                if (decode_oversampled_choices(even, odd, telemetry)) {
+                if (dp_find_choices(even, odd, true, &start_prev, choices)) {
+                    uint32_t gcr_stream = build_gcr_stream(even, odd, choices, start_prev);
+                    dshot_telemetry_t candidate = *telemetry;
+                    if (decode_edt_payload(gcr_stream, &candidate, extended_active)) {
+                        *telemetry = candidate;
+                        if (out_path != NULL) {
+                            *out_path = path;
+                        }
+                        return true;
+                    }
+                }
+
+                dshot_telemetry_t candidate = *telemetry;
+                if (decode_oversampled_choices(even, odd, &candidate, extended_active)) {
+                    *telemetry = candidate;
+                    if (out_path != NULL) {
+                        *out_path = path;
+                    }
                     return true;
                 }
             }
@@ -547,6 +965,26 @@ static bool parse_edt_telemetry(uint64_t raw_samples, dshot_telemetry_t* telemet
     }
 
     return false;
+}
+
+static void dshot_update_extended_state(dshot_motor_state_t* state) {
+    if (state->last_telemetry.type != 0xE) {
+        return;
+    }
+
+    if (state->last_telemetry.value == 0xE00) {
+        state->extended_telem_active = true;
+        state->extended_telem_seen = false;
+        state->last_telemetry.voltage_cV = 0;
+        state->last_telemetry.current_cA = 0;
+        state->last_telemetry.temperature_C = 0;
+    } else if (state->last_telemetry.value == 0xEFF) {
+        state->extended_telem_active = false;
+        state->extended_telem_seen = false;
+        state->last_telemetry.voltage_cV = 0;
+        state->last_telemetry.current_cA = 0;
+        state->last_telemetry.temperature_C = 0;
+    }
 }
 
 bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
@@ -559,9 +997,53 @@ bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
     if (!state->initialized || !state->config.bidirectional) {
         return false;
     }
+    uint16_t last_packet = (uint16_t)(state->last_packet >> 16);
+    decode_throttle_hint = (last_packet >> 5) & 0x7FF;
 
-    if (!parse_edt_telemetry(raw_samples, &state->last_telemetry)) {
+    bool decoded = false;
+#if DSHOT_TELEM_PATH_LOCK_ENABLE
+    if (state->telem_path_valid) {
+        decoded = parse_edt_telemetry_with_path(raw_samples, &state->last_telemetry,
+                                                state->extended_telem_active,
+                                                &state->telem_path);
+        if (decoded) {
+            state->telem_path_failures = 0;
+        } else {
+            if (state->telem_path_failures < UINT8_MAX) {
+                state->telem_path_failures++;
+            }
+            if (state->telem_path_failures < DSHOT_TELEM_PATH_MAX_FAILURES) {
+                return false;
+            }
+            state->telem_path_valid = false;
+            state->telem_path_failures = 0;
+            state->telem_path_candidate_hits = 0;
+        }
+    }
+#endif
+
+    if (!decoded) {
+        dshot_decode_path_t path = {0};
+        decoded = parse_edt_telemetry(raw_samples, &state->last_telemetry,
+                                      state->extended_telem_active, &path);
+        if (decoded && dshot_should_track_path(state, &state->last_telemetry)) {
+            dshot_track_decode_path(state, &path);
+        }
+    } else {
+        state->telem_path_candidate_hits = 0;
+    }
+
+    if (!decoded) {
         return false;
+    }
+
+    state->telem_type_counts[state->last_telemetry.type & 0x0F]++;
+    dshot_update_extended_state(state);
+    if (state->extended_telem_active) {
+        uint8_t type = state->last_telemetry.type;
+        if (type == 0x2 || type == 0x4 || type == 0x6) {
+            state->extended_telem_seen = true;
+        }
     }
 
     if (telemetry != NULL) {
@@ -723,6 +1205,13 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         state->last_telemetry.temperature_C = 0;
         state->last_telemetry.crc = 0;
         state->last_telemetry.timestamp_ms = 0;
+        state->last_telemetry.type = 0;
+        state->last_telemetry.value = 0;
+        state->extended_telem_active = false;
+        state->extended_telem_seen = false;
+        state->telem_path_valid = false;
+        state->telem_path_candidate_hits = 0;
+        state->telem_path_failures = 0;
         return false;
     }
 
@@ -744,6 +1233,19 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
 
     // Initialize telemetry
     state->last_telemetry.valid = false;
+    state->last_telemetry.erpm = 0;
+    state->last_telemetry.voltage_cV = 0;
+    state->last_telemetry.current_cA = 0;
+    state->last_telemetry.temperature_C = 0;
+    state->last_telemetry.crc = 0;
+    state->last_telemetry.timestamp_ms = 0;
+    state->last_telemetry.type = 0;
+    state->last_telemetry.value = 0;
+    state->extended_telem_active = false;
+    state->extended_telem_seen = false;
+    state->telem_path_valid = false;
+    state->telem_path_candidate_hits = 0;
+    state->telem_path_failures = 0;
     state->crc_invert_override = -1;
     state->initialized = true;
 
@@ -894,12 +1396,30 @@ bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd) {
         return false;
     }
 
-    // DShot commands must be sent 6-10 times with 1ms delays
+    // DShot commands must be sent 6-10 times with small delays
     for (int i = 0; i < 10; i++) {
         if (!dshot_send_throttle(motor, (uint16_t)cmd, false)) {
             return false;
         }
-        sleep_ms(1);
+        sleep_ms(2);
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (state->initialized) {
+        if (cmd == DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE) {
+            // Assume EDT active immediately; some ESCs omit explicit init events.
+            state->extended_telem_active = true;
+            state->extended_telem_seen = false;
+            state->last_telemetry.voltage_cV = 0;
+            state->last_telemetry.current_cA = 0;
+            state->last_telemetry.temperature_C = 0;
+        } else if (cmd == DSHOT_CMD_EXTENDED_TELEMETRY_DISABLE) {
+            state->extended_telem_active = false;
+            state->extended_telem_seen = false;
+            state->last_telemetry.voltage_cV = 0;
+            state->last_telemetry.current_cA = 0;
+            state->last_telemetry.temperature_C = 0;
+        }
     }
 
     return true;
@@ -975,6 +1495,92 @@ bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
 
     memcpy(telemetry, &state->last_telemetry, sizeof(dshot_telemetry_t));
     return true;
+}
+
+bool dshot_extended_telemetry_active(motor_channel_t motor) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || !state->config.bidirectional) {
+        return false;
+    }
+
+    return state->extended_telem_active;
+}
+
+bool dshot_extended_telemetry_seen(motor_channel_t motor) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || !state->config.bidirectional) {
+        return false;
+    }
+
+    return state->extended_telem_seen;
+}
+
+bool dshot_sm_is_enabled(motor_channel_t motor) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || state->pio == NULL) {
+        return false;
+    }
+
+    return (state->pio->ctrl & (1u << state->sm)) != 0;
+}
+
+bool dshot_get_fifo_levels(motor_channel_t motor, uint8_t* tx_level, uint8_t* rx_level) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return false;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized || state->pio == NULL) {
+        return false;
+    }
+
+    if (tx_level != NULL) {
+        *tx_level = pio_sm_get_tx_fifo_level(state->pio, state->sm);
+    }
+    if (rx_level != NULL) {
+        *rx_level = pio_sm_get_rx_fifo_level(state->pio, state->sm);
+    }
+
+    return true;
+}
+
+void dshot_get_telemetry_type_counts(motor_channel_t motor, uint32_t counts[16]) {
+    if (motor >= MAX_DSHOT_MOTORS || counts == NULL) {
+        return;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized) {
+        memset(counts, 0, sizeof(uint32_t) * 16);
+        return;
+    }
+
+    memcpy(counts, state->telem_type_counts, sizeof(state->telem_type_counts));
+}
+
+void dshot_reset_telemetry_type_counts(motor_channel_t motor) {
+    if (motor >= MAX_DSHOT_MOTORS) {
+        return;
+    }
+
+    dshot_motor_state_t* state = &motor_states[motor];
+    if (!state->initialized) {
+        return;
+    }
+
+    memset(state->telem_type_counts, 0, sizeof(state->telem_type_counts));
 }
 
 // Convert eRPM to actual RPM

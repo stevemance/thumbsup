@@ -42,9 +42,15 @@ bool weapon_is_armed(void);
 void weapon_emergency_stop(void);
 bool weapon_get_telemetry(weapon_telemetry_t* telemetry);
 uint32_t weapon_get_dshot_failures(void);
+uint16_t weapon_get_dshot_last_throttle(void);
+void weapon_get_dshot_send_counts(uint32_t* attempts, uint32_t* successes);
 void weapon_get_dshot_telemetry_counts(uint32_t* requests, uint32_t* responses);
 void weapon_reset_dshot_telemetry_counts(void);
 uint32_t weapon_get_telemetry_age_ms(void);
+void weapon_get_dshot_telemetry_debug(uint32_t* raw, uint32_t* decode_fail);
+void weapon_get_dshot_telemetry_timing(uint32_t* frames, uint64_t* total_us);
+void weapon_set_dshot_raw_dump(uint16_t count);
+void weapon_get_dshot_setup_state(bool* pending, bool* done);
 
 // Mode switching functions (Critical Fix #2 & #6)
 bool weapon_enable_dshot(void);

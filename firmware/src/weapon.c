@@ -12,6 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Delay before issuing DShot setup commands during arming.
+#define WEAPON_DSHOT_SETUP_DELAY_MS WEAPON_ARM_TIMEOUT
+
 // MINOR FIX: Move extern declarations to file scope for cleaner code organization
 extern uint32_t read_battery_voltage(void);
 
@@ -25,18 +28,35 @@ static uint32_t arm_start_time = 0;
 static uint32_t last_ramp_time = 0;
 static uint32_t last_dshot_send_time = 0;
 static uint32_t last_dshot_telemetry_time = 0;
+static uint16_t dshot_last_throttle = 0;
+static uint32_t dshot_send_attempts = 0;
+static uint32_t dshot_send_successes = 0;
 static uint32_t dshot_send_failures = 0;
 static uint32_t last_dshot_fail_log_ms = 0;
 static uint32_t last_dshot_debug_log_ms = 0;
 static uint32_t dshot_telemetry_requests = 0;
 static uint32_t dshot_telemetry_responses = 0;
+static uint32_t dshot_telemetry_pending = 0;
+static uint32_t dshot_telemetry_raw = 0;
+static uint32_t dshot_telemetry_decode_fail = 0;
 static uint32_t last_dshot_telemetry_rx_ms = 0;
+static uint64_t dshot_telemetry_decode_us = 0;
+static uint32_t dshot_telemetry_decode_frames = 0;
+#if INTEGRATION_TEST_AUTO
+static uint16_t dshot_raw_dump_remaining = 0;
+#endif
+static uint32_t last_dshot_setup_attempt_ms = 0;
+static uint8_t dshot_setup_attempts = 0;
+static bool dshot_setup_pending = false;
+static bool dshot_setup_done = false;
 static bool initialized = false;
 // CRITICAL FIX #2 (Iteration 4): Protect dshot_initialized with mode_mutex
 // This flag is accessed by weapon_update() and mode switch functions
 // Race scenario: weapon_update checks flag, then mode switch calls dshot_deinit(),
 // then weapon_update uses freed resources → use-after-free
 static volatile bool dshot_initialized = false;
+
+static void weapon_poll_telemetry_locked(void);
 
 static uint16_t weapon_speed_to_pulse(uint8_t speed_percent) {
     if (speed_percent == 0) {
@@ -47,13 +67,71 @@ static uint16_t weapon_speed_to_pulse(uint8_t speed_percent) {
     return PWM_MIN_PULSE + (speed_percent * range) / 100;
 }
 
+static void weapon_mark_dshot_setup_pending(void) {
+    dshot_setup_pending = true;
+    dshot_setup_done = false;
+    dshot_setup_attempts = 0;
+    last_dshot_setup_attempt_ms = 0;
+}
+
+static void weapon_run_dshot_setup_locked(uint32_t now_ms) {
+    if (!dshot_setup_pending) {
+        return;
+    }
+    if ((now_ms - arm_start_time) < WEAPON_DSHOT_SETUP_DELAY_MS) {
+        return;
+    }
+    if (last_dshot_setup_attempt_ms != 0 &&
+        (now_ms - last_dshot_setup_attempt_ms) < WEAPON_DSHOT_SETUP_RETRY_MS) {
+        return;
+    }
+
+    last_dshot_setup_attempt_ms = now_ms;
+    if (dshot_setup_attempts < UINT8_MAX) {
+        dshot_setup_attempts++;
+    }
+
+    bool ok = dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
+    ok = ok && dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_OFF);
+    ok = ok && dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_SPIN_DIRECTION_NORMAL);
+    weapon_poll_telemetry_locked();
+
+    if (ok && dshot_extended_telemetry_seen(MOTOR_WEAPON)) {
+        dshot_setup_pending = false;
+        dshot_setup_done = true;
+    } else if (dshot_setup_attempts >= WEAPON_DSHOT_SETUP_MAX_ATTEMPTS) {
+        dshot_setup_pending = false;
+        dshot_setup_done = true;
+        DEBUG_PRINT("WARN: EDT enable not confirmed after %u attempts\n",
+                    dshot_setup_attempts);
+    }
+}
+
 static void weapon_poll_telemetry_locked(void) {
     uint64_t raw = 0;
     dshot_telemetry_t telem;
     while (dshot_read_telemetry_raw(MOTOR_WEAPON, &raw)) {
-        if (!dshot_decode_telemetry_raw(MOTOR_WEAPON, raw, &telem)) {
+#if INTEGRATION_TEST_AUTO
+        if (dshot_raw_dump_remaining > 0) {
+            printf("EDT raw=0x%010llx\n", (unsigned long long)raw);
+            dshot_raw_dump_remaining--;
+        }
+#endif
+
+        dshot_telemetry_raw++;
+        if (dshot_telemetry_pending == 0) {
             continue;
         }
+        dshot_telemetry_pending--;
+        uint64_t decode_start_us = time_us_64();
+        bool decoded = dshot_decode_telemetry_raw(MOTOR_WEAPON, raw, &telem);
+        dshot_telemetry_decode_us += time_us_64() - decode_start_us;
+        dshot_telemetry_decode_frames++;
+        if (!decoded) {
+            dshot_telemetry_decode_fail++;
+            continue;
+        }
+
         dshot_telemetry_responses++;
         last_dshot_telemetry_rx_ms = telem.timestamp_ms;
     }
@@ -64,10 +142,31 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
         return;
     }
 
+    if (dshot_telemetry_pending > 0 &&
+        last_dshot_telemetry_time != 0 &&
+        (now_ms - last_dshot_telemetry_time) > WEAPON_DSHOT_TELEMETRY_TIMEOUT_MS) {
+        dshot_telemetry_pending = 0;
+    }
+
     bool should_send = force_send ||
                        (now_ms - last_dshot_send_time >= WEAPON_DSHOT_UPDATE_MS);
+
+    // Drain before sending to avoid RX FIFO backpressure blocking the PIO SM.
+    weapon_poll_telemetry_locked();
+
     if (should_send) {
-        bool request_telemetry = (now_ms - last_dshot_telemetry_time >= WEAPON_DSHOT_TELEMETRY_MS);
+        dshot_last_throttle = throttle;
+        dshot_send_attempts++;
+        bool telemetry_allowed = (weapon_state == WEAPON_STATE_ARMING ||
+                                  weapon_state == WEAPON_STATE_ARMED ||
+                                  weapon_state == WEAPON_STATE_SPINNING);
+        bool request_telemetry = false;
+        if (telemetry_allowed) {
+            bool interval_ok = (last_dshot_telemetry_time == 0) ||
+                               ((now_ms - last_dshot_telemetry_time) >= WEAPON_DSHOT_TELEMETRY_MS);
+            bool pending_ok = dshot_telemetry_pending < WEAPON_DSHOT_TELEMETRY_MAX_PENDING;
+            request_telemetry = interval_ok && pending_ok;
+        }
 #if INTEGRATION_TEST_AUTO
         if (now_ms - last_dshot_debug_log_ms > 1000) {
             printf("DShot send throttle=%u telemetry=%u\n", throttle, request_telemetry ? 1u : 0u);
@@ -75,10 +174,14 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
         }
 #endif
         if (dshot_send_throttle(MOTOR_WEAPON, throttle, request_telemetry)) {
+            dshot_send_successes++;
             last_dshot_send_time = now_ms;
             if (request_telemetry) {
                 last_dshot_telemetry_time = now_ms;
                 dshot_telemetry_requests++;
+                if (dshot_telemetry_pending < WEAPON_DSHOT_TELEMETRY_MAX_PENDING) {
+                    dshot_telemetry_pending++;
+                }
             }
         } else {
             dshot_send_failures++;
@@ -91,6 +194,7 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
         }
     }
 
+    // Drain again to capture the response immediately after TX.
     weapon_poll_telemetry_locked();
 }
 
@@ -138,6 +242,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
             if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
                 DEBUG_PRINT("WARNING: GPIO %d not in SIO after PWM cleanup\n", PIN_WEAPON_PWM);
             }
+            motor_control_disable_weapon_pwm();
             break;
 
         case WEAPON_MODE_DSHOT:
@@ -146,9 +251,12 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                 sleep_ms(10);  // Allow command to complete
                 dshot_deinit(MOTOR_WEAPON);
                 dshot_initialized = false;
+                dshot_setup_pending = false;
+                dshot_setup_done = false;
             }
             last_dshot_send_time = 0;
             last_dshot_telemetry_time = 0;
+            dshot_telemetry_pending = 0;
             // Reset GPIO to SIO after DShot (PIO cleanup)
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
@@ -195,6 +303,11 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
     // Enable new mode
     switch (new_mode) {
         case WEAPON_MODE_PWM:
+            if (!motor_control_enable_weapon_pwm()) {
+                DEBUG_PRINT("ERROR: Failed to initialize weapon PWM\n");
+                mutex_exit(&mode_mutex);
+                return false;
+            }
             motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
             DEBUG_PRINT("Weapon control mode: PWM\n");
             break;
@@ -212,13 +325,27 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                     last_dshot_send_time = 0;
                     last_dshot_telemetry_time = 0;
                     dshot_send_failures = 0;
+                    dshot_send_attempts = 0;
+                    dshot_send_successes = 0;
                     dshot_telemetry_requests = 0;
                     dshot_telemetry_responses = 0;
+                    dshot_telemetry_pending = 0;
+                    dshot_telemetry_raw = 0;
+                    dshot_telemetry_decode_fail = 0;
+                    dshot_telemetry_decode_us = 0;
+                    dshot_telemetry_decode_frames = 0;
                     last_dshot_telemetry_rx_ms = 0;
+                    dshot_setup_pending = false;
+                    dshot_setup_done = false;
                     DEBUG_PRINT("Weapon control mode: DShot300 with EDT\n");
                 } else {
                     // MAJOR FIX #5 (Iteration 3): Fallback to PWM if DShot init fails
                     DEBUG_PRINT("ERROR: Failed to initialize DShot, falling back to PWM\n");
+                    if (!motor_control_enable_weapon_pwm()) {
+                        DEBUG_PRINT("ERROR: Failed to initialize weapon PWM\n");
+                        mutex_exit(&mode_mutex);
+                        return false;
+                    }
                     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
                     new_mode = WEAPON_MODE_PWM;
                     DEBUG_PRINT("Weapon control mode: PWM (fallback)\n");
@@ -292,8 +419,15 @@ bool weapon_init(void) {
     last_dshot_send_time = 0;
     last_dshot_telemetry_time = 0;
     dshot_send_failures = 0;
+    dshot_send_attempts = 0;
+    dshot_send_successes = 0;
     dshot_telemetry_requests = 0;
     dshot_telemetry_responses = 0;
+    dshot_telemetry_pending = 0;
+    dshot_telemetry_raw = 0;
+    dshot_telemetry_decode_fail = 0;
+    dshot_telemetry_decode_us = 0;
+    dshot_telemetry_decode_frames = 0;
     last_dshot_telemetry_rx_ms = 0;
 
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
@@ -304,6 +438,12 @@ bool weapon_init(void) {
     // Hardware is configured for DShot on GP4, ESC supports it
     if (weapon_enable_dshot()) {
         DEBUG_PRINT("Weapon system initialized in DShot300 mode\n");
+        // Send a short idle burst so ESC auto-detects DShot after power-on.
+        uint32_t warmup_start = to_ms_since_boot(get_absolute_time());
+        while ((to_ms_since_boot(get_absolute_time()) - warmup_start) < 200) {
+            dshot_send_throttle(MOTOR_WEAPON, 0, false);
+            sleep_ms(2);
+        }
     } else {
         DEBUG_PRINT("Weapon system initialized in PWM mode (DShot init failed)\n");
     }
@@ -350,6 +490,7 @@ void weapon_update(void) {
                 case WEAPON_MODE_DSHOT:
                     if (dshot_initialized) {
                         weapon_send_dshot_locked(current_time, 0, true);
+                        weapon_run_dshot_setup_locked(current_time);
                     }
                     break;
 
@@ -358,7 +499,12 @@ void weapon_update(void) {
             }
             mutex_exit(&mode_mutex);
 
-            if (current_time - arm_start_time > WEAPON_ARM_TIMEOUT) {
+            bool ready_to_arm = true;
+            if (control_mode == WEAPON_MODE_DSHOT && dshot_setup_pending) {
+                ready_to_arm = false;
+            }
+
+            if (ready_to_arm && (current_time - arm_start_time > WEAPON_ARM_TIMEOUT)) {
                 weapon_state = WEAPON_STATE_ARMED;
                 DEBUG_PRINT("Weapon armed\n");
                 status_set_weapon(WEAPON_STATUS_ARMED, LED_EFFECT_SOLID);
@@ -370,6 +516,11 @@ void weapon_update(void) {
             {
                 bool speed_changed = false;
                 if (current_speed != target_speed) {
+#if INTEGRATION_TEST_AUTO
+                    current_speed = target_speed;
+                    last_ramp_time = current_time;
+                    speed_changed = true;
+#else
                     if (current_time - last_ramp_time > (WEAPON_SPINUP_TIME / WEAPON_RAMP_STEPS)) {
                         // MAJOR FIX #5: Static ramp calculation is intentional for performance
                         // Using 'static const' allows compile-time calculation of ramp_step,
@@ -386,7 +537,9 @@ void weapon_update(void) {
 
                         last_ramp_time = current_time;
                         speed_changed = true;
-
+                    }
+#endif
+                    if (speed_changed) {
                         if (current_speed > 0 && weapon_state != WEAPON_STATE_SPINNING) {
                             weapon_state = WEAPON_STATE_SPINNING;
                             status_set_weapon(WEAPON_STATUS_SPINNING, LED_EFFECT_SOLID);
@@ -412,7 +565,7 @@ void weapon_update(void) {
                         break;
 
                     case WEAPON_MODE_DSHOT: {
-                        uint16_t dshot_throttle = dshot_throttle_from_percent(current_speed);
+                        uint16_t dshot_throttle = dshot_throttle_from_percent_unidir(current_speed);
                         weapon_send_dshot_locked(current_time, dshot_throttle, speed_changed);
                         break;
                     }
@@ -475,6 +628,12 @@ bool weapon_arm(void) {
 
     weapon_state = WEAPON_STATE_ARMING;
     arm_start_time = to_ms_since_boot(get_absolute_time());
+    mutex_enter_blocking(&mode_mutex);
+    if (control_mode == WEAPON_MODE_DSHOT && dshot_initialized) {
+        weapon_mark_dshot_setup_pending();
+        dshot_telemetry_pending = 0;
+    }
+    mutex_exit(&mode_mutex);
     DEBUG_PRINT("Weapon arming... (Battery: %.1fV)\n", battery_mv / 1000.0f);
     status_set_weapon(WEAPON_STATUS_ARMING, LED_EFFECT_BLINK_MEDIUM);
 
@@ -496,6 +655,7 @@ bool weapon_disarm(void) {
         case WEAPON_MODE_DSHOT:
             if (dshot_initialized) {
                 dshot_send_throttle(MOTOR_WEAPON, 0, false);
+                dshot_telemetry_pending = 0;
             }
             break;
 
@@ -569,6 +729,7 @@ void weapon_emergency_stop(void) {
     // Worst case: we skip DShot stop if flag race occurs, but GPIO force-low still works
     if (dshot_initialized) {
         dshot_send_throttle(MOTOR_WEAPON, 0, false);
+        dshot_telemetry_pending = 0;
     }
 
     // Method 3: Direct GPIO control - force pin low as last resort
@@ -617,6 +778,19 @@ uint32_t weapon_get_dshot_failures(void) {
     return dshot_send_failures;
 }
 
+uint16_t weapon_get_dshot_last_throttle(void) {
+    return dshot_last_throttle;
+}
+
+void weapon_get_dshot_send_counts(uint32_t* attempts, uint32_t* successes) {
+    if (attempts != NULL) {
+        *attempts = dshot_send_attempts;
+    }
+    if (successes != NULL) {
+        *successes = dshot_send_successes;
+    }
+}
+
 void weapon_get_dshot_telemetry_counts(uint32_t* requests, uint32_t* responses) {
     if (requests == NULL && responses == NULL) {
         return;
@@ -636,7 +810,55 @@ void weapon_reset_dshot_telemetry_counts(void) {
     mutex_enter_blocking(&mode_mutex);
     dshot_telemetry_requests = 0;
     dshot_telemetry_responses = 0;
+    dshot_telemetry_pending = 0;
+    dshot_telemetry_raw = 0;
+    dshot_telemetry_decode_fail = 0;
     last_dshot_telemetry_rx_ms = 0;
+    dshot_telemetry_decode_us = 0;
+    dshot_telemetry_decode_frames = 0;
+    mutex_exit(&mode_mutex);
+}
+
+void weapon_get_dshot_telemetry_debug(uint32_t* raw, uint32_t* decode_fail) {
+    mutex_enter_blocking(&mode_mutex);
+    if (raw != NULL) {
+        *raw = dshot_telemetry_raw;
+    }
+    if (decode_fail != NULL) {
+        *decode_fail = dshot_telemetry_decode_fail;
+    }
+    mutex_exit(&mode_mutex);
+}
+
+void weapon_get_dshot_telemetry_timing(uint32_t* frames, uint64_t* total_us) {
+    mutex_enter_blocking(&mode_mutex);
+    if (frames != NULL) {
+        *frames = dshot_telemetry_decode_frames;
+    }
+    if (total_us != NULL) {
+        *total_us = dshot_telemetry_decode_us;
+    }
+    mutex_exit(&mode_mutex);
+}
+
+void weapon_set_dshot_raw_dump(uint16_t count) {
+#if INTEGRATION_TEST_AUTO
+    mutex_enter_blocking(&mode_mutex);
+    dshot_raw_dump_remaining = count;
+    mutex_exit(&mode_mutex);
+#else
+    (void)count;
+#endif
+}
+
+void weapon_get_dshot_setup_state(bool* pending, bool* done) {
+    mutex_enter_blocking(&mode_mutex);
+    if (pending != NULL) {
+        *pending = dshot_setup_pending;
+    }
+    if (done != NULL) {
+        *done = dshot_setup_done;
+    }
     mutex_exit(&mode_mutex);
 }
 

@@ -136,16 +136,17 @@ target_link_libraries(thumbsup_integration PUBLIC
     bluepad32
 )
 
-target_compile_definitions(thumbsup_integration PRIVATE INTEGRATION_TEST_AUTO=1)
+target_compile_definitions(thumbsup_integration PRIVATE
+    INTEGRATION_TEST_AUTO=1
+    AM32_ONEWIRE=1
+    PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=0)
 
 pico_enable_stdio_usb(thumbsup_serial 1)
 pico_enable_stdio_uart(thumbsup_serial 0)
 
 target_link_libraries(thumbsup_serial PUBLIC
     pico_stdlib
-    pico_cyw43_arch_none  # Bluetooth support
-    pico_btstack_classic
-    pico_btstack_cyw43
     hardware_pwm
     hardware_adc
     hardware_gpio
@@ -155,10 +156,19 @@ target_link_libraries(thumbsup_serial PUBLIC
     hardware_dma
     hardware_flash
     hardware_sync
-    bluepad32
 )
 
-target_compile_definitions(thumbsup_serial PRIVATE SERIAL_GAMEPAD=1)
+target_compile_definitions(thumbsup_serial PRIVATE
+    SERIAL_GAMEPAD=1
+    PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+    PICO_STDIO_USB_ENABLE_TINYUSB_INIT=1
+    PICO_STDIO_USB_ENABLE_IRQ_BACKGROUND_TASK=1
+    AM32_ONEWIRE=1
+)
+
+target_compile_definitions(thumbsup PRIVATE
+    AM32_ONEWIRE=1
+)
 
 pico_enable_stdio_usb(thumbsup 1)
 pico_enable_stdio_uart(thumbsup 0)

@@ -73,6 +73,7 @@ def log_samples(channel, duration_s, interval_s, out_path):
                     status,
                     "",
                 ])
+            handle.flush()
 
             next_sample += interval_s
 

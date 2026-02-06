@@ -185,13 +185,26 @@ pico_enable_stdio_usb(dshot_single_rpm_test 1)
 pico_enable_stdio_uart(dshot_single_rpm_test 0)
 pico_add_extra_outputs(dshot_single_rpm_test)
 
+# --- USB CDC smoke test ---
+add_executable(usb_cdc_smoke_test
+    ${TESTS_SRC_DIR}/usb_cdc_smoke_test.c
+)
+
+target_link_libraries(usb_cdc_smoke_test
+    pico_stdlib
+)
+
+pico_enable_stdio_usb(usb_cdc_smoke_test 1)
+pico_enable_stdio_uart(usb_cdc_smoke_test 0)
+pico_add_extra_outputs(usb_cdc_smoke_test)
+
 # --- AM32 one-wire config probe ---
 add_executable(am32_onewire_probe
     ${TESTS_SRC_DIR}/am32_onewire_probe.c
     ${FIRMWARE_SRC_DIR}/am32_config.c
 )
 
-target_compile_definitions(am32_onewire_probe PRIVATE AM32_ONEWIRE=1)
+target_compile_definitions(am32_onewire_probe PRIVATE AM32_ONEWIRE=1 AM32_ONEWIRE_PUSH_PULL=1)
 
 target_include_directories(am32_onewire_probe PRIVATE ${FIRMWARE_DIR}/include)
 

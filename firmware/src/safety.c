@@ -22,6 +22,7 @@ bool safety_init(void) {
 }
 
 bool safety_check_arm_conditions(uint32_t battery_voltage_mv) {
+#if !SERIAL_GAMEPAD
     if (!safety_check_battery(battery_voltage_mv)) {
         DEBUG_PRINT("Cannot arm: Battery voltage too low (%.1fV)\n",
                     battery_voltage_mv / 1000.0f);
@@ -32,6 +33,9 @@ bool safety_check_arm_conditions(uint32_t battery_voltage_mv) {
         DEBUG_PRINT("Cannot arm: Safety button is pressed\n");
         return false;
     }
+#else
+    (void)battery_voltage_mv;
+#endif
 
     return true;
 }
@@ -59,10 +63,12 @@ void safety_update(void) {
         // Check for safety violations
         bool violation = false;
 
-#if INTEGRATION_TEST_AUTO
+#if INTEGRATION_TEST_AUTO || SERIAL_GAMEPAD
         bool check_battery = false;
+        bool check_button = false;
 #else
         bool check_battery = true;
+        bool check_button = true;
 #endif
 
         if (check_battery && !safety_check_battery(battery_mv)) {
@@ -70,7 +76,7 @@ void safety_update(void) {
             violation = true;
         }
 
-        if (safety_is_button_pressed()) {
+        if (check_button && safety_is_button_pressed()) {
             DEBUG_PRINT("SAFETY VIOLATION: Safety button pressed\n");
             violation = true;
         }

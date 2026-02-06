@@ -27,14 +27,21 @@ bool ws2812_init(uint pin, uint num_leds) {
     }
     num_pixels = num_leds;
 
-    // Find a free PIO and state machine
+    // Find a free PIO and state machine with enough program space
     pio = pio0;
     sm = pio_claim_unused_sm(pio, false);
+    if (sm != -1 && !pio_can_add_program(pio, &ws2812_program)) {
+        pio_sm_unclaim(pio, sm);
+        sm = -1;
+    }
     if (sm == -1) {
-        // Try PIO1 if PIO0 is full
+        // Try PIO1 if PIO0 is full or has no program space
         pio = pio1;
         sm = pio_claim_unused_sm(pio, false);
-        if (sm == -1) {
+        if (sm == -1 || !pio_can_add_program(pio, &ws2812_program)) {
+            if (sm != -1) {
+                pio_sm_unclaim(pio, sm);
+            }
             free(pixel_buffer);
             pixel_buffer = NULL;
             return false;

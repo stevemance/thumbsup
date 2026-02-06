@@ -75,6 +75,8 @@ typedef struct {
     uint8_t crc;                // CRC checksum
     bool valid;                 // True if telemetry is valid
     uint32_t timestamp_ms;      // When telemetry was received
+    uint8_t type;               // EDT type nibble (internal/debug)
+    uint16_t value;             // Raw 12-bit EDT payload (internal/debug)
 } dshot_telemetry_t;
 
 // DShot configuration
@@ -171,6 +173,55 @@ uint32_t dshot_erpm_to_rpm(uint32_t erpm, uint8_t pole_pairs);
 bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 
 /**
+ * Check whether extended telemetry is active for a motor.
+ *
+ * @param motor Motor channel
+ * @return true if extended telemetry is active
+ */
+bool dshot_extended_telemetry_active(motor_channel_t motor);
+
+/**
+ * Check whether any extended telemetry frame has been decoded.
+ *
+ * @param motor Motor channel
+ * @return true if extended telemetry has been seen
+ */
+bool dshot_extended_telemetry_seen(motor_channel_t motor);
+
+/**
+ * Check whether the DShot state machine is enabled for a motor.
+ *
+ * @param motor Motor channel
+ * @return true if the PIO state machine is enabled
+ */
+bool dshot_sm_is_enabled(motor_channel_t motor);
+
+/**
+ * Read DShot PIO FIFO levels for debugging.
+ *
+ * @param motor Motor channel
+ * @param tx_level Output TX FIFO level (optional)
+ * @param rx_level Output RX FIFO level (optional)
+ * @return true if motor is initialized
+ */
+bool dshot_get_fifo_levels(motor_channel_t motor, uint8_t* tx_level, uint8_t* rx_level);
+
+/**
+ * Get counts of decoded telemetry frame types for a motor.
+ *
+ * @param motor Motor channel
+ * @param counts Output array of 16 entries (indexed by type nibble)
+ */
+void dshot_get_telemetry_type_counts(motor_channel_t motor, uint32_t counts[16]);
+
+/**
+ * Reset telemetry type counters for a motor.
+ *
+ * @param motor Motor channel
+ */
+void dshot_reset_telemetry_type_counts(motor_channel_t motor);
+
+/**
  * Calculate DShot CRC4
  *
  * @param packet 12-bit packet data
@@ -185,6 +236,14 @@ uint8_t dshot_calculate_crc(uint16_t packet);
  * @return DShot throttle value (48-2047, 0 = disarmed)
  */
 uint16_t dshot_throttle_from_percent(int8_t percent);
+
+/**
+ * Convert throttle percentage to DShot value (unidirectional).
+ *
+ * @param percent Throttle percentage (0 to 100)
+ * @return DShot throttle value (48-2047, 0 = disarmed)
+ */
+uint16_t dshot_throttle_from_percent_unidir(uint8_t percent);
 
 /**
  * Deinitialize DShot and free resources
