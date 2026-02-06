@@ -3,6 +3,9 @@ build/
 *.build/
 cmake-build-*/
 controller_emulator/build/
+firmware/build_projects/
+firmware/build_tests/
+firmware/build_tests_pico/
 
 # Pico SDK
 pico-sdk/
