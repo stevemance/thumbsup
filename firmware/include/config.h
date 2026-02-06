@@ -93,7 +93,7 @@
 #define FAILSAFE_TIMEOUT    1500  // Connection loss failsafe timeout (ms) - increased for reliability
 #define WEAPON_SPINUP_TIME  2000  // Weapon ramp-up time (ms)
 #define WEAPON_RAMP_STEPS   50    // Number of steps for smooth ramping
-#define WEAPON_DSHOT_UPDATE_MS     10  // Minimum DShot update interval (ms)
+#define WEAPON_DSHOT_UPDATE_MS     2   // Minimum DShot update interval (ms) (500 Hz)
 #define WEAPON_DSHOT_TELEMETRY_MS  50  // Telemetry request interval (ms)
 #define WEAPON_DSHOT_TELEMETRY_MAX_PENDING 1  // Max outstanding telemetry responses
 #define WEAPON_DSHOT_TELEMETRY_TIMEOUT_MS 20  // Timeout before clearing pending telemetry (ms)

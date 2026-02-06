@@ -86,13 +86,14 @@ python3 tools/hitl_orchestrator.py --suite smoke
 Active weapon spin suite:
 
 ```bash
-python3 tools/hitl_orchestrator.py --suite weapon_spin
+python3 tools/hitl_orchestrator.py --suite weapon_spin --spin-axis 60 --spin-hold-s 5
 ```
 
 Artifacts:
 
 - `hitl_logs/orchestrator_*/robot_serial.log`
 - `hitl_logs/orchestrator_*/gamepad_serial.log`
+- `hitl_logs/orchestrator_*/weapon_spin_result.json` (PSU + telemetry summary)
 - `hitl_logs/latest_orchestrator_report.json`
 
 ## Pass/Fail Behavior (Smoke Suite)

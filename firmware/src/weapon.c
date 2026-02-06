@@ -317,7 +317,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                 dshot_config_t dshot_config = {
                     .gpio_pin = PIN_WEAPON_PWM,
                     .speed = DSHOT_SPEED_300,  // 300kbit/s recommended for RP2040
-                    .bidirectional = true,     // Enable EDT telemetry
+                    .bidirectional = false,    // Unidirectional DShot (telemetry off by default)
                     .pole_pairs = WEAPON_POLE_PAIRS
                 };
                 if (dshot_init(MOTOR_WEAPON, &dshot_config)) {
@@ -337,7 +337,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                     last_dshot_telemetry_rx_ms = 0;
                     dshot_setup_pending = false;
                     dshot_setup_done = false;
-                    DEBUG_PRINT("Weapon control mode: DShot300 with EDT\n");
+                    DEBUG_PRINT("Weapon control mode: DShot300\n");
                 } else {
                     // MAJOR FIX #5 (Iteration 3): Fallback to PWM if DShot init fails
                     DEBUG_PRINT("ERROR: Failed to initialize DShot, falling back to PWM\n");

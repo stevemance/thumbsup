@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 import time
@@ -245,6 +246,28 @@ def labctl_psu_snapshot(channel: int) -> dict:
     result = run_cmd(["labctl", "--json", "psu", "snapshot", "--channel", str(channel)], check=True, capture_output=True)
     payload = json.loads(result.stdout or "{}")
     return payload
+
+
+def labctl_psu_measure(channel: int, kind: str) -> float | None:
+    # Use --json for stable parsing. Return None on any error/timeouts.
+    result = run_cmd(
+        ["labctl", "--json", "--timeout", "2.0", "psu", "measure", "--channel", str(channel), "--kind", kind],
+        check=False,
+        capture_output=True,
+    )
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    if not payload.get("ok"):
+        return None
+    text = payload.get("text")
+    if text is None:
+        return None
+    try:
+        return float(str(text).strip())
+    except ValueError:
+        return None
 
 
 def now_iso() -> str:
@@ -526,6 +549,12 @@ def do_weapon_spin(
     leave_psu_on: bool,
     spin_axis: int,
     spin_hold_s: float,
+    spin_baseline_s: float,
+    spin_sample_interval_s: float,
+    spin_settle_s: float,
+    spin_current_delta_a: float,
+    spin_min_current_a: float,
+    require_telemetry: bool,
 ) -> str:
     if psu_channel is not None and psu_off_first:
         labctl_psu_off(psu_channel)
@@ -555,6 +584,8 @@ def do_weapon_spin(
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
         gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        psu_samples: list[dict] = []
 
         def cleanup_best_effort() -> None:
             try:
@@ -634,24 +665,95 @@ def do_weapon_spin(
             spin_axis = max(-127, min(127, int(spin_axis)))
             if spin_axis < 0:
                 spin_axis = 0
-            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            spin_hold_s = max(0.0, float(spin_hold_s))
 
-            def telemetry_rpm_ok(s: dict[str, str]) -> bool:
-                if s.get("telem") != "1":
-                    return False
-                rpm_s = s.get("rpm")
+            # Establish baseline PSU current draw while armed and commanded stopped.
+            gamepad_log.send_line("AXIS RY 0")
+            time.sleep(0.2)
+
+            telemetry_rpms: list[int] = []
+            telemetry_ok = False
+
+            def observe_robot_line(line: str) -> None:
+                nonlocal telemetry_ok
+                m = HITL_STATUS_RE.match(line)
+                if not m:
+                    return
+                status = parse_kv_payload(m.group(1))
+                if status.get("telem") != "1":
+                    return
+                rpm_s = status.get("rpm")
                 if not rpm_s:
-                    return False
+                    return
                 try:
                     rpm = int(rpm_s)
                 except ValueError:
-                    return False
-                return rpm > 0
+                    return
+                telemetry_rpms.append(rpm)
+                if rpm > 0:
+                    telemetry_ok = True
 
-            wait_for_robot_condition(robot_log, timeout_s=10.0, predicate=telemetry_rpm_ok)
+            def drain_robot_serial(max_s: float) -> None:
+                deadline = time.monotonic() + max_s
+                while time.monotonic() < deadline:
+                    line = robot_log.read_line()
+                    if not line:
+                        break
+                    observe_robot_line(line)
 
-            # Hold spin.
-            time.sleep(max(0.0, float(spin_hold_s)))
+            def psu_sample_current(phase: str) -> float | None:
+                if psu_channel is None:
+                    return None
+                value = labctl_psu_measure(psu_channel, "current")
+                psu_samples.append(
+                    {
+                        "t_s": round(time.monotonic() - suite_t0, 3),
+                        "phase": phase,
+                        "current_a": value,
+                    }
+                )
+                return value
+
+            def sample_current_window(phase: str, duration_s: float, *, settle_s: float = 0.0) -> list[float]:
+                values: list[float] = []
+                if psu_channel is None:
+                    return values
+                duration_s = max(0.0, float(duration_s))
+                settle_s = max(0.0, float(settle_s))
+                start_t = time.monotonic()
+                next_sample = start_t
+                while True:
+                    now = time.monotonic()
+                    elapsed = now - start_t
+                    if elapsed >= duration_s:
+                        break
+                    drain_robot_serial(0.02)
+                    if now < next_sample:
+                        time.sleep(min(0.01, next_sample - now))
+                        continue
+                    current = psu_sample_current(phase)
+                    if current is not None and elapsed >= settle_s:
+                        values.append(current)
+                    next_sample += max(0.05, float(spin_sample_interval_s))
+                return values
+
+            baseline_values = sample_current_window("baseline", spin_baseline_s, settle_s=0.0)
+            baseline_med = statistics.median(baseline_values) if baseline_values else None
+
+            # Start spin and sample during the entire hold (optionally skipping the first settle period).
+            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            run_values = sample_current_window("run", spin_hold_s, settle_s=spin_settle_s)
+            run_med = statistics.median(run_values) if run_values else None
+
+            # Determine pass/fail based on telemetry and/or PSU current delta.
+            current_ok = False
+            delta = None
+            if baseline_med is not None and run_med is not None:
+                delta = run_med - baseline_med
+                if delta >= float(spin_current_delta_a) and run_med >= float(spin_min_current_a):
+                    current_ok = True
+
+            ok = telemetry_ok if require_telemetry else (telemetry_ok or current_ok)
 
             # Stop.
             gamepad_log.send_line("AXIS RY 0")
@@ -682,6 +784,60 @@ def do_weapon_spin(
                     encoding="utf-8",
                 )
 
+            # Persist current sampling + computed result for debugging/plotting.
+            (out_dir / "psu_current_samples.json").write_text(
+                json.dumps(psu_samples, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            spin_result = {
+                "ok": ok,
+                "require_telemetry": require_telemetry,
+                "spin_axis": spin_axis,
+                "spin_hold_s": spin_hold_s,
+                "spin_settle_s": float(spin_settle_s),
+                "psu_channel": psu_channel,
+                "psu_voltage_set": psu_voltage if psu_channel is not None else None,
+                "psu_current_limit_set": psu_current if psu_channel is not None else None,
+                "baseline": {
+                    "duration_s": float(spin_baseline_s),
+                    "samples": len(baseline_values),
+                    "median_a": baseline_med,
+                },
+                "run": {
+                    "duration_s": float(spin_hold_s),
+                    "samples": len(run_values),
+                    "median_a": run_med,
+                },
+                "thresholds": {
+                    "delta_a": float(spin_current_delta_a),
+                    "min_current_a": float(spin_min_current_a),
+                },
+                "delta_a": delta,
+                "current_ok": current_ok,
+                "telemetry_ok": telemetry_ok,
+                "telemetry_rpms": {
+                    "samples": len(telemetry_rpms),
+                    "min": min(telemetry_rpms) if telemetry_rpms else None,
+                    "median": (statistics.median(telemetry_rpms) if telemetry_rpms else None),
+                    "max": max(telemetry_rpms) if telemetry_rpms else None,
+                },
+            }
+            (out_dir / "weapon_spin_result.json").write_text(
+                json.dumps(spin_result, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            if not ok:
+                if require_telemetry:
+                    raise RuntimeError(
+                        "no valid DShot telemetry (rpm) observed while spinning "
+                        f"(baseline_med={baseline_med}A run_med={run_med}A delta={delta}A)"
+                    )
+                raise RuntimeError(
+                    "no spin signal detected (need telemetry rpm>0 or PSU current delta). "
+                    f"(baseline_med={baseline_med}A run_med={run_med}A delta={delta}A)"
+                )
+
         finally:
             cleanup_best_effort()
             robot_log.close()
@@ -699,8 +855,14 @@ def main() -> None:
     parser.add_argument("--psu-voltage", type=float, default=12.6, help="PSU voltage for active motor tests")
     parser.add_argument("--psu-current", type=float, default=5.0, help="PSU current limit for active motor tests")
     parser.add_argument("--leave-psu-on", action="store_true", help="leave PSU output enabled after suite")
-    parser.add_argument("--spin-axis", type=int, default=20, help="Weapon spin command (RY axis -127..127)")
+    parser.add_argument("--spin-axis", type=int, default=60, help="Weapon spin command (RY axis -127..127)")
     parser.add_argument("--spin-hold-s", type=float, default=5.0, help="Seconds to hold weapon command")
+    parser.add_argument("--spin-baseline-s", type=float, default=2.0, help="Seconds to sample baseline current before spin")
+    parser.add_argument("--spin-sample-interval-s", type=float, default=0.2, help="PSU current sample interval (s)")
+    parser.add_argument("--spin-settle-s", type=float, default=0.4, help="Seconds after spin start to ignore for current stats")
+    parser.add_argument("--spin-current-delta-a", type=float, default=0.15, help="Min median current delta to treat as spinning")
+    parser.add_argument("--spin-min-current-a", type=float, default=0.25, help="Min median current during run to treat as spinning")
+    parser.add_argument("--require-telemetry", action="store_true", help="Fail unless DShot telemetry rpm>0 is observed")
     parser.add_argument("--suite", choices=["smoke", "weapon_spin"], default="smoke")
     args = parser.parse_args()
 
@@ -741,6 +903,12 @@ def main() -> None:
                 leave_psu_on=args.leave_psu_on,
                 spin_axis=args.spin_axis,
                 spin_hold_s=args.spin_hold_s,
+                spin_baseline_s=args.spin_baseline_s,
+                spin_sample_interval_s=args.spin_sample_interval_s,
+                spin_settle_s=args.spin_settle_s,
+                spin_current_delta_a=args.spin_current_delta_a,
+                spin_min_current_a=args.spin_min_current_a,
+                require_telemetry=args.require_telemetry,
             )
         )
 
