@@ -8,6 +8,9 @@ project(thumbsup_controller_emulator C CXX ASM)
 
 pico_sdk_init()
 
+set(THUMBSUP_EMULATOR_USB_MANUFACTURER "ThumbsUp" CACHE STRING "USB manufacturer string")
+set(THUMBSUP_EMULATOR_USB_PRODUCT "ThumbsUp HITL Gamepad" CACHE STRING "USB product string")
+
 add_executable(thumbsup_controller_emulator
     src/main.c
 )
@@ -26,6 +29,8 @@ target_link_libraries(thumbsup_controller_emulator
 target_compile_definitions(thumbsup_controller_emulator PRIVATE
     PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
     PICO_STDIO_USB_STDOUT_TIMEOUT_US=0
+    USBD_MANUFACTURER=\"${THUMBSUP_EMULATOR_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_EMULATOR_USB_PRODUCT}\"
 )
 
 pico_enable_stdio_usb(thumbsup_controller_emulator 1)

@@ -31,6 +31,10 @@ set(CMAKE_CXX_STANDARD 17)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# USB identification for serial tools and picotool.
+set(THUMBSUP_USB_MANUFACTURER "ThumbsUp" CACHE STRING "USB manufacturer string")
+set(THUMBSUP_USB_PRODUCT "ThumbsUp HITL Robot" CACHE STRING "USB product string")
+
 # Core source files for both modes
 set(CORE_SOURCES
     src/main.c
@@ -140,7 +144,9 @@ target_compile_definitions(thumbsup_integration PRIVATE
     INTEGRATION_TEST_AUTO=1
     AM32_ONEWIRE=1
     PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
-    PICO_STDIO_USB_STDOUT_TIMEOUT_US=0)
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=0
+    USBD_MANUFACTURER=\"${THUMBSUP_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_USB_PRODUCT}\")
 
 pico_enable_stdio_usb(thumbsup_serial 1)
 pico_enable_stdio_uart(thumbsup_serial 0)
@@ -164,10 +170,14 @@ target_compile_definitions(thumbsup_serial PRIVATE
     PICO_STDIO_USB_ENABLE_TINYUSB_INIT=1
     PICO_STDIO_USB_ENABLE_IRQ_BACKGROUND_TASK=1
     AM32_ONEWIRE=1
+    USBD_MANUFACTURER=\"${THUMBSUP_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_USB_PRODUCT}\"
 )
 
 target_compile_definitions(thumbsup PRIVATE
     AM32_ONEWIRE=1
+    USBD_MANUFACTURER=\"${THUMBSUP_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_USB_PRODUCT}\"
 )
 
 pico_enable_stdio_usb(thumbsup 1)

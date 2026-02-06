@@ -14,10 +14,15 @@ except ImportError as exc:
     sys.exit(1)
 
 
-def find_pico_ports():
+def find_pico_ports(product_hint=None):
     ports = serial.tools.list_ports.comports()
     matches = []
     for port in ports:
+        if product_hint:
+            product = (port.product or "").lower()
+            description = (port.description or "").lower()
+            if product_hint.lower() not in product and product_hint.lower() not in description:
+                continue
         if "2E8A" in port.hwid or "Pico" in port.description or "RP2040" in port.description:
             matches.append(port.device)
     return matches
@@ -28,7 +33,7 @@ def resolve_port(args):
         return args.port
     if not args.auto:
         return None
-    matches = find_pico_ports()
+    matches = find_pico_ports(args.product)
     if len(matches) == 1:
         return matches[0]
     if not matches:
@@ -85,6 +90,7 @@ def main():
     parser = argparse.ArgumentParser(description="Drive the HID emulator over USB serial.")
     parser.add_argument("--port", help="serial port (e.g. /dev/ttyACM0)")
     parser.add_argument("--auto", action="store_true", help="auto-detect Pico serial port")
+    parser.add_argument("--product", help="substring to match USB product string")
     parser.add_argument("--baud", type=int, default=115200, help="serial baud rate")
     parser.add_argument("--script", help="script file with commands")
     parser.add_argument("--repeat", type=int, default=1, help="repeat script")

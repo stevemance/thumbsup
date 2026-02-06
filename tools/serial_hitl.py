@@ -25,9 +25,14 @@ TELEM_RE = re.compile(
 )
 
 
-def find_pico_port():
+def find_pico_port(product_hint=None):
     ports = serial.tools.list_ports.comports()
     for port in ports:
+        if product_hint:
+            product = (port.product or "").lower()
+            description = (port.description or "").lower()
+            if product_hint.lower() not in product and product_hint.lower() not in description:
+                continue
         if "2E8A" in port.hwid or "Pico" in port.description or "RP2040" in port.description:
             return port.device
     return None
@@ -127,6 +132,7 @@ def main():
     parser.add_argument("--port", help="serial port (e.g. /dev/ttyACM0)")
     parser.add_argument("--auto", action="store_true", help="auto-detect Pico serial port")
     parser.add_argument("--baud", type=int, default=115200, help="serial baud rate")
+    parser.add_argument("--product", help="substring to match USB product string")
     parser.add_argument("--steps", default="20,40,60,80",
                         help="comma-separated throttle steps (percent)")
     parser.add_argument("--hold", type=float, default=3.0, help="seconds per step")
@@ -149,7 +155,7 @@ def main():
 
     port = args.port
     if not port and args.auto:
-        port = find_pico_port()
+        port = find_pico_port(args.product)
     if not port:
         print("No serial port specified. Use --port or --auto.")
         sys.exit(1)
