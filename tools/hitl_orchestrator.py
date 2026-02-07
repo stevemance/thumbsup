@@ -1470,6 +1470,701 @@ def do_drive_spin(
 
     return "drive spin passed"
 
+
+@step("E-Stop While Driving Test")
+def do_estop_drive(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    drive_forward_axis: int,
+    drive_hold_s: float,
+    drive_sample_interval_s: float,
+    drive_settle_s: float,
+    drive_current_delta_a: float,
+    drive_min_current_a: float,
+    drive_return_tol_a: float,
+    out_dir: Path | None = None,
+) -> str:
+    """
+    Assert emergency stop works while drive outputs are actively commanded.
+
+    Signals checked:
+    - Robot reports failsafe=1 and drive pulses return near neutral.
+    - PSU current returns close to baseline after e-stop.
+    """
+    if psu_channel is None:
+        raise RuntimeError("psu_channel is required for estop_drive")
+
+    if psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    labctl_psu_set(psu_channel, psu_voltage, psu_current)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        psu_samples: list[dict] = []
+        states: dict[str, dict[str, str]] = {}
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS LX 0")
+                gamepad_log.send_line("AXIS LY 0")
+                gamepad_log.send_line("AXIS RX 0")
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+            except Exception:
+                pass
+            if not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        def psu_sample_current(phase: str) -> float | None:
+            value = labctl_psu_measure(psu_channel, "current")
+            psu_samples.append(
+                {
+                    "t_s": round(time.monotonic() - suite_t0, 3),
+                    "phase": phase,
+                    "current_a": value,
+                }
+            )
+            return value
+
+        def drain_robot_serial(max_s: float) -> None:
+            deadline = time.monotonic() + max_s
+            while time.monotonic() < deadline:
+                line = robot_log.read_line()
+                if not line:
+                    break
+
+        def sample_current_window(phase: str, duration_s: float, *, settle_s: float = 0.0) -> list[float]:
+            values: list[float] = []
+            duration_s = max(0.0, float(duration_s))
+            settle_s = max(0.0, float(settle_s))
+            start_t = time.monotonic()
+            next_sample = start_t
+            while True:
+                now = time.monotonic()
+                elapsed = now - start_t
+                if elapsed >= duration_s:
+                    break
+                drain_robot_serial(0.02)
+                if now < next_sample:
+                    time.sleep(min(0.01, next_sample - now))
+                    continue
+                current = psu_sample_current(phase)
+                if current is not None and elapsed >= settle_s:
+                    values.append(current)
+                next_sample += max(0.05, float(drive_sample_interval_s))
+            return values
+
+        def get_pulses(s: dict[str, str]) -> tuple[int, int]:
+            dl = int(s.get("dl_us") or 0)
+            dr = int(s.get("dr_us") or 0)
+            return dl, dr
+
+        def near_neutral(s: dict[str, str], *, tol_us: int = 35) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) <= tol_us and abs(dr - 1500) <= tol_us
+
+        def deviated(s: dict[str, str], *, min_delta_us: int) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) >= min_delta_us and abs(dr - 1500) >= min_delta_us
+
+        def tail_median(values: list[float], n: int = 3) -> float | None:
+            if not values:
+                return None
+            n = max(1, min(int(n), len(values)))
+            return statistics.median(values[-n:])
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            gamepad_log.send_line("RESET")
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("batt_mv") == "12500", pump_logs=[gamepad_log])
+
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+
+            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0", pump_logs=[gamepad_log])
+
+            drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
+            drive_hold_s = max(0.6, float(drive_hold_s))
+
+            # Baseline.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            s0 = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
+            states["neutral"] = s0
+            baseline_values = sample_current_window("baseline", 1.5, settle_s=0.0)
+            baseline_med = statistics.median(baseline_values) if baseline_values else None
+            if baseline_med is None:
+                raise RuntimeError("no PSU current samples for baseline")
+
+            # Start driving.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
+            s_move = wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: deviated(s, min_delta_us=60),
+                pump_logs=[gamepad_log],
+            )
+            states["moving"] = s_move
+            run_values = sample_current_window("drive_run", drive_hold_s, settle_s=drive_settle_s)
+            run_med = statistics.median(run_values) if run_values else None
+
+            if run_med is None:
+                raise RuntimeError("no PSU current samples while driving")
+            run_delta = run_med - baseline_med
+            run_ok = (run_delta >= float(drive_current_delta_a)) and (run_med >= float(drive_min_current_a))
+
+            # Emergency stop.
+            gamepad_log.send_line("BTN L1 1")
+            gamepad_log.send_line("BTN R1 1")
+            s_estop = wait_for_robot_condition(
+                robot_log,
+                timeout_s=3.0,
+                predicate=lambda s: s.get("failsafe") == "1",
+                pump_logs=[gamepad_log],
+            )
+            states["estop"] = s_estop
+            gamepad_log.send_line("BTN L1 0")
+            gamepad_log.send_line("BTN R1 0")
+
+            s_stop = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=60), pump_logs=[gamepad_log])
+            states["neutral_after_estop"] = s_stop
+
+            estop_values = sample_current_window("estop", 1.2, settle_s=0.2)
+            estop_tail = tail_median(estop_values, n=3)
+            return_ok = (estop_tail is not None) and (abs(estop_tail - baseline_med) <= float(drive_return_tol_a))
+
+            # Clear emergency stop (hold A).
+            gamepad_log.send_line("BTN A 1")
+            time.sleep(2.3)
+            gamepad_log.send_line("BTN A 0")
+            s_clear = wait_for_robot_condition(
+                robot_log,
+                timeout_s=8.0,
+                predicate=lambda s: s.get("failsafe") == "0" and near_neutral(s, tol_us=70),
+                pump_logs=[gamepad_log],
+            )
+            states["cleared"] = s_clear
+
+            result = {
+                "ok": bool(run_ok and return_ok),
+                "psu_channel": psu_channel,
+                "psu_voltage_set": psu_voltage,
+                "psu_current_limit_set": psu_current,
+                "drive_forward_axis": drive_forward_axis,
+                "drive_hold_s": drive_hold_s,
+                "drive_settle_s": float(drive_settle_s),
+                "thresholds": {
+                    "delta_a": float(drive_current_delta_a),
+                    "min_current_a": float(drive_min_current_a),
+                    "return_tol_a": float(drive_return_tol_a),
+                },
+                "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
+                "drive_run": {"median_a": run_med, "delta_a": run_delta, "ok": run_ok, "samples": len(run_values)},
+                "estop": {"tail_median_a": estop_tail, "ok": return_ok, "samples": len(estop_values)},
+                "states": states,
+            }
+
+            (out_dir / "estop_drive_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+            (out_dir / "psu_current_samples.json").write_text(json.dumps(psu_samples, indent=2, sort_keys=True), encoding="utf-8")
+            try:
+                payload = labctl_psu_snapshot(psu_channel)
+            except Exception as exc:
+                payload = {"ok": False, "error": str(exc)}
+            (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+            if not result["ok"]:
+                raise RuntimeError(f"estop while driving failed (result={result})")
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "estop while driving passed"
+
+
+@step("Weapon Disarmed Guard Test")
+def do_weapon_disarmed_guard(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    guard_axis: int,
+    guard_hold_s: float,
+    guard_baseline_s: float,
+    guard_sample_interval_s: float,
+    guard_max_delta_a: float,
+    out_dir: Path | None = None,
+) -> str:
+    """
+    Assert commanding weapon throttle while disarmed does not spin the motor.
+
+    Signals checked:
+    - Robot reports armed=0 and weapon=DISARMED.
+    - PSU current does not rise above baseline by more than guard_max_delta_a.
+    """
+    if psu_channel is None:
+        raise RuntimeError("psu_channel is required for weapon_disarmed_guard")
+
+    if psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    # Power ESC supply.
+    labctl_psu_set(psu_channel, psu_voltage, psu_current)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        psu_samples: list[dict] = []
+        states: dict[str, dict[str, str]] = {}
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+            except Exception:
+                pass
+            if not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        def psu_sample_current(phase: str) -> float | None:
+            value = labctl_psu_measure(psu_channel, "current")
+            psu_samples.append(
+                {
+                    "t_s": round(time.monotonic() - suite_t0, 3),
+                    "phase": phase,
+                    "current_a": value,
+                }
+            )
+            return value
+
+        def drain_robot_serial(max_s: float) -> None:
+            deadline = time.monotonic() + max_s
+            while time.monotonic() < deadline:
+                line = robot_log.read_line()
+                if not line:
+                    break
+
+        def sample_current_window(phase: str, duration_s: float, *, settle_s: float = 0.0) -> list[float]:
+            values: list[float] = []
+            duration_s = max(0.0, float(duration_s))
+            settle_s = max(0.0, float(settle_s))
+            start_t = time.monotonic()
+            next_sample = start_t
+            while True:
+                now = time.monotonic()
+                elapsed = now - start_t
+                if elapsed >= duration_s:
+                    break
+                drain_robot_serial(0.02)
+                if now < next_sample:
+                    time.sleep(min(0.01, next_sample - now))
+                    continue
+                current = psu_sample_current(phase)
+                if current is not None and elapsed >= settle_s:
+                    values.append(current)
+                next_sample += max(0.05, float(guard_sample_interval_s))
+            return values
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            gamepad_log.send_line("RESET")
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("batt_mv") == "12500", pump_logs=[gamepad_log])
+
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+
+            # Assert disarmed.
+            s_dis = wait_for_robot_condition(
+                robot_log,
+                timeout_s=5.0,
+                predicate=lambda s: s.get("failsafe") == "0" and s.get("armed") == "0" and s.get("weapon") == "DISARMED",
+                pump_logs=[gamepad_log],
+            )
+            states["disarmed"] = s_dis
+
+            # Baseline while disarmed and stopped.
+            gamepad_log.send_line("AXIS RY 0")
+            baseline_values = sample_current_window("baseline", guard_baseline_s, settle_s=0.0)
+            baseline_med = statistics.median(baseline_values) if baseline_values else None
+            if baseline_med is None:
+                raise RuntimeError("no PSU current samples for baseline")
+
+            # Command weapon while disarmed.
+            guard_axis = max(-127, min(127, int(guard_axis)))
+            if guard_axis < 0:
+                guard_axis = 0
+            guard_hold_s = max(0.4, float(guard_hold_s))
+
+            gamepad_log.send_line(f"AXIS RY {guard_axis}")
+            run_values = sample_current_window("disarmed_cmd", guard_hold_s, settle_s=0.2)
+            run_med = statistics.median(run_values) if run_values else None
+
+            # Stop.
+            gamepad_log.send_line("AXIS RY 0")
+            s_after = wait_for_robot_condition(
+                robot_log,
+                timeout_s=5.0,
+                predicate=lambda s: s.get("armed") == "0" and s.get("weapon") == "DISARMED",
+                pump_logs=[gamepad_log],
+            )
+            states["after_cmd"] = s_after
+
+            if run_med is None:
+                raise RuntimeError("no PSU current samples during disarmed command")
+            delta = run_med - baseline_med
+            ok = delta <= float(guard_max_delta_a)
+
+            result = {
+                "ok": bool(ok),
+                "psu_channel": psu_channel,
+                "psu_voltage_set": psu_voltage,
+                "psu_current_limit_set": psu_current,
+                "guard_axis": guard_axis,
+                "guard_hold_s": guard_hold_s,
+                "guard_baseline_s": float(guard_baseline_s),
+                "thresholds": {"max_delta_a": float(guard_max_delta_a)},
+                "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
+                "run": {"median_a": run_med, "delta_a": delta, "samples": len(run_values)},
+                "states": states,
+            }
+
+            (out_dir / "weapon_disarmed_guard_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+            (out_dir / "psu_current_samples.json").write_text(json.dumps(psu_samples, indent=2, sort_keys=True), encoding="utf-8")
+            try:
+                payload = labctl_psu_snapshot(psu_channel)
+            except Exception as exc:
+                payload = {"ok": False, "error": str(exc)}
+            (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+            if not ok:
+                raise RuntimeError(f"weapon disarmed guard failed (delta={delta}A baseline={baseline_med}A run={run_med}A)")
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "weapon disarmed guard passed"
+
+
+@step("E-Stop While Weapon Spinning Test")
+def do_estop_weapon(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    spin_axis: int,
+    spin_hold_s: float,
+    spin_baseline_s: float,
+    spin_sample_interval_s: float,
+    spin_settle_s: float,
+    spin_current_delta_a: float,
+    spin_min_current_a: float,
+    spin_return_tol_a: float,
+    out_dir: Path | None = None,
+) -> str:
+    """
+    Assert emergency stop works while the weapon is actively spinning.
+
+    Signals checked:
+    - PSU current rises during spin and drops near baseline after e-stop.
+    - Robot reports failsafe=1 and weapon returns to DISARMED/speed=0.
+    """
+    if psu_channel is None:
+        raise RuntimeError("psu_channel is required for estop_weapon")
+
+    if psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    labctl_psu_set(psu_channel, psu_voltage, psu_current)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        psu_samples: list[dict] = []
+        states: dict[str, dict[str, str]] = {}
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+            except Exception:
+                pass
+            if not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        def psu_sample_current(phase: str) -> float | None:
+            value = labctl_psu_measure(psu_channel, "current")
+            psu_samples.append(
+                {
+                    "t_s": round(time.monotonic() - suite_t0, 3),
+                    "phase": phase,
+                    "current_a": value,
+                }
+            )
+            return value
+
+        def drain_robot_serial(max_s: float) -> None:
+            deadline = time.monotonic() + max_s
+            while time.monotonic() < deadline:
+                line = robot_log.read_line()
+                if not line:
+                    break
+
+        def sample_current_window(phase: str, duration_s: float, *, settle_s: float = 0.0) -> list[float]:
+            values: list[float] = []
+            duration_s = max(0.0, float(duration_s))
+            settle_s = max(0.0, float(settle_s))
+            start_t = time.monotonic()
+            next_sample = start_t
+            while True:
+                now = time.monotonic()
+                elapsed = now - start_t
+                if elapsed >= duration_s:
+                    break
+                drain_robot_serial(0.02)
+                if now < next_sample:
+                    time.sleep(min(0.01, next_sample - now))
+                    continue
+                current = psu_sample_current(phase)
+                if current is not None and elapsed >= settle_s:
+                    values.append(current)
+                next_sample += max(0.05, float(spin_sample_interval_s))
+            return values
+
+        def tail_median(values: list[float], n: int = 3) -> float | None:
+            if not values:
+                return None
+            n = max(1, min(int(n), len(values)))
+            return statistics.median(values[-n:])
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            gamepad_log.send_line("RESET")
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("batt_mv") == "12500", pump_logs=[gamepad_log])
+
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+
+            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0", pump_logs=[gamepad_log])
+
+            # Arm.
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+            s_arm = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1", pump_logs=[gamepad_log])
+            states["armed"] = s_arm
+
+            # Wait for weapon state machine to finish arming (DShot setup can take a few seconds).
+            wait_for_robot_condition(robot_log, timeout_s=20.0, predicate=lambda s: s.get("weapon") in ("ARMED", "SPINNING"), pump_logs=[gamepad_log])
+
+            # Clamp + enforce unidirectional.
+            spin_axis = max(-127, min(127, int(spin_axis)))
+            if spin_axis < 0:
+                spin_axis = 0
+            spin_hold_s = max(0.8, float(spin_hold_s))
+
+            gamepad_log.send_line("AXIS RY 0")
+            time.sleep(0.2)
+
+            baseline_values = sample_current_window("baseline", spin_baseline_s, settle_s=0.0)
+            baseline_med = statistics.median(baseline_values) if baseline_values else None
+            if baseline_med is None:
+                raise RuntimeError("no PSU current samples for baseline")
+
+            # Spin.
+            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            s_spin = wait_for_robot_condition(
+                robot_log,
+                timeout_s=6.0,
+                predicate=lambda s: s.get("weapon") == "SPINNING" or (s.get("speed") and s.get("speed") != "0"),
+                pump_logs=[gamepad_log],
+            )
+            states["spinning"] = s_spin
+
+            run_values = sample_current_window("run", spin_hold_s, settle_s=spin_settle_s)
+            run_med = statistics.median(run_values) if run_values else None
+            if run_med is None:
+                raise RuntimeError("no PSU current samples while spinning")
+            delta = run_med - baseline_med
+            run_ok = (delta >= float(spin_current_delta_a)) and (run_med >= float(spin_min_current_a))
+
+            # Emergency stop while still commanding throttle.
+            gamepad_log.send_line("BTN L1 1")
+            gamepad_log.send_line("BTN R1 1")
+            s_estop = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("failsafe") == "1", pump_logs=[gamepad_log])
+            states["estop"] = s_estop
+            gamepad_log.send_line("BTN L1 0")
+            gamepad_log.send_line("BTN R1 0")
+
+            s_stop = wait_for_robot_condition(
+                robot_log,
+                timeout_s=6.0,
+                predicate=lambda s: s.get("weapon") == "DISARMED" and s.get("speed") == "0",
+                pump_logs=[gamepad_log],
+            )
+            states["stopped_after_estop"] = s_stop
+
+            estop_values = sample_current_window("estop", 1.4, settle_s=0.2)
+            estop_tail = tail_median(estop_values, n=3)
+            return_ok = (estop_tail is not None) and (estop_tail <= (baseline_med + float(spin_return_tol_a)))
+
+            # Clear emergency stop (hold A).
+            gamepad_log.send_line("BTN A 1")
+            time.sleep(2.3)
+            gamepad_log.send_line("BTN A 0")
+            s_clear = wait_for_robot_condition(
+                robot_log,
+                timeout_s=10.0,
+                predicate=lambda s: s.get("failsafe") == "0" and s.get("armed") == "0" and s.get("weapon") == "DISARMED",
+                pump_logs=[gamepad_log],
+            )
+            states["cleared"] = s_clear
+
+            # Stop commanding.
+            gamepad_log.send_line("AXIS RY 0")
+
+            result = {
+                "ok": bool(run_ok and return_ok),
+                "psu_channel": psu_channel,
+                "psu_voltage_set": psu_voltage,
+                "psu_current_limit_set": psu_current,
+                "spin_axis": spin_axis,
+                "spin_hold_s": spin_hold_s,
+                "spin_baseline_s": float(spin_baseline_s),
+                "spin_settle_s": float(spin_settle_s),
+                "thresholds": {
+                    "delta_a": float(spin_current_delta_a),
+                    "min_current_a": float(spin_min_current_a),
+                    "return_tol_a": float(spin_return_tol_a),
+                },
+                "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
+                "run": {"median_a": run_med, "delta_a": delta, "ok": run_ok, "samples": len(run_values)},
+                "estop": {"tail_median_a": estop_tail, "ok": return_ok, "samples": len(estop_values)},
+                "states": states,
+            }
+
+            (out_dir / "estop_weapon_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+            (out_dir / "psu_current_samples.json").write_text(json.dumps(psu_samples, indent=2, sort_keys=True), encoding="utf-8")
+            try:
+                payload = labctl_psu_snapshot(psu_channel)
+            except Exception as exc:
+                payload = {"ok": False, "error": str(exc)}
+            (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+            if not result["ok"]:
+                raise RuntimeError(f"estop while weapon spinning failed (result={result})")
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "estop while weapon spinning passed"
+
+
 @step("Weapon Spin Test")
 def do_weapon_spin(
     repo_root: Path,
@@ -1519,6 +2214,7 @@ def do_weapon_spin(
         gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
         suite_t0 = time.monotonic()
         psu_samples: list[dict] = []
+        weapon_armed = False
 
         def cleanup_best_effort() -> None:
             try:
@@ -1527,10 +2223,11 @@ def do_weapon_spin(
                 gamepad_log.send_line("BTN B 0")
                 gamepad_log.send_line("BTN L1 0")
                 gamepad_log.send_line("BTN R1 0")
-                # Toggle B to try to disarm if we're armed.
-                gamepad_log.send_line("BTN B 1")
-                time.sleep(0.15)
-                gamepad_log.send_line("BTN B 0")
+                # Only attempt to disarm if we armed during this suite. Avoids accidental arm at teardown.
+                if weapon_armed:
+                    gamepad_log.send_line("BTN B 1")
+                    time.sleep(0.15)
+                    gamepad_log.send_line("BTN B 0")
             except Exception:
                 pass
             if psu_channel is not None and not leave_psu_on:
@@ -1568,6 +2265,7 @@ def do_weapon_spin(
             time.sleep(0.12)
             gamepad_log.send_line("BTN B 0")
             wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1", pump_logs=[gamepad_log])
+            weapon_armed = True
 
             # Wait for weapon state machine to finish arming (DShot setup can take a few seconds).
             wait_for_robot_condition(
@@ -1681,6 +2379,7 @@ def do_weapon_spin(
             time.sleep(0.12)
             gamepad_log.send_line("BTN B 0")
             wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("armed") == "0")
+            weapon_armed = False
 
             # Explicit telemetry snapshot for the logs.
             robot_log.send_line("HITL TELEMSTATS")
@@ -1791,7 +2490,13 @@ def main() -> None:
     parser.add_argument("--spin-settle-s", type=float, default=0.4, help="Seconds after spin start to ignore for current stats")
     parser.add_argument("--spin-current-delta-a", type=float, default=0.15, help="Min median current delta to treat as spinning")
     parser.add_argument("--spin-min-current-a", type=float, default=0.25, help="Min median current during run to treat as spinning")
+    parser.add_argument("--spin-return-tol-a", type=float, default=0.10, help="Max median current above baseline after weapon stop/e-stop")
     parser.add_argument("--require-telemetry", action="store_true", help="Fail unless DShot telemetry rpm>0 is observed")
+    parser.add_argument("--guard-axis", type=int, default=80, help="Weapon guard command (RY axis -127..127) while disarmed")
+    parser.add_argument("--guard-hold-s", type=float, default=1.5, help="Seconds to hold disarmed weapon command")
+    parser.add_argument("--guard-baseline-s", type=float, default=1.5, help="Seconds to sample baseline current before disarmed command")
+    parser.add_argument("--guard-sample-interval-s", type=float, default=0.2, help="PSU current sample interval during guard test (s)")
+    parser.add_argument("--guard-max-delta-a", type=float, default=0.08, help="Max allowed median current delta during disarmed command")
     parser.add_argument("--drive-forward-axis", type=int, default=-80, help="Drive forward command (LY axis -127..127)")
     parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
     parser.add_argument("--drive-hold-s", type=float, default=0.6, help="Seconds to hold each drive command")
@@ -1802,7 +2507,22 @@ def main() -> None:
     parser.add_argument("--drive-spin-current-delta-a", type=float, default=0.08, help="Min median current delta to treat as drive spinning")
     parser.add_argument("--drive-spin-min-current-a", type=float, default=0.10, help="Min median current during run to treat as drive spinning")
     parser.add_argument("--drive-spin-return-tol-a", type=float, default=0.08, help="Max median current deviation from baseline when stopped")
-    parser.add_argument("--suite", choices=["smoke", "weapon_spin", "drive_e2e", "disconnect_failsafe", "drive_spin", "full_e2e"], default="smoke")
+    parser.add_argument(
+        "--suite",
+        choices=[
+            "smoke",
+            "weapon_spin",
+            "weapon_disarmed_guard",
+            "estop_weapon",
+            "drive_e2e",
+            "disconnect_failsafe",
+            "drive_spin",
+            "estop_drive",
+            "safety_active",
+            "full_e2e",
+        ],
+        default="smoke",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -1891,6 +2611,43 @@ def main() -> None:
                     out_dir=alloc_step_dir("Smoke Test"),
                 )
             )
+        elif args.suite == "weapon_disarmed_guard":
+            results.append(
+                do_weapon_disarmed_guard(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    guard_axis=args.guard_axis,
+                    guard_hold_s=args.guard_hold_s,
+                    guard_baseline_s=args.guard_baseline_s,
+                    guard_sample_interval_s=args.guard_sample_interval_s,
+                    guard_max_delta_a=args.guard_max_delta_a,
+                    out_dir=alloc_step_dir("Weapon Disarmed Guard Test"),
+                )
+            )
+        elif args.suite == "estop_weapon":
+            results.append(
+                do_estop_weapon(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    spin_axis=args.spin_axis,
+                    spin_hold_s=args.spin_hold_s,
+                    spin_baseline_s=args.spin_baseline_s,
+                    spin_sample_interval_s=args.spin_sample_interval_s,
+                    spin_settle_s=args.spin_settle_s,
+                    spin_current_delta_a=args.spin_current_delta_a,
+                    spin_min_current_a=args.spin_min_current_a,
+                    spin_return_tol_a=args.spin_return_tol_a,
+                    out_dir=alloc_step_dir("E-Stop While Weapon Spinning Test"),
+                )
+            )
         elif args.suite == "drive_e2e":
             results.append(
                 do_drive_e2e(
@@ -1935,6 +2692,25 @@ def main() -> None:
                     out_dir=alloc_step_dir("Drive Spin Test"),
                 )
             )
+        elif args.suite == "estop_drive":
+            results.append(
+                do_estop_drive(
+                    repo_root,
+                    args.psu_drive_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_hold_s=args.drive_spin_hold_s,
+                    drive_sample_interval_s=args.drive_spin_sample_interval_s,
+                    drive_settle_s=args.drive_spin_settle_s,
+                    drive_current_delta_a=args.drive_spin_current_delta_a,
+                    drive_min_current_a=args.drive_spin_min_current_a,
+                    drive_return_tol_a=args.drive_spin_return_tol_a,
+                    out_dir=alloc_step_dir("E-Stop While Driving Test"),
+                )
+            )
         elif args.suite == "weapon_spin":
             results.append(
                 do_weapon_spin(
@@ -1955,6 +2731,73 @@ def main() -> None:
                     out_dir=alloc_step_dir("Weapon Spin Test"),
                 )
             )
+        elif args.suite == "safety_active":
+            results.append(
+                do_estop_drive(
+                    repo_root,
+                    args.psu_drive_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_hold_s=args.drive_spin_hold_s,
+                    drive_sample_interval_s=args.drive_spin_sample_interval_s,
+                    drive_settle_s=args.drive_spin_settle_s,
+                    drive_current_delta_a=args.drive_spin_current_delta_a,
+                    drive_min_current_a=args.drive_spin_min_current_a,
+                    drive_return_tol_a=args.drive_spin_return_tol_a,
+                    out_dir=alloc_step_dir("E-Stop While Driving Test"),
+                )
+            )
+            if results[-1].ok:
+                results.append(
+                    do_disconnect_failsafe(
+                        repo_root,
+                        args.psu_channel,
+                        psu_off_first=not args.no_psu_off,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_min_delta_us=args.drive_min_delta_us,
+                        out_dir=alloc_step_dir("Disconnect Failsafe Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_weapon_disarmed_guard(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        guard_axis=args.guard_axis,
+                        guard_hold_s=args.guard_hold_s,
+                        guard_baseline_s=args.guard_baseline_s,
+                        guard_sample_interval_s=args.guard_sample_interval_s,
+                        guard_max_delta_a=args.guard_max_delta_a,
+                        out_dir=alloc_step_dir("Weapon Disarmed Guard Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_estop_weapon(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        spin_axis=args.spin_axis,
+                        spin_hold_s=args.spin_hold_s,
+                        spin_baseline_s=args.spin_baseline_s,
+                        spin_sample_interval_s=args.spin_sample_interval_s,
+                        spin_settle_s=args.spin_settle_s,
+                        spin_current_delta_a=args.spin_current_delta_a,
+                        spin_min_current_a=args.spin_min_current_a,
+                        spin_return_tol_a=args.spin_return_tol_a,
+                        out_dir=alloc_step_dir("E-Stop While Weapon Spinning Test"),
+                    )
+                )
         elif args.suite == "full_e2e":
             results.append(
                 do_smoke(
@@ -1999,6 +2842,25 @@ def main() -> None:
                 )
             if results[-1].ok:
                 results.append(
+                    do_estop_drive(
+                        repo_root,
+                        args.psu_drive_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_hold_s=args.drive_spin_hold_s,
+                        drive_sample_interval_s=args.drive_spin_sample_interval_s,
+                        drive_settle_s=args.drive_spin_settle_s,
+                        drive_current_delta_a=args.drive_spin_current_delta_a,
+                        drive_min_current_a=args.drive_spin_min_current_a,
+                        drive_return_tol_a=args.drive_spin_return_tol_a,
+                        out_dir=alloc_step_dir("E-Stop While Driving Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
                     do_disconnect_failsafe(
                         repo_root,
                         args.psu_channel,
@@ -2006,6 +2868,23 @@ def main() -> None:
                         drive_forward_axis=args.drive_forward_axis,
                         drive_min_delta_us=args.drive_min_delta_us,
                         out_dir=alloc_step_dir("Disconnect Failsafe Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_weapon_disarmed_guard(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        guard_axis=args.guard_axis,
+                        guard_hold_s=args.guard_hold_s,
+                        guard_baseline_s=args.guard_baseline_s,
+                        guard_sample_interval_s=args.guard_sample_interval_s,
+                        guard_max_delta_a=args.guard_max_delta_a,
+                        out_dir=alloc_step_dir("Weapon Disarmed Guard Test"),
                     )
                 )
             if results[-1].ok:
@@ -2026,6 +2905,26 @@ def main() -> None:
                         spin_min_current_a=args.spin_min_current_a,
                         require_telemetry=args.require_telemetry,
                         out_dir=alloc_step_dir("Weapon Spin Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_estop_weapon(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        spin_axis=args.spin_axis,
+                        spin_hold_s=args.spin_hold_s,
+                        spin_baseline_s=args.spin_baseline_s,
+                        spin_sample_interval_s=args.spin_sample_interval_s,
+                        spin_settle_s=args.spin_settle_s,
+                        spin_current_delta_a=args.spin_current_delta_a,
+                        spin_min_current_a=args.spin_min_current_a,
+                        spin_return_tol_a=args.spin_return_tol_a,
+                        out_dir=alloc_step_dir("E-Stop While Weapon Spinning Test"),
                     )
                 )
 

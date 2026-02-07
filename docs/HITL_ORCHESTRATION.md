@@ -107,7 +107,31 @@ Active drive spin suite (requires PSU channel powering the drive ESC/motors):
 python3 tools/hitl_orchestrator.py --suite drive_spin --psu-drive-channel 1 --drive-spin-hold-s 2.5
 ```
 
-Full end-to-end suite (smoke + drive + disconnect + weapon spin):
+Emergency stop while actively driving (requires PSU channel powering the drive ESC/motors):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite estop_drive --psu-drive-channel 1
+```
+
+Weapon disarmed guard (requires PSU channel powering the weapon ESC/motor):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite weapon_disarmed_guard --psu-channel 1
+```
+
+Emergency stop while weapon is spinning (requires PSU channel powering the weapon ESC/motor):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite estop_weapon --psu-channel 1
+```
+
+Active safety invariants (estop drive + disconnect failsafe + weapon guard + estop weapon):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite safety_active --psu-channel 1 --psu-drive-channel 1
+```
+
+Full end-to-end suite (smoke + drive + safety + weapon):
 
 ```bash
 python3 tools/hitl_orchestrator.py --suite full_e2e

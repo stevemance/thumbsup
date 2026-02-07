@@ -171,6 +171,9 @@ def plot_psu_current(samples_path: Path, title: str, out_png: Path, *, pdf=None)
     palette = {
         "baseline": "#4c78a8",
         "run": "#f58518",
+        "drive_run": "#54a24b",
+        "disarmed_cmd": "#b279a2",
+        "estop": "#e45756",
         "forward": "#54a24b",
         "turn": "#e45756",
         "left_only": "#eeca3b",
@@ -400,6 +403,9 @@ def main() -> None:
             for json_name in [
                 "drive_spin_result.json",
                 "weapon_spin_result.json",
+                "estop_drive_result.json",
+                "weapon_disarmed_guard_result.json",
+                "estop_weapon_result.json",
                 "drive_e2e_result.json",
                 "disconnect_failsafe_result.json",
                 "psu_snapshot.json",

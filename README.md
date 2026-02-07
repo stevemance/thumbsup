@@ -48,6 +48,7 @@ A complete control system for a 1lb (454g) combat robot using Raspberry Pi Pico 
 - **[User Manual](docs/USER_MANUAL.md)** - Complete operating instructions, safety procedures, and troubleshooting
 - **[Quick Reference](docs/QUICK_REFERENCE.md)** - Single-page quick reference for competition use
 - **[Hardware Setup](docs/HARDWARE_SETUP.md)** - Complete pin configuration and wiring guide
+- **[HITL (Hardware In The Loop)](docs/HITL.md)** - Fully automated end-to-end tests (robot + emulated controller + host orchestrator)
 - **[Building Guide](docs/building.md)** - Compilation and setup instructions
 - **[Wiring Guide](docs/wiring_guide.md)** - Hardware connection diagrams
 
