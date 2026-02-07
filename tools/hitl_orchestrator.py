@@ -1134,13 +1134,22 @@ def do_drive_spin(
             fwd_ok, fwd_delta = ok_run(fwd_med)
             turn_ok, turn_delta = ok_run(turn_med)
 
-            def ok_return(stop_med: float | None) -> bool:
-                if stop_med is None:
-                    return False
-                return abs(stop_med - baseline_med) <= float(drive_return_tol_a)
+            def tail_median(values: list[float], n: int = 3) -> float | None:
+                if not values:
+                    return None
+                n = max(1, min(int(n), len(values)))
+                return statistics.median(values[-n:])
 
-            stop1_ok = ok_return(stop1_med)
-            stop2_ok = ok_return(stop2_med)
+            stop1_tail_med = tail_median(stop1_values, n=3)
+            stop2_tail_med = tail_median(stop2_values, n=3)
+
+            def ok_return(stop_tail_med: float | None) -> bool:
+                if stop_tail_med is None:
+                    return False
+                return abs(stop_tail_med - baseline_med) <= float(drive_return_tol_a)
+
+            stop1_ok = ok_return(stop1_tail_med)
+            stop2_ok = ok_return(stop2_tail_med)
 
             result = {
                 "ok": bool(fwd_ok and turn_ok and stop1_ok and stop2_ok),
@@ -1159,8 +1168,18 @@ def do_drive_spin(
                 "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
                 "forward": {"median_a": fwd_med, "delta_a": fwd_delta, "ok": fwd_ok, "samples": len(fwd_values)},
                 "turn": {"median_a": turn_med, "delta_a": turn_delta, "ok": turn_ok, "samples": len(turn_values)},
-                "stop1": {"median_a": stop1_med, "ok": stop1_ok, "samples": len(stop1_values)},
-                "stop2": {"median_a": stop2_med, "ok": stop2_ok, "samples": len(stop2_values)},
+                "stop1": {
+                    "median_a": stop1_med,
+                    "tail_median_a": stop1_tail_med,
+                    "ok": stop1_ok,
+                    "samples": len(stop1_values),
+                },
+                "stop2": {
+                    "median_a": stop2_med,
+                    "tail_median_a": stop2_tail_med,
+                    "ok": stop2_ok,
+                    "samples": len(stop2_values),
+                },
                 "states": states,
             }
 
