@@ -128,6 +128,21 @@ python3 tools/hitl_orchestrator.py --suite estop_weapon --psu-channel 1
 python3 tools/hitl_orchestrator.py --suite full_e2e --psu-channel 1 --psu-drive-channel 1
 ```
 
+### `full_e2e` Flow
+
+```mermaid
+flowchart TD
+  A[full_e2e] --> S[Smoke]
+  S --> D1[Drive E2E]
+  D1 --> D2[Drive Spin]
+  D2 --> ED[E-Stop While Driving]
+  ED --> DF[Disconnect Failsafe]
+  DF --> WG[Weapon Disarmed Guard]
+  WG --> W1[Weapon Spin]
+  W1 --> EW[E-Stop While Weapon Spinning]
+  EW --> R[Report + Artifacts]
+```
+
 ### Safety defaults
 
 - Orchestrator defaults to turning PSU outputs **off** at the start of a run.
@@ -152,6 +167,22 @@ Key files:
 Convenience pointer:
 
 - `hitl_logs/latest_run_dir.txt`
+
+### Run Directory Layout
+
+```mermaid
+flowchart TB
+  Run[hitl_logs/run_<timestamp>_<suite>/]
+  Run --> OR[orchestrator_report.json]
+  Run --> MD[report.md]
+  Run --> PDF[report.pdf]
+  Run --> Plots[plots/*.png]
+  Run --> Steps[steps/]
+  Steps --> Step[NN_<step_name>/]
+  Step --> Logs[robot_serial.log / gamepad_serial.log]
+  Step --> JSON[*_result.json]
+  Step --> PSU[psu_current_samples.json]
+```
 
 ## How The Tests Decide PASS/FAIL
 
