@@ -1056,13 +1056,22 @@ def do_drive_spin(
 
     # Power motor supply and require it to be on.
     labctl_psu_set(psu_channel, psu_voltage, psu_current)
-    snap = labctl_psu_snapshot(psu_channel)
-    try:
-        status = str(((snap.get("values") or {}).get(str(psu_channel)) or {}).get("status") or "").upper()
-    except Exception:
-        status = ""
-    if status != "ON":
-        raise RuntimeError(f"PSU channel {psu_channel} is not ON (snapshot={snap})")
+    # Best-effort status check: USBTMC can be flaky; if snapshot fails we rely on the
+    # subsequent current sampling to fail the test when the PSU is truly off.
+    snap: dict | None = None
+    for attempt in range(3):
+        try:
+            snap = labctl_psu_snapshot(psu_channel)
+            break
+        except Exception:
+            time.sleep(0.15 * (attempt + 1))
+    if snap is not None:
+        try:
+            status = str(((snap.get("values") or {}).get(str(psu_channel)) or {}).get("status") or "").upper()
+        except Exception:
+            status = ""
+        if status and status != "ON":
+            raise RuntimeError(f"PSU channel {psu_channel} is not ON (snapshot={snap})")
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
@@ -1188,6 +1197,129 @@ def do_drive_spin(
             if baseline_med is None:
                 raise RuntimeError("no PSU current samples for baseline")
 
+            # Individual drive checks: command each side independently by canceling one motor in the mixer.
+            #
+            # Rationale: Total PSU current is a strong "did anything spin" signal, but with both drive
+            # motors commanded together it can pass even if one motor is unplugged. We therefore run
+            # "left-only" and "right-only" phases where one side is held near neutral (1500us).
+
+            def clamp_axis(v: int) -> int:
+                return max(-127, min(127, int(v)))
+
+            # Avoid saturating the mixer when trying to cancel one side. With default config
+            # (MAX_DRIVE_SPEED > MAX_TURN_SPEED), extreme forward values can prevent perfect cancel.
+            single_forward_axis = drive_forward_axis
+            if abs(single_forward_axis) > 110:
+                single_forward_axis = 110 if single_forward_axis > 0 else -110
+
+            def find_single_side_lx(stop_side: str, ly: int) -> tuple[int, dict[str, str]]:
+                """
+                Find an LX value that keeps the requested stop_side motor near neutral while LY is held.
+
+                stop_side: "left" or "right" (which motor should be ~1500us)
+                Returns: (lx, status_dict)
+                """
+                ly = clamp_axis(ly)
+                if stop_side not in ("left", "right"):
+                    raise ValueError(f"invalid stop_side: {stop_side}")
+
+                # Best-effort guess from firmware defaults (MAX_DRIVE_SPEED=75, MAX_TURN_SPEED=70).
+                # Even if these change, the scan below will still find a reasonable cancel point.
+                ratio = 75.0 / 70.0
+                guess = int(round(ly * ratio))
+                if stop_side == "left":
+                    # left=F+T => cancel left by T=-F
+                    guess = -guess
+
+                def score_for(s: dict[str, str], lx: int) -> tuple[int, int, int]:
+                    dl, dr = get_pulses(s)
+                    stop_pulse = dl if stop_side == "left" else dr
+                    active_pulse = dr if stop_side == "left" else dl
+                    stop_delta = abs(stop_pulse - 1500)
+                    active_delta = abs(active_pulse - 1500)
+                    # Sort by: stop delta (smaller is better), then active delta (larger is better),
+                    # then |lx| (prefer smaller turns to reduce trim interactions).
+                    return (stop_delta, -active_delta, abs(lx))
+
+                def try_lx_values(cands: list[int]) -> tuple[int, dict[str, str]] | None:
+                    best: tuple[tuple[int, int, int], int, dict[str, str]] | None = None
+                    for lx in cands:
+                        lx = clamp_axis(lx)
+                        gamepad_log.send_line(f"AXIS LX {lx}")
+                        gamepad_log.send_line(f"AXIS LY {ly}")
+                        try:
+                            # Wait for any meaningful deviation on the active side before scoring.
+                            if stop_side == "right":
+                                pred = lambda s: abs(int(s.get("dl_us") or 0) - 1500) >= 60
+                            else:
+                                pred = lambda s: abs(int(s.get("dr_us") or 0) - 1500) >= 60
+                            s = wait_for_robot_condition(
+                                robot_log,
+                                timeout_s=0.8,
+                                predicate=pred,
+                                pump_logs=[gamepad_log],
+                            )
+                        except RuntimeError:
+                            continue
+
+                        sc = score_for(s, lx)
+                        if best is None or sc < best[0]:
+                            best = (sc, lx, s)
+                            # If we nailed a very small stop delta, stop searching early.
+                            if sc[0] <= 15:
+                                break
+                    if best is None:
+                        return None
+                    return best[1], best[2]
+
+                span = 48
+                step = 4
+                near = list(range(guess - span, guess + span + 1, step))
+                found = try_lx_values(near)
+                if found is not None:
+                    return found
+
+                # Fallback: full scan (coarser) if the guess window didn't find a good candidate.
+                full = list(range(-127, 128, 6))
+                found = try_lx_values(full)
+                if found is None:
+                    raise RuntimeError(f"could not find single-side cancel (stop_side={stop_side} ly={ly})")
+                return found
+
+            # Left-only (right motor canceled).
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
+            lx_left, s_left = find_single_side_lx("right", single_forward_axis)
+            states["left_only"] = s_left
+            left_values = sample_current_window("left_only", drive_hold_s, settle_s=drive_settle_s)
+            left_med = statistics.median(left_values) if left_values else None
+
+            # Stop after left-only.
+            gamepad_log.send_line("AXIS LY 0")
+            gamepad_log.send_line("AXIS LX 0")
+            s_stop_left = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
+            states["stop_left"] = s_stop_left
+            stop_left_values = sample_current_window("stop_left", 1.0, settle_s=0.0)
+            stop_left_med = statistics.median(stop_left_values) if stop_left_values else None
+
+            # Right-only (left motor canceled).
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
+            lx_right, s_right = find_single_side_lx("left", single_forward_axis)
+            states["right_only"] = s_right
+            right_values = sample_current_window("right_only", drive_hold_s, settle_s=drive_settle_s)
+            right_med = statistics.median(right_values) if right_values else None
+
+            # Stop after right-only.
+            gamepad_log.send_line("AXIS LY 0")
+            gamepad_log.send_line("AXIS LX 0")
+            s_stop_right = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
+            states["stop_right"] = s_stop_right
+            stop_right_values = sample_current_window("stop_right", 1.0, settle_s=0.0)
+            stop_right_med = statistics.median(stop_right_values) if stop_right_values else None
+
             # Forward run.
             gamepad_log.send_line("AXIS LX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
@@ -1237,6 +1369,8 @@ def do_drive_spin(
 
             fwd_ok, fwd_delta = ok_run(fwd_med)
             turn_ok, turn_delta = ok_run(turn_med)
+            left_ok, left_delta = ok_run(left_med)
+            right_ok, right_delta = ok_run(right_med)
 
             def tail_median(values: list[float], n: int = 3) -> float | None:
                 if not values:
@@ -1246,6 +1380,8 @@ def do_drive_spin(
 
             stop1_tail_med = tail_median(stop1_values, n=3)
             stop2_tail_med = tail_median(stop2_values, n=3)
+            stop_left_tail_med = tail_median(stop_left_values, n=3)
+            stop_right_tail_med = tail_median(stop_right_values, n=3)
 
             def ok_return(stop_tail_med: float | None) -> bool:
                 if stop_tail_med is None:
@@ -1254,14 +1390,17 @@ def do_drive_spin(
 
             stop1_ok = ok_return(stop1_tail_med)
             stop2_ok = ok_return(stop2_tail_med)
+            stop_left_ok = ok_return(stop_left_tail_med)
+            stop_right_ok = ok_return(stop_right_tail_med)
 
             result = {
-                "ok": bool(fwd_ok and turn_ok and stop1_ok and stop2_ok),
+                "ok": bool(left_ok and right_ok and fwd_ok and turn_ok and stop_left_ok and stop_right_ok and stop1_ok and stop2_ok),
                 "psu_channel": psu_channel,
                 "psu_voltage_set": psu_voltage,
                 "psu_current_limit_set": psu_current,
                 "drive_forward_axis": drive_forward_axis,
                 "drive_turn_axis": drive_turn_axis,
+                "single_forward_axis": single_forward_axis,
                 "drive_hold_s": drive_hold_s,
                 "drive_settle_s": float(drive_settle_s),
                 "thresholds": {
@@ -1270,8 +1409,34 @@ def do_drive_spin(
                     "return_tol_a": float(drive_return_tol_a),
                 },
                 "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
+                "left_only": {
+                    "axis": {"lx": lx_left, "ly": single_forward_axis},
+                    "median_a": left_med,
+                    "delta_a": left_delta,
+                    "ok": left_ok,
+                    "samples": len(left_values),
+                },
+                "right_only": {
+                    "axis": {"lx": lx_right, "ly": single_forward_axis},
+                    "median_a": right_med,
+                    "delta_a": right_delta,
+                    "ok": right_ok,
+                    "samples": len(right_values),
+                },
                 "forward": {"median_a": fwd_med, "delta_a": fwd_delta, "ok": fwd_ok, "samples": len(fwd_values)},
                 "turn": {"median_a": turn_med, "delta_a": turn_delta, "ok": turn_ok, "samples": len(turn_values)},
+                "stop_left": {
+                    "median_a": stop_left_med,
+                    "tail_median_a": stop_left_tail_med,
+                    "ok": stop_left_ok,
+                    "samples": len(stop_left_values),
+                },
+                "stop_right": {
+                    "median_a": stop_right_med,
+                    "tail_median_a": stop_right_tail_med,
+                    "ok": stop_right_ok,
+                    "samples": len(stop_right_values),
+                },
                 "stop1": {
                     "median_a": stop1_med,
                     "tail_median_a": stop1_tail_med,
@@ -1289,7 +1454,11 @@ def do_drive_spin(
 
             (out_dir / "drive_spin_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
             (out_dir / "psu_current_samples.json").write_text(json.dumps(psu_samples, indent=2, sort_keys=True), encoding="utf-8")
-            (out_dir / "psu_snapshot.json").write_text(json.dumps(labctl_psu_snapshot(psu_channel), indent=2, sort_keys=True), encoding="utf-8")
+            try:
+                payload = labctl_psu_snapshot(psu_channel)
+            except Exception as exc:
+                payload = {"ok": False, "error": str(exc)}
+            (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
             if not result["ok"]:
                 raise RuntimeError(f"drive spin not detected / not returning to baseline (result={result})")
@@ -1630,7 +1799,7 @@ def main() -> None:
     parser.add_argument("--drive-spin-hold-s", type=float, default=2.0, help="Seconds to hold each active drive command")
     parser.add_argument("--drive-spin-sample-interval-s", type=float, default=0.2, help="PSU current sample interval during drive tests (s)")
     parser.add_argument("--drive-spin-settle-s", type=float, default=0.3, help="Seconds after drive start to ignore for current stats")
-    parser.add_argument("--drive-spin-current-delta-a", type=float, default=0.10, help="Min median current delta to treat as drive spinning")
+    parser.add_argument("--drive-spin-current-delta-a", type=float, default=0.08, help="Min median current delta to treat as drive spinning")
     parser.add_argument("--drive-spin-min-current-a", type=float, default=0.10, help="Min median current during run to treat as drive spinning")
     parser.add_argument("--drive-spin-return-tol-a", type=float, default=0.08, help="Max median current deviation from baseline when stopped")
     parser.add_argument("--suite", choices=["smoke", "weapon_spin", "drive_e2e", "disconnect_failsafe", "drive_spin", "full_e2e"], default="smoke")

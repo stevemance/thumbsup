@@ -173,6 +173,10 @@ def plot_psu_current(samples_path: Path, title: str, out_png: Path, *, pdf=None)
         "run": "#f58518",
         "forward": "#54a24b",
         "turn": "#e45756",
+        "left_only": "#eeca3b",
+        "right_only": "#ff9da6",
+        "stop_left": "#b279a2",
+        "stop_right": "#72b7b2",
         "stop1": "#b279a2",
         "stop2": "#72b7b2",
     }
@@ -432,4 +436,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
