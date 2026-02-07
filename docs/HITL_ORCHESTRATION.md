@@ -115,12 +115,37 @@ python3 tools/hitl_orchestrator.py --suite full_e2e
 
 Artifacts:
 
-- `hitl_logs/orchestrator_*/robot_serial.log`
-- `hitl_logs/orchestrator_*/gamepad_serial.log`
-- `hitl_logs/orchestrator_*/weapon_spin_result.json` (PSU + telemetry summary)
-- `hitl_logs/orchestrator_*/drive_e2e_result.json`
-- `hitl_logs/orchestrator_*/disconnect_failsafe_result.json`
+- `hitl_logs/run_*/steps/*/robot_serial.log`
+- `hitl_logs/run_*/steps/*/gamepad_serial.log`
+- `hitl_logs/run_*/steps/*/weapon_spin_result.json` (PSU + telemetry summary)
+- `hitl_logs/run_*/steps/*/drive_spin_result.json`
+- `hitl_logs/run_*/steps/*/drive_e2e_result.json`
+- `hitl_logs/run_*/steps/*/disconnect_failsafe_result.json`
 - `hitl_logs/latest_orchestrator_report.json`
+
+## Reports (MD/PDF + Plots)
+
+Each orchestrator invocation also creates a single run directory:
+
+- `hitl_logs/run_<timestamp>_<suite>/`
+
+Inside that directory you'll find:
+
+- `orchestrator_report.json` (machine-readable report with step results and artifact paths)
+- `report.md` (human readable report, includes plots)
+- `report.pdf` (multi-page PDF with the same core plots + a summary page)
+- `steps/` (per-step logs + JSON results)
+- `plots/` (generated PNG plots)
+
+Convenience pointer:
+
+- `hitl_logs/latest_run_dir.txt`
+
+To skip report generation:
+
+```bash
+python3 tools/hitl_orchestrator.py --no-report ...
+```
 
 ## Pass/Fail Behavior (Smoke Suite)
 

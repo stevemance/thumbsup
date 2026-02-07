@@ -182,18 +182,31 @@ def wait_for_tty_reenumerate(path: str, timeout_s: float) -> None:
     wait_for_tty_ready(path, remaining)
 
 
-def picotool_flash_via_reset(usb_serial: str, uf2_path: str) -> None:
+def picotool_flash_via_reset(usb_serial: str, uf2_path: str, *, log_path: Path | None = None) -> None:
     if not Path(uf2_path).exists():
         raise RuntimeError(f"missing UF2: {uf2_path}")
 
     before = lsusb_rp2_bootsel_devices()
-    run_cmd(["picotool", "reboot", "-u", "-f", "--ser", usb_serial], check=True, capture_output=True)
+    reboot = run_cmd(["picotool", "reboot", "-u", "-f", "--ser", usb_serial], check=True, capture_output=True)
     bus, addr = wait_for_new_rp2_bootsel_device(before, timeout_s=10.0)
-    run_cmd(
+    load = run_cmd(
         ["picotool", "load", "-x", uf2_path, "--bus", str(bus), "--address", str(addr)],
         check=True,
-        capture_output=False,
+        capture_output=True,
     )
+    if log_path is not None:
+        lines = []
+        lines.append(f"picotool reboot -u -f --ser {usb_serial}")
+        if reboot.stdout:
+            lines.append(reboot.stdout.strip())
+        if reboot.stderr:
+            lines.append(reboot.stderr.strip())
+        lines.append(f"picotool load -x {uf2_path} --bus {bus} --address {addr}")
+        if load.stdout:
+            lines.append(load.stdout.strip())
+        if load.stderr:
+            lines.append(load.stderr.strip())
+        log_path.write_text("\n".join(l for l in lines if l) + "\n", encoding="utf-8")
 
 
 def picotool_reboot_application(usb_serial: str) -> None:
@@ -280,6 +293,11 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def slugify(name: str) -> str:
+    # Lowercase, keep alnum, convert runs of other chars to underscores.
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 @dataclass
 class StepResult:
     name: str
@@ -287,6 +305,7 @@ class StepResult:
     detail: str
     started_at: str
     finished_at: str
+    artifacts_dir: str | None = None
 
 
 def parse_kv_payload(payload: str) -> dict[str, str]:
@@ -427,39 +446,117 @@ def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, ti
 def step(name: str):
     def deco(fn):
         def wrapped(*args, **kwargs):
+            out_dir = kwargs.get("out_dir")
+            artifacts_dir = str(out_dir) if out_dir is not None else None
             started = now_iso()
             try:
                 detail = fn(*args, **kwargs)
-                return StepResult(name=name, ok=True, detail=detail or "ok", started_at=started, finished_at=now_iso())
+                return StepResult(
+                    name=name,
+                    ok=True,
+                    detail=detail or "ok",
+                    started_at=started,
+                    finished_at=now_iso(),
+                    artifacts_dir=artifacts_dir,
+                )
             except Exception as exc:
-                return StepResult(name=name, ok=False, detail=str(exc), started_at=started, finished_at=now_iso())
+                return StepResult(
+                    name=name,
+                    ok=False,
+                    detail=str(exc),
+                    started_at=started,
+                    finished_at=now_iso(),
+                    artifacts_dir=artifacts_dir,
+                )
         return wrapped
     return deco
 
 
 @step("Build Firmware")
-def do_build(repo_root: Path, build_robot_fw: bool, build_gamepad_fw: bool) -> str:
+def do_build(repo_root: Path, build_robot_fw: bool, build_gamepad_fw: bool, out_dir: Path | None = None) -> str:
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
     if build_robot_fw:
-        build_robot(repo_root)
+        if out_dir is None:
+            build_robot(repo_root)
+        else:
+            result = run_cmd([str(repo_root / "tools" / "build.sh")], check=True, capture_output=True)
+            (out_dir / "build_robot.log").write_text(
+                (result.stdout or "") + ("\n" + result.stderr if result.stderr else ""),
+                encoding="utf-8",
+            )
+
     if build_gamepad_fw:
-        build_gamepad(repo_root)
+        if out_dir is None:
+            build_gamepad(repo_root)
+        else:
+            env = os.environ.copy()
+            if "PICO_SDK_PATH" not in env or not env["PICO_SDK_PATH"]:
+                env["PICO_SDK_PATH"] = str(Path.home() / "pico" / "pico-sdk")
+            build_dir = repo_root / "controller_emulator" / "build"
+
+            cfg = run_cmd(
+                ["cmake", "-S", str(repo_root / "controller_emulator"), "-B", str(build_dir)],
+                check=True,
+                capture_output=True,
+                env=env,
+            )
+            (out_dir / "build_gamepad_configure.log").write_text(
+                (cfg.stdout or "") + ("\n" + cfg.stderr if cfg.stderr else ""),
+                encoding="utf-8",
+            )
+
+            bld = run_cmd(
+                ["cmake", "--build", str(build_dir), "-j", str(os.cpu_count() or 4)],
+                check=True,
+                capture_output=True,
+                env=env,
+            )
+            (out_dir / "build_gamepad_build.log").write_text(
+                (bld.stdout or "") + ("\n" + bld.stderr if bld.stderr else ""),
+                encoding="utf-8",
+            )
     return "built"
 
 
 @step("Flash Firmware")
-def do_flash(repo_root: Path, flash_robot: bool, flash_gamepad: bool) -> str:
+def do_flash(repo_root: Path, flash_robot: bool, flash_gamepad: bool, out_dir: Path | None = None) -> str:
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        flash_log = out_dir / "flash.log"
+    else:
+        flash_log = None
+
     # Resolve current tty devices to read their application-mode USB serials.
     if flash_robot:
         robot_tty = resolve_robot_port()
         robot_usb_ser = get_usb_serial_for_tty(robot_tty)
-        picotool_flash_via_reset(robot_usb_ser, str(repo_root / "firmware" / "build" / "thumbsup_hitl.uf2"))
+        if flash_log is not None:
+            flash_log.write_text(
+                f"robot_tty={robot_tty}\nrobot_usb_serial={robot_usb_ser}\n",
+                encoding="utf-8",
+            )
+        picotool_flash_via_reset(
+            robot_usb_ser,
+            str(repo_root / "firmware" / "build" / "thumbsup_hitl.uf2"),
+            log_path=(out_dir / "picotool_robot.log") if out_dir is not None else None,
+        )
         wait_for_tty_ready("/dev/ttyHITL_ROBOT", 10)
 
     if flash_gamepad:
         gamepad_tty = resolve_gamepad_port()
         gamepad_usb_ser = get_usb_serial_for_tty(gamepad_tty)
+        if flash_log is not None:
+            flash_log.write_text(
+                (flash_log.read_text(encoding="utf-8") if flash_log.exists() else "")
+                + f"gamepad_tty={gamepad_tty}\ngamepad_usb_serial={gamepad_usb_ser}\n",
+                encoding="utf-8",
+            )
         picotool_flash_via_reset(
-            gamepad_usb_ser, str(repo_root / "controller_emulator" / "build" / "thumbsup_controller_emulator.uf2")
+            gamepad_usb_ser,
+            str(repo_root / "controller_emulator" / "build" / "thumbsup_controller_emulator.uf2"),
+            log_path=(out_dir / "picotool_gamepad.log") if out_dir is not None else None,
         )
         wait_for_tty_ready("/dev/ttyHITL_GAMEPAD", 10)
 
@@ -467,7 +564,7 @@ def do_flash(repo_root: Path, flash_robot: bool, flash_gamepad: bool) -> str:
 
 
 @step("Smoke Test")
-def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> str:
+def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool, out_dir: Path | None = None) -> str:
     if psu_channel is not None and psu_off_first:
         labctl_psu_off(psu_channel)
 
@@ -485,7 +582,8 @@ def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> s
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
-        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
@@ -576,6 +674,7 @@ def do_drive_e2e(
     drive_turn_axis: int,
     drive_hold_s: float,
     drive_min_delta_us: int,
+    out_dir: Path | None = None,
 ) -> str:
     # This suite does not require the PSU, but turning it off first can avoid surprises.
     if psu_channel is not None and psu_off_first:
@@ -594,7 +693,8 @@ def do_drive_e2e(
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
-        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
@@ -770,6 +870,7 @@ def do_disconnect_failsafe(
     psu_off_first: bool,
     drive_forward_axis: int,
     drive_min_delta_us: int,
+    out_dir: Path | None = None,
 ) -> str:
     # This suite does not require the PSU, but turning it off first can avoid surprises.
     if psu_channel is not None and psu_off_first:
@@ -788,7 +889,8 @@ def do_disconnect_failsafe(
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
-        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
@@ -933,6 +1035,7 @@ def do_drive_spin(
     drive_current_delta_a: float,
     drive_min_current_a: float,
     drive_return_tol_a: float,
+    out_dir: Path | None = None,
 ) -> str:
     if psu_channel is None:
         raise RuntimeError("psu_channel is required for drive_spin")
@@ -963,7 +1066,8 @@ def do_drive_spin(
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
-        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
@@ -1213,6 +1317,7 @@ def do_weapon_spin(
     spin_current_delta_a: float,
     spin_min_current_a: float,
     require_telemetry: bool,
+    out_dir: Path | None = None,
 ) -> str:
     if psu_channel is not None and psu_off_first:
         labctl_psu_off(psu_channel)
@@ -1237,7 +1342,8 @@ def do_weapon_spin(
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
-        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
@@ -1491,6 +1597,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="ThumbsUp HITL orchestrator")
     parser.add_argument("--no-build", action="store_true", help="skip firmware builds")
     parser.add_argument("--no-flash", action="store_true", help="skip flashing")
+    parser.add_argument("--no-report", action="store_true", help="skip generating report.md/report.pdf")
+    parser.add_argument("--run-dir", help="override output directory under hitl_logs/")
     parser.add_argument("--no-psu-off", action="store_true", help="do not force PSU off at start")
     parser.add_argument(
         "--psu-channel",
@@ -1530,164 +1638,275 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
 
+    run_started_at = now_iso()
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.run_dir:
+        run_dir = Path(args.run_dir).expanduser().resolve()
+    else:
+        run_dir = repo_root / "hitl_logs" / f"run_{run_id}_{args.suite}"
+    steps_root = run_dir / "steps"
+    steps_root.mkdir(parents=True, exist_ok=True)
+
+    step_idx = 1
+
+    def alloc_step_dir(step_name: str) -> Path:
+        nonlocal step_idx
+        d = steps_root / f"{step_idx:02d}_{slugify(step_name)}"
+        step_idx += 1
+        return d
+
     results: list[StepResult] = []
+    exit_code = 0
+
+    # Snapshot repo + hardware metadata (best-effort).
+    git_meta: dict[str, object] = {}
+    try:
+        git_meta["commit"] = run_cmd(["git", "rev-parse", "HEAD"], cwd=str(repo_root)).stdout.strip()
+        git_meta["branch"] = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(repo_root)).stdout.strip()
+        git_meta["dirty"] = bool((run_cmd(["git", "status", "--porcelain=v1"], cwd=str(repo_root)).stdout or "").strip())
+    except Exception as exc:
+        git_meta = {"error": str(exc)}
+
+    device_meta: dict[str, object] = {}
+    try:
+        robot_port = resolve_robot_port(timeout_s=1.0)
+        device_meta["robot_port"] = robot_port
+        device_meta["robot_usb_serial"] = get_usb_serial_for_tty(robot_port)
+    except Exception:
+        pass
+    try:
+        gamepad_port = resolve_gamepad_port(timeout_s=1.0)
+        device_meta["gamepad_port"] = gamepad_port
+        device_meta["gamepad_usb_serial"] = get_usb_serial_for_tty(gamepad_port)
+    except Exception:
+        pass
+
+    psu_meta: dict[str, object] = {}
+    try:
+        psu_meta = json.loads(run_cmd(["labctl", "--json", "psu", "idn"], check=True, capture_output=True).stdout or "{}")
+    except Exception:
+        pass
 
     if not args.no_build:
-        results.append(do_build(repo_root, build_robot_fw=True, build_gamepad_fw=True))
-
-    if not args.no_flash:
-        results.append(do_flash(repo_root, flash_robot=True, flash_gamepad=True))
+        results.append(
+            do_build(
+                repo_root,
+                build_robot_fw=True,
+                build_gamepad_fw=True,
+                out_dir=alloc_step_dir("Build Firmware"),
+            )
+        )
         if not results[-1].ok:
-            # Don't attempt to run tests if the devices might be in BOOTSEL.
-            report = {
-                "started_at": now_iso(),
-                "suite": args.suite,
-                "results": [r.__dict__ for r in results],
-                "ok": False,
-            }
-            report_path = repo_root / "hitl_logs" / "latest_orchestrator_report.json"
-            report_path.parent.mkdir(parents=True, exist_ok=True)
-            report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-            print("HITL: FAIL")
-            print(f"- Flash Firmware: {results[-1].detail}")
-            sys.exit(1)
+            exit_code = 1
 
-    if args.suite == "smoke":
-        results.append(do_smoke(repo_root, args.psu_channel, psu_off_first=not args.no_psu_off))
-    elif args.suite == "drive_e2e":
+    if not args.no_flash and exit_code == 0:
         results.append(
-            do_drive_e2e(
+            do_flash(
                 repo_root,
-                args.psu_channel,
-                psu_off_first=not args.no_psu_off,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_turn_axis=args.drive_turn_axis,
-                drive_hold_s=args.drive_hold_s,
-                drive_min_delta_us=args.drive_min_delta_us,
+                flash_robot=True,
+                flash_gamepad=True,
+                out_dir=alloc_step_dir("Flash Firmware"),
             )
         )
-    elif args.suite == "disconnect_failsafe":
-        results.append(
-            do_disconnect_failsafe(
-                repo_root,
-                args.psu_channel,
-                psu_off_first=not args.no_psu_off,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_min_delta_us=args.drive_min_delta_us,
+        if not results[-1].ok:
+            exit_code = 1
+
+    # Don't attempt to run active tests if build/flash already failed.
+    if exit_code == 0:
+        if args.suite == "smoke":
+            results.append(
+                do_smoke(
+                    repo_root,
+                    args.psu_channel,
+                    psu_off_first=not args.no_psu_off,
+                    out_dir=alloc_step_dir("Smoke Test"),
+                )
             )
-        )
-    elif args.suite == "drive_spin":
-        results.append(
-            do_drive_spin(
-                repo_root,
-                args.psu_drive_channel,
-                args.psu_voltage,
-                args.psu_current,
-                psu_off_first=not args.no_psu_off,
-                leave_psu_on=args.leave_psu_on,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_turn_axis=args.drive_turn_axis,
-                drive_hold_s=args.drive_spin_hold_s,
-                drive_sample_interval_s=args.drive_spin_sample_interval_s,
-                drive_settle_s=args.drive_spin_settle_s,
-                drive_current_delta_a=args.drive_spin_current_delta_a,
-                drive_min_current_a=args.drive_spin_min_current_a,
-                drive_return_tol_a=args.drive_spin_return_tol_a,
+        elif args.suite == "drive_e2e":
+            results.append(
+                do_drive_e2e(
+                    repo_root,
+                    args.psu_channel,
+                    psu_off_first=not args.no_psu_off,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_turn_axis=args.drive_turn_axis,
+                    drive_hold_s=args.drive_hold_s,
+                    drive_min_delta_us=args.drive_min_delta_us,
+                    out_dir=alloc_step_dir("Drive E2E Test"),
+                )
             )
-        )
-    elif args.suite == "weapon_spin":
-        results.append(
-            do_weapon_spin(
-                repo_root,
-                args.psu_channel,
-                args.psu_voltage,
-                args.psu_current,
-                psu_off_first=not args.no_psu_off,
-                leave_psu_on=args.leave_psu_on,
-                spin_axis=args.spin_axis,
-                spin_hold_s=args.spin_hold_s,
-                spin_baseline_s=args.spin_baseline_s,
-                spin_sample_interval_s=args.spin_sample_interval_s,
-                spin_settle_s=args.spin_settle_s,
-                spin_current_delta_a=args.spin_current_delta_a,
-                spin_min_current_a=args.spin_min_current_a,
-                require_telemetry=args.require_telemetry,
+        elif args.suite == "disconnect_failsafe":
+            results.append(
+                do_disconnect_failsafe(
+                    repo_root,
+                    args.psu_channel,
+                    psu_off_first=not args.no_psu_off,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_min_delta_us=args.drive_min_delta_us,
+                    out_dir=alloc_step_dir("Disconnect Failsafe Test"),
+                )
             )
-        )
-    elif args.suite == "full_e2e":
-        results.append(do_smoke(repo_root, args.psu_channel, psu_off_first=not args.no_psu_off))
-        results.append(
-            do_drive_e2e(
-                repo_root,
-                args.psu_channel,
-                psu_off_first=not args.no_psu_off,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_turn_axis=args.drive_turn_axis,
-                drive_hold_s=args.drive_hold_s,
-                drive_min_delta_us=args.drive_min_delta_us,
+        elif args.suite == "drive_spin":
+            results.append(
+                do_drive_spin(
+                    repo_root,
+                    args.psu_drive_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_turn_axis=args.drive_turn_axis,
+                    drive_hold_s=args.drive_spin_hold_s,
+                    drive_sample_interval_s=args.drive_spin_sample_interval_s,
+                    drive_settle_s=args.drive_spin_settle_s,
+                    drive_current_delta_a=args.drive_spin_current_delta_a,
+                    drive_min_current_a=args.drive_spin_min_current_a,
+                    drive_return_tol_a=args.drive_spin_return_tol_a,
+                    out_dir=alloc_step_dir("Drive Spin Test"),
+                )
             )
-        )
-        results.append(
-            do_drive_spin(
-                repo_root,
-                args.psu_drive_channel,
-                args.psu_voltage,
-                args.psu_current,
-                psu_off_first=not args.no_psu_off,
-                leave_psu_on=args.leave_psu_on,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_turn_axis=args.drive_turn_axis,
-                drive_hold_s=args.drive_spin_hold_s,
-                drive_sample_interval_s=args.drive_spin_sample_interval_s,
-                drive_settle_s=args.drive_spin_settle_s,
-                drive_current_delta_a=args.drive_spin_current_delta_a,
-                drive_min_current_a=args.drive_spin_min_current_a,
-                drive_return_tol_a=args.drive_spin_return_tol_a,
+        elif args.suite == "weapon_spin":
+            results.append(
+                do_weapon_spin(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    spin_axis=args.spin_axis,
+                    spin_hold_s=args.spin_hold_s,
+                    spin_baseline_s=args.spin_baseline_s,
+                    spin_sample_interval_s=args.spin_sample_interval_s,
+                    spin_settle_s=args.spin_settle_s,
+                    spin_current_delta_a=args.spin_current_delta_a,
+                    spin_min_current_a=args.spin_min_current_a,
+                    require_telemetry=args.require_telemetry,
+                    out_dir=alloc_step_dir("Weapon Spin Test"),
+                )
             )
-        )
-        results.append(
-            do_disconnect_failsafe(
-                repo_root,
-                args.psu_channel,
-                psu_off_first=not args.no_psu_off,
-                drive_forward_axis=args.drive_forward_axis,
-                drive_min_delta_us=args.drive_min_delta_us,
+        elif args.suite == "full_e2e":
+            results.append(
+                do_smoke(
+                    repo_root,
+                    args.psu_channel,
+                    psu_off_first=not args.no_psu_off,
+                    out_dir=alloc_step_dir("Smoke Test"),
+                )
             )
-        )
-        results.append(
-            do_weapon_spin(
-                repo_root,
-                args.psu_channel,
-                args.psu_voltage,
-                args.psu_current,
-                psu_off_first=not args.no_psu_off,
-                leave_psu_on=args.leave_psu_on,
-                spin_axis=args.spin_axis,
-                spin_hold_s=args.spin_hold_s,
-                spin_baseline_s=args.spin_baseline_s,
-                spin_sample_interval_s=args.spin_sample_interval_s,
-                spin_settle_s=args.spin_settle_s,
-                spin_current_delta_a=args.spin_current_delta_a,
-                spin_min_current_a=args.spin_min_current_a,
-                require_telemetry=args.require_telemetry,
-            )
-        )
+            if results[-1].ok:
+                results.append(
+                    do_drive_e2e(
+                        repo_root,
+                        args.psu_channel,
+                        psu_off_first=not args.no_psu_off,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_turn_axis=args.drive_turn_axis,
+                        drive_hold_s=args.drive_hold_s,
+                        drive_min_delta_us=args.drive_min_delta_us,
+                        out_dir=alloc_step_dir("Drive E2E Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_drive_spin(
+                        repo_root,
+                        args.psu_drive_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_turn_axis=args.drive_turn_axis,
+                        drive_hold_s=args.drive_spin_hold_s,
+                        drive_sample_interval_s=args.drive_spin_sample_interval_s,
+                        drive_settle_s=args.drive_spin_settle_s,
+                        drive_current_delta_a=args.drive_spin_current_delta_a,
+                        drive_min_current_a=args.drive_spin_min_current_a,
+                        drive_return_tol_a=args.drive_spin_return_tol_a,
+                        out_dir=alloc_step_dir("Drive Spin Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_disconnect_failsafe(
+                        repo_root,
+                        args.psu_channel,
+                        psu_off_first=not args.no_psu_off,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_min_delta_us=args.drive_min_delta_us,
+                        out_dir=alloc_step_dir("Disconnect Failsafe Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_weapon_spin(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        spin_axis=args.spin_axis,
+                        spin_hold_s=args.spin_hold_s,
+                        spin_baseline_s=args.spin_baseline_s,
+                        spin_sample_interval_s=args.spin_sample_interval_s,
+                        spin_settle_s=args.spin_settle_s,
+                        spin_current_delta_a=args.spin_current_delta_a,
+                        spin_min_current_a=args.spin_min_current_a,
+                        require_telemetry=args.require_telemetry,
+                        out_dir=alloc_step_dir("Weapon Spin Test"),
+                    )
+                )
+
+        if results and not results[-1].ok:
+            exit_code = 1
 
     report = {
-        "started_at": now_iso(),
+        "started_at": run_started_at,
+        "finished_at": now_iso(),
+        "run_id": run_id,
+        "run_dir": str(run_dir),
         "suite": args.suite,
+        "argv": sys.argv,
+        "args": vars(args),
+        "git": git_meta,
+        "devices": device_meta,
+        "psu": psu_meta,
         "results": [r.__dict__ for r in results],
         "ok": all(r.ok for r in results),
     }
 
-    report_path = repo_root / "hitl_logs" / "latest_orchestrator_report.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "orchestrator_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    latest_path = repo_root / "hitl_logs" / "latest_orchestrator_report.json"
+    latest_path.parent.mkdir(parents=True, exist_ok=True)
+    latest_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (repo_root / "hitl_logs" / "latest_run_dir.txt").write_text(str(run_dir) + "\n", encoding="utf-8")
+
+    if not args.no_report:
+        venv_py = repo_root / ".venv" / "bin" / "python3"
+        report_py = repo_root / "tools" / "hitl_report.py"
+        if venv_py.exists() and report_py.exists():
+            gen = run_cmd([str(venv_py), str(report_py), "--run-dir", str(run_dir)], check=False, capture_output=True)
+            (run_dir / "report_gen.log").write_text(
+                (gen.stdout or "") + ("\n" + gen.stderr if gen.stderr else ""),
+                encoding="utf-8",
+            )
+        else:
+            (run_dir / "report_gen.log").write_text(
+                f"report generation skipped (venv_py_exists={venv_py.exists()} report_py_exists={report_py.exists()})\n",
+                encoding="utf-8",
+            )
 
     if report["ok"]:
         print("HITL: PASS")
+        print(f"HITL artifacts: {run_dir}")
         sys.exit(0)
     print("HITL: FAIL")
+    print(f"HITL artifacts: {run_dir}")
     for r in results:
         if not r.ok:
             print(f"- {r.name}: {r.detail}")
