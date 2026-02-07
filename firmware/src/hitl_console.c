@@ -14,6 +14,7 @@
 #include "hitl_overrides.h"
 #include "pico/stdlib.h"
 #include "system_status.h"
+#include "motor_control.h"
 #include "weapon.h"
 
 #define HITL_LINE_MAX 160
@@ -163,12 +164,15 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
     uint32_t now_ms = to_ms_since_boot(get_absolute_time());
     uint32_t batt_mv = read_battery_voltage();
 
+    uint16_t dl_us = motor_control_get_pulse(MOTOR_LEFT_DRIVE);
+    uint16_t dr_us = motor_control_get_pulse(MOTOR_RIGHT_DRIVE);
+
     weapon_telemetry_t telem;
     bool telem_ok = weapon_get_telemetry(&telem);
     uint32_t age = weapon_get_telemetry_age_ms();
 
     printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu weapon=%s speed=%u mode=%s "
-           "x=%d y=%d rx=%d ry=%d buttons=0x%04x dpad=0x%02x telem=%u age_ms=",
+           "x=%d y=%d rx=%d ry=%d buttons=0x%04x dpad=0x%02x dl_us=%u dr_us=%u telem=%u age_ms=",
            (unsigned long)now_ms,
            controller_connected ? 1u : 0u,
            controller_ready ? 1u : 0u,
@@ -184,6 +188,8 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
            gp ? (int)gp->axis_ry : 0,
            gp ? (unsigned)gp->buttons : 0u,
            gp ? (unsigned)gp->dpad : 0u,
+           (unsigned)dl_us,
+           (unsigned)dr_us,
            telem_ok ? 1u : 0u);
 
     if (age == UINT32_MAX) {

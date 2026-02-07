@@ -539,6 +539,215 @@ def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> s
     return "smoke passed"
 
 
+@step("Drive E2E Test")
+def do_drive_e2e(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_off_first: bool,
+    drive_forward_axis: int,
+    drive_turn_axis: int,
+    drive_hold_s: float,
+    drive_min_delta_us: int,
+) -> str:
+    # This suite does not require the PSU, but turning it off first can avoid surprises.
+    if psu_channel is not None and psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start the suite from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+
+        drive_states: dict[str, dict[str, str]] = {}
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS LX 0")
+                gamepad_log.send_line("AXIS LY 0")
+                gamepad_log.send_line("AXIS RX 0")
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+                gamepad_log.send_line("BTN L3 0")
+                gamepad_log.send_line("BTN R3 0")
+            except Exception:
+                pass
+
+        def get_pulses(s: dict[str, str]) -> tuple[int, int]:
+            dl = int(s.get("dl_us") or 0)
+            dr = int(s.get("dr_us") or 0)
+            return dl, dr
+
+        def near_neutral(s: dict[str, str], *, tol_us: int = 25) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) <= tol_us and abs(dr - 1500) <= tol_us
+
+        def deviated(s: dict[str, str], *, min_delta_us: int) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) >= min_delta_us and abs(dr - 1500) >= min_delta_us
+
+        def same_side(s: dict[str, str]) -> bool:
+            dl, dr = get_pulses(s)
+            return (dl - 1500) * (dr - 1500) > 0
+
+        def opposite_side(s: dict[str, str]) -> bool:
+            dl, dr = get_pulses(s)
+            return (dl - 1500) * (dr - 1500) < 0
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            # Put both devices into a deterministic state.
+            gamepad_log.send_line("RESET")
+
+            # Wait for at least one status sample so we know the HITL console tick is alive.
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s)
+
+            # Force a safe, deterministic battery voltage for HITL.
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=3.0,
+                predicate=lambda s: s.get("batt_mv") == "12500",
+            )
+
+            # Ensure controller connects (gamepad initiates).
+            robot_log.send_line("HITL BTADDR")
+            btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
+            gamepad_log.send_line(f"CONNECT {btaddr}")
+            try:
+                wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=20.0,
+                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
+                )
+            except RuntimeError:
+                robot_log.send_line("HITL BTKEYS CLEAR")
+                gamepad_log.send_line("KEYS CLEAR")
+                time.sleep(0.5)
+                gamepad_log.send_line(f"CONNECT {btaddr}")
+                wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=90.0,
+                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
+                )
+
+            # Wait until failsafe clears (no estop, recent controller activity).
+            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0")
+
+            drive_hold_s = max(0.2, float(drive_hold_s))
+            drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
+            drive_turn_axis = max(-127, min(127, int(drive_turn_axis)))
+
+            # Baseline: sticks neutral -> neutral pulses.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            s0 = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=30))
+            drive_states["neutral"] = s0
+
+            # Forward: LY negative (competition code treats negative Y as forward).
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
+            s_fwd = wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: deviated(s, min_delta_us=drive_min_delta_us) and opposite_side(s),
+            )
+            drive_states["forward"] = s_fwd
+            time.sleep(drive_hold_s)
+
+            # Turn in place: LX non-zero, LY 0. Expect both pulses on same side of neutral.
+            gamepad_log.send_line("AXIS LY 0")
+            gamepad_log.send_line(f"AXIS LX {drive_turn_axis}")
+            s_turn = wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: deviated(s, min_delta_us=drive_min_delta_us) and same_side(s),
+            )
+            drive_states["turn"] = s_turn
+            time.sleep(drive_hold_s)
+
+            # Stop: back to neutral.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            s_stop = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=40))
+            drive_states["stop"] = s_stop
+
+            # Validate emergency stop halts drive outputs.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: deviated(s, min_delta_us=drive_min_delta_us),
+            )
+            gamepad_log.send_line("BTN L1 1")
+            gamepad_log.send_line("BTN R1 1")
+            s_estop = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("failsafe") == "1")
+            drive_states["estop"] = s_estop
+            # Drive should settle back to neutral after estop.
+            s_estop_stop = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=50))
+            drive_states["estop_stop"] = s_estop_stop
+            gamepad_log.send_line("BTN L1 0")
+            gamepad_log.send_line("BTN R1 0")
+            gamepad_log.send_line("AXIS LY 0")
+
+            # Clear estop by holding A for SAFETY_BUTTON_HOLD_TIME (2s) + margin.
+            gamepad_log.send_line("BTN A 1")
+            time.sleep(2.3)
+            gamepad_log.send_line("BTN A 0")
+            s_clear = wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0")
+            drive_states["estop_clear"] = s_clear
+
+            # Final neutral.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS LY 0")
+            s_final = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=40))
+            drive_states["final"] = s_final
+
+            (out_dir / "drive_e2e_result.json").write_text(
+                json.dumps(
+                    {
+                        "drive_forward_axis": drive_forward_axis,
+                        "drive_turn_axis": drive_turn_axis,
+                        "drive_hold_s": drive_hold_s,
+                        "drive_min_delta_us": drive_min_delta_us,
+                        "states": drive_states,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "drive e2e passed"
+
+
 @step("Weapon Spin Test")
 def do_weapon_spin(
     repo_root: Path,
@@ -863,7 +1072,11 @@ def main() -> None:
     parser.add_argument("--spin-current-delta-a", type=float, default=0.15, help="Min median current delta to treat as spinning")
     parser.add_argument("--spin-min-current-a", type=float, default=0.25, help="Min median current during run to treat as spinning")
     parser.add_argument("--require-telemetry", action="store_true", help="Fail unless DShot telemetry rpm>0 is observed")
-    parser.add_argument("--suite", choices=["smoke", "weapon_spin"], default="smoke")
+    parser.add_argument("--drive-forward-axis", type=int, default=-80, help="Drive forward command (LY axis -127..127)")
+    parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
+    parser.add_argument("--drive-hold-s", type=float, default=0.6, help="Seconds to hold each drive command")
+    parser.add_argument("--drive-min-delta-us", type=int, default=60, help="Min PWM pulse delta from neutral to treat as moving")
+    parser.add_argument("--suite", choices=["smoke", "weapon_spin", "drive_e2e"], default="smoke")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -892,6 +1105,18 @@ def main() -> None:
 
     if args.suite == "smoke":
         results.append(do_smoke(repo_root, args.psu_channel, psu_off_first=not args.no_psu_off))
+    elif args.suite == "drive_e2e":
+        results.append(
+            do_drive_e2e(
+                repo_root,
+                args.psu_channel,
+                psu_off_first=not args.no_psu_off,
+                drive_forward_axis=args.drive_forward_axis,
+                drive_turn_axis=args.drive_turn_axis,
+                drive_hold_s=args.drive_hold_s,
+                drive_min_delta_us=args.drive_min_delta_us,
+            )
+        )
     elif args.suite == "weapon_spin":
         results.append(
             do_weapon_spin(
