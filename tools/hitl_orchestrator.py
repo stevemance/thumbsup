@@ -115,23 +115,29 @@ def find_port_by_product(product_hint: str) -> str | None:
     return None
 
 
-def resolve_robot_port() -> str:
-    port = find_port_by_symlink("/dev/ttyHITL_ROBOT")
-    if port:
-        return port
-    port = find_port_by_product("ThumbsUp HITL Robot")
-    if port:
-        return port
+def resolve_robot_port(timeout_s: float = 10.0) -> str:
+    deadline = time.time() + max(0.1, float(timeout_s))
+    while time.time() < deadline:
+        port = find_port_by_symlink("/dev/ttyHITL_ROBOT")
+        if port:
+            return port
+        port = find_port_by_product("ThumbsUp HITL Robot")
+        if port:
+            return port
+        time.sleep(0.1)
     raise RuntimeError("could not find robot serial port (expected /dev/ttyHITL_ROBOT or USB product match)")
 
 
-def resolve_gamepad_port() -> str:
-    port = find_port_by_symlink("/dev/ttyHITL_GAMEPAD")
-    if port:
-        return port
-    port = find_port_by_product("ThumbsUp HITL Gamepad")
-    if port:
-        return port
+def resolve_gamepad_port(timeout_s: float = 10.0) -> str:
+    deadline = time.time() + max(0.1, float(timeout_s))
+    while time.time() < deadline:
+        port = find_port_by_symlink("/dev/ttyHITL_GAMEPAD")
+        if port:
+            return port
+        port = find_port_by_product("ThumbsUp HITL Gamepad")
+        if port:
+            return port
+        time.sleep(0.1)
     raise RuntimeError("could not find gamepad serial port (expected /dev/ttyHITL_GAMEPAD or USB product match)")
 
 
@@ -757,6 +763,160 @@ def do_drive_e2e(
     return "drive e2e passed"
 
 
+@step("Disconnect Failsafe Test")
+def do_disconnect_failsafe(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_off_first: bool,
+    drive_forward_axis: int,
+    drive_min_delta_us: int,
+) -> str:
+    # This suite does not require the PSU, but turning it off first can avoid surprises.
+    if psu_channel is not None and psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode so we always start the suite from a known state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+
+        states: dict[str, dict[str, str]] = {}
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS LX 0")
+                gamepad_log.send_line("AXIS LY 0")
+                gamepad_log.send_line("AXIS RX 0")
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+            except Exception:
+                pass
+
+        def get_pulses(s: dict[str, str]) -> tuple[int, int]:
+            dl = int(s.get("dl_us") or 0)
+            dr = int(s.get("dr_us") or 0)
+            return dl, dr
+
+        def near_neutral(s: dict[str, str], *, tol_us: int = 25) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) <= tol_us and abs(dr - 1500) <= tol_us
+
+        def deviated(s: dict[str, str], *, min_delta_us: int) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) >= min_delta_us and abs(dr - 1500) >= min_delta_us
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            # Put both devices into a deterministic state.
+            gamepad_log.send_line("RESET")
+
+            # Wait for at least one status sample so we know the HITL console tick is alive.
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            # Force a safe, deterministic battery voltage for HITL.
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=3.0,
+                predicate=lambda s: s.get("batt_mv") == "12500",
+                pump_logs=[gamepad_log],
+            )
+
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+
+            # Wait until failsafe clears (no estop, recent controller activity).
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=5.0,
+                predicate=lambda s: s.get("failsafe") == "0",
+                pump_logs=[gamepad_log],
+            )
+
+            drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
+
+            # Start driving so we can assert the disconnect drives outputs back to neutral.
+            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
+            s_move = wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: deviated(s, min_delta_us=drive_min_delta_us),
+                pump_logs=[gamepad_log],
+            )
+            states["moving"] = s_move
+
+            # Disconnect controller.
+            gamepad_log.send_line("DISCONNECT")
+            s_disc = wait_for_robot_condition(
+                robot_log,
+                timeout_s=10.0,
+                predicate=lambda s: s.get("conn") == "0" and s.get("failsafe") == "1",
+                pump_logs=[gamepad_log],
+            )
+            states["disconnected"] = s_disc
+
+            # Outputs should settle back to neutral.
+            s_stop = wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: near_neutral(s, tol_us=60),
+                pump_logs=[gamepad_log],
+            )
+            states["neutral_after_disconnect"] = s_stop
+
+            # Reconnect should clear failsafe (my_platform_on_device_ready clears emergency_stop).
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=60.0)
+            s_reconn = wait_for_robot_condition(
+                robot_log,
+                timeout_s=8.0,
+                predicate=lambda s: s.get("conn") == "1" and s.get("ready") == "1" and s.get("failsafe") == "0",
+                pump_logs=[gamepad_log],
+            )
+            states["reconnected"] = s_reconn
+
+            (out_dir / "disconnect_failsafe_result.json").write_text(
+                json.dumps(
+                    {
+                        "drive_forward_axis": drive_forward_axis,
+                        "drive_min_delta_us": drive_min_delta_us,
+                        "states": states,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "disconnect failsafe passed"
+
+
 @step("Weapon Spin Test")
 def do_weapon_spin(
     repo_root: Path,
@@ -1068,7 +1228,7 @@ def main() -> None:
     parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
     parser.add_argument("--drive-hold-s", type=float, default=0.6, help="Seconds to hold each drive command")
     parser.add_argument("--drive-min-delta-us", type=int, default=60, help="Min PWM pulse delta from neutral to treat as moving")
-    parser.add_argument("--suite", choices=["smoke", "weapon_spin", "drive_e2e"], default="smoke")
+    parser.add_argument("--suite", choices=["smoke", "weapon_spin", "drive_e2e", "disconnect_failsafe", "full_e2e"], default="smoke")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -1109,7 +1269,57 @@ def main() -> None:
                 drive_min_delta_us=args.drive_min_delta_us,
             )
         )
+    elif args.suite == "disconnect_failsafe":
+        results.append(
+            do_disconnect_failsafe(
+                repo_root,
+                args.psu_channel,
+                psu_off_first=not args.no_psu_off,
+                drive_forward_axis=args.drive_forward_axis,
+                drive_min_delta_us=args.drive_min_delta_us,
+            )
+        )
     elif args.suite == "weapon_spin":
+        results.append(
+            do_weapon_spin(
+                repo_root,
+                args.psu_channel,
+                args.psu_voltage,
+                args.psu_current,
+                psu_off_first=not args.no_psu_off,
+                leave_psu_on=args.leave_psu_on,
+                spin_axis=args.spin_axis,
+                spin_hold_s=args.spin_hold_s,
+                spin_baseline_s=args.spin_baseline_s,
+                spin_sample_interval_s=args.spin_sample_interval_s,
+                spin_settle_s=args.spin_settle_s,
+                spin_current_delta_a=args.spin_current_delta_a,
+                spin_min_current_a=args.spin_min_current_a,
+                require_telemetry=args.require_telemetry,
+            )
+        )
+    elif args.suite == "full_e2e":
+        results.append(do_smoke(repo_root, args.psu_channel, psu_off_first=not args.no_psu_off))
+        results.append(
+            do_drive_e2e(
+                repo_root,
+                args.psu_channel,
+                psu_off_first=not args.no_psu_off,
+                drive_forward_axis=args.drive_forward_axis,
+                drive_turn_axis=args.drive_turn_axis,
+                drive_hold_s=args.drive_hold_s,
+                drive_min_delta_us=args.drive_min_delta_us,
+            )
+        )
+        results.append(
+            do_disconnect_failsafe(
+                repo_root,
+                args.psu_channel,
+                psu_off_first=not args.no_psu_off,
+                drive_forward_axis=args.drive_forward_axis,
+                drive_min_delta_us=args.drive_min_delta_us,
+            )
+        )
         results.append(
             do_weapon_spin(
                 repo_root,

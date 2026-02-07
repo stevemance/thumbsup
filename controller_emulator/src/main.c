@@ -58,7 +58,10 @@ static const uint8_t hid_descriptor_gamepad[] = {
     0x05, 0x01,  // Usage Page (Generic Desktop)
     0x09, 0x30,  // Usage (X)
     0x09, 0x31,  // Usage (Y)
-    0x09, 0x33,  // Usage (Rx)
+    // Bluepad32's Android HID profile maps:
+    // - Z  -> axis_rx
+    // - Rz -> axis_ry
+    0x09, 0x32,  // Usage (Z)
     0x09, 0x35,  // Usage (Rz)
     0x15, 0x81,  // Logical Minimum (-127)
     0x25, 0x7F,  // Logical Maximum (127)

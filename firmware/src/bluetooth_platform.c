@@ -67,6 +67,18 @@ static bool hitl_last_gp_valid = false;
 
 static void hitl_timer_handler(btstack_timer_source_t* ts) {
     hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
+
+    // Feed watchdog even when no controller data is arriving (e.g. controller
+    // disconnect). This keeps the watchdog focused on detecting actual system
+    // hangs, not RF/controller availability.
+    if (watchdog_enabled) {
+        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+        if (now_ms - last_watchdog_feed > 500) {
+            watchdog_update();
+            last_watchdog_feed = now_ms;
+        }
+    }
+
     btstack_run_loop_set_timer(ts, 20);
     btstack_run_loop_add_timer(ts);
 }
@@ -164,6 +176,10 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
     weapon_disarm();  // This also updates weapon LED status
     armed_state = false;
     emergency_stop = true;
+
+    // CRITICAL: Ensure PWM outputs are driven to a safe state even if we never
+    // receive another controller update after the disconnect callback.
+    motor_control_stop_all();
 
     // Update system status LED
     status_set_system(SYSTEM_STATUS_FAILSAFE, LED_EFFECT_BLINK_FAST);

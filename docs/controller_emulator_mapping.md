@@ -1,7 +1,7 @@
 # Controller Emulator Mapping
 
 This document records the HID report fields the controller emulator will expose
-and how Bluepad32's generic HID parser maps them into `uni_gamepad_t`.
+and how Bluepad32 maps them into `uni_gamepad_t`.
 
 ## Goals
 
@@ -9,17 +9,21 @@ and how Bluepad32's generic HID parser maps them into `uni_gamepad_t`.
 - Keep button usages aligned with Bluepad32's generic button map.
 - Avoid RY pedal semantics (0..1023) for weapon control.
 
-## Axis Mapping (Generic HID)
+## Axis Mapping (Bluepad32)
 
-Bluepad32 generic parser uses the following HID usages:
+Important: because the emulator uses VID/PID `0x2e8a/0x0001` (RP2040),
+Bluepad32 does not find a device profile and currently falls back to the
+**Android** HID parser.
+
+Both the Android and generic parsers support a 2-stick mapping using:
 
 - `X`  -> `gamepad.axis_x`  (left stick X, signed)
 - `Y`  -> `gamepad.axis_y`  (left stick Y, signed)
-- `Z`/`RX` -> `gamepad.axis_rx` (right stick X, signed)
+- `Z`  -> `gamepad.axis_rx` (right stick X, signed)
 - `RZ` -> `gamepad.axis_ry` (right stick Y, signed)
 
-Note: `RY` is treated as a pedal (0..1023). To keep weapon control signed,
-we use `RZ` for the right-stick Y axis.
+Note: Bluepad32 treats `RY` as a pedal in the generic parser. To keep weapon
+control signed, we use `RZ` for the right-stick Y axis.
 
 ## D-Pad Mapping
 

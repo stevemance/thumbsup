@@ -83,10 +83,28 @@ Run:
 python3 tools/hitl_orchestrator.py --suite smoke
 ```
 
-Active weapon spin suite:
+Drive PWM end-to-end (no motor power required):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite drive_e2e
+```
+
+Disconnect failsafe (drive outputs return to neutral after controller disconnect):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite disconnect_failsafe
+```
+
+Active weapon spin suite (requires PSU channel powering the ESC/motor):
 
 ```bash
 python3 tools/hitl_orchestrator.py --suite weapon_spin --spin-axis 60 --spin-hold-s 5
+```
+
+Full end-to-end suite (smoke + drive + disconnect + weapon spin):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite full_e2e
 ```
 
 Artifacts:
@@ -94,6 +112,8 @@ Artifacts:
 - `hitl_logs/orchestrator_*/robot_serial.log`
 - `hitl_logs/orchestrator_*/gamepad_serial.log`
 - `hitl_logs/orchestrator_*/weapon_spin_result.json` (PSU + telemetry summary)
+- `hitl_logs/orchestrator_*/drive_e2e_result.json`
+- `hitl_logs/orchestrator_*/disconnect_failsafe_result.json`
 - `hitl_logs/latest_orchestrator_report.json`
 
 ## Pass/Fail Behavior (Smoke Suite)
