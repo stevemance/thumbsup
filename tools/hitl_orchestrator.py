@@ -1482,8 +1482,8 @@ def main() -> None:
     parser.add_argument(
         "--psu-drive-channel",
         type=int,
-        default=2,
-        help="PSU channel for drive ESC (Rigol DP832). Default assumes CH1=weapon, CH2=drive.",
+        default=1,
+        help="PSU channel for drive ESC (Rigol DP832). Default assumes all motors are on CH1.",
     )
     parser.add_argument("--psu-voltage", type=float, default=12.6, help="PSU voltage for active motor tests")
     parser.add_argument("--psu-current", type=float, default=5.0, help="PSU current limit for active motor tests")

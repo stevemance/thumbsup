@@ -104,7 +104,7 @@ python3 tools/hitl_orchestrator.py --suite weapon_spin --spin-axis 60 --spin-hol
 Active drive spin suite (requires PSU channel powering the drive ESC/motors):
 
 ```bash
-python3 tools/hitl_orchestrator.py --suite drive_spin --psu-drive-channel 2 --drive-spin-hold-s 2.5
+python3 tools/hitl_orchestrator.py --suite drive_spin --psu-drive-channel 1 --drive-spin-hold-s 2.5
 ```
 
 Full end-to-end suite (smoke + drive + disconnect + weapon spin):
