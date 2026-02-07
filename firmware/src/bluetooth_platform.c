@@ -110,8 +110,17 @@ static void my_platform_on_init_complete(void) {
 
     // Safe to call "unsafe" functions since they are called from BT thread
 
-    // Start scanning
+    // Start scanning (autoconnect) only for non-HITL builds.
+    //
+    // In HITL, the controller emulator initiates the connection to us. If we
+    // also scan+autoconnect, we can race the incoming connect and hit errors
+    // like "ACL Connection Already Exists" / L2CAP failures. Accepting incoming
+    // connections is still enabled by default in Bluepad32.
+#if HITL_CONSOLE
+    uni_bt_enable_new_connections_unsafe(false);
+#else
     uni_bt_enable_new_connections_unsafe(true);
+#endif
 
     // Based on runtime condition, you can delete or list the stored BT keys.
     // Keep stored keys so HITL pairing can be stable across reboots.
@@ -298,15 +307,32 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     // Emergency stop (Both shoulder buttons pressed)
     if ((gp->buttons & (BTN_L1 | BTN_R1)) ==
         (BTN_L1 | BTN_R1)) {
+        bool was_emergency_stop = emergency_stop;
         emergency_stop = true;
         armed_state = false;
         drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
         drive_update(&stop_cmd);
         weapon_disarm();
-        logi("EMERGENCY STOP TRIGGERED\n");
+
+        // CRITICAL: Ensure motor outputs are driven to a safe state even if the
+        // user keeps holding the emergency stop buttons. Without this, we can
+        // get stuck in this early-return path and never call motor_control_update(),
+        // leaving PWM outputs at the last commanded value.
+        motor_control_stop_all();
+
+        if (!was_emergency_stop) {
+            logi("EMERGENCY STOP TRIGGERED\n");
+        }
         status_set_system(SYSTEM_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
         status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
         last_buttons = gp->buttons;
+
+        // Keep the rest of the system responsive / observable while e-stop is held.
+        motor_control_update();
+        weapon_update();
+        status_update();
+        safety_update();
+        hitl_console_on_gamepad(gp);
         return;
     }
 

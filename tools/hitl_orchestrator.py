@@ -323,6 +323,14 @@ class SerialLogger:
         self.write_tx(line)
 
     def read_line(self) -> str | None:
+        # Avoid blocking when there's no pending RX data.
+        try:
+            if self._ser.in_waiting == 0:
+                return None
+        except Exception:
+            # Fall back to readline() if in_waiting isn't supported.
+            pass
+
         raw = self._ser.readline()
         if not raw:
             return None
@@ -350,10 +358,14 @@ def wait_for_robot_condition(
     *,
     timeout_s: float,
     predicate,
+    pump_logs: list[SerialLogger] | None = None,
 ) -> dict[str, str]:
     deadline = time.monotonic() + timeout_s
     last_status: dict[str, str] = {}
     while time.monotonic() < deadline:
+        if pump_logs:
+            for log in pump_logs:
+                log.read_line()
         line = robot_log.read_line()
         if not line:
             time.sleep(0.01)
@@ -370,6 +382,40 @@ def wait_for_robot_condition(
             if predicate(last_status):
                 return last_status
     raise RuntimeError(f"timeout waiting for robot condition; last_status={last_status}")
+
+
+def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, timeout_s: float) -> None:
+    # In HITL, we prefer the controller emulator to initiate the connection.
+    # This exercises the same "incoming connection" path as real controllers and
+    # avoids flaky host-initiated L2CAP behavior with some devices.
+    gamepad_log.send_line("RESET")
+
+    robot_log.send_line("HITL BTADDR")
+    btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
+
+    def wait_ready(t: float) -> None:
+        wait_for_robot_condition(
+            robot_log,
+            timeout_s=t,
+            predicate=lambda s: s.get("ready") == "1" and s.get("conn") == "1",
+            pump_logs=[gamepad_log],
+        )
+
+    # Attempt 1: use existing keys (most stable / fastest).
+    gamepad_log.send_line(f"CONNECT {btaddr}")
+    try:
+        wait_ready(timeout_s)
+        return
+    except RuntimeError:
+        pass
+
+    # Attempt 2: wipe keys on both sides to force a clean pair.
+    robot_log.send_line("HITL BTKEYS CLEAR")
+    gamepad_log.send_line("DISCONNECT")
+    gamepad_log.send_line("KEYS CLEAR")
+    time.sleep(0.8)
+    gamepad_log.send_line(f"CONNECT {btaddr}")
+    wait_ready(timeout_s * 3.0)
 
 
 def step(name: str):
@@ -445,11 +491,8 @@ def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> s
             robot_log.read_line()
             gamepad_log.read_line()
 
-        # Put both devices into a deterministic state.
-        gamepad_log.send_line("RESET")
-
         # Wait for at least one status sample so we know the HITL console tick is alive.
-        wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s)
+        wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
 
         # Force a safe, deterministic battery voltage for HITL.
         robot_log.send_line("HITL BATTERY 12500")
@@ -457,31 +500,10 @@ def do_smoke(repo_root: Path, psu_channel: int | None, psu_off_first: bool) -> s
             robot_log,
             timeout_s=3.0,
             predicate=lambda s: s.get("batt_mv") == "12500",
+            pump_logs=[gamepad_log],
         )
 
-        # Ensure controller connects (gamepad initiates).
-        robot_log.send_line("HITL BTADDR")
-        btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
-        gamepad_log.send_line(f"CONNECT {btaddr}")
-        # Prefer status field "ready=1" since printf output can interleave and corrupt event lines.
-        # Try once without clearing keys (stable pairing is more reliable). If it doesn't connect,
-        # fall back to wiping keys and retrying to force a fresh pair.
-        try:
-            wait_for_robot_condition(
-                robot_log,
-                timeout_s=20.0,
-                predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-            )
-        except RuntimeError:
-            robot_log.send_line("HITL BTKEYS CLEAR")
-            gamepad_log.send_line("KEYS CLEAR")
-            time.sleep(0.5)
-            gamepad_log.send_line(f"CONNECT {btaddr}")
-            wait_for_robot_condition(
-                robot_log,
-                timeout_s=40.0,
-                predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-            )
+        ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
 
         # Arm toggle with B.
         gamepad_log.send_line("BTN B 1")
@@ -621,7 +643,7 @@ def do_drive_e2e(
             gamepad_log.send_line("RESET")
 
             # Wait for at least one status sample so we know the HITL console tick is alive.
-            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s)
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
 
             # Force a safe, deterministic battery voltage for HITL.
             robot_log.send_line("HITL BATTERY 12500")
@@ -629,31 +651,18 @@ def do_drive_e2e(
                 robot_log,
                 timeout_s=3.0,
                 predicate=lambda s: s.get("batt_mv") == "12500",
+                pump_logs=[gamepad_log],
             )
 
-            # Ensure controller connects (gamepad initiates).
-            robot_log.send_line("HITL BTADDR")
-            btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
-            gamepad_log.send_line(f"CONNECT {btaddr}")
-            try:
-                wait_for_robot_condition(
-                    robot_log,
-                    timeout_s=20.0,
-                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-                )
-            except RuntimeError:
-                robot_log.send_line("HITL BTKEYS CLEAR")
-                gamepad_log.send_line("KEYS CLEAR")
-                time.sleep(0.5)
-                gamepad_log.send_line(f"CONNECT {btaddr}")
-                wait_for_robot_condition(
-                    robot_log,
-                    timeout_s=90.0,
-                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-                )
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
 
             # Wait until failsafe clears (no estop, recent controller activity).
-            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=5.0,
+                predicate=lambda s: s.get("failsafe") == "0",
+                pump_logs=[gamepad_log],
+            )
 
             drive_hold_s = max(0.2, float(drive_hold_s))
             drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
@@ -826,7 +835,7 @@ def do_weapon_spin(
             gamepad_log.send_line("RESET")
 
             # Wait for at least one status sample so we know the HITL console tick is alive.
-            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s)
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
 
             # Force a safe, deterministic battery voltage for HITL.
             robot_log.send_line("HITL BATTERY 12500")
@@ -834,40 +843,23 @@ def do_weapon_spin(
                 robot_log,
                 timeout_s=3.0,
                 predicate=lambda s: s.get("batt_mv") == "12500",
+                pump_logs=[gamepad_log],
             )
 
-            # Ensure controller connects (gamepad initiates).
-            robot_log.send_line("HITL BTADDR")
-            btaddr = wait_for_robot_btaddr(robot_log, timeout_s=5.0)
-            gamepad_log.send_line(f"CONNECT {btaddr}")
-            try:
-                wait_for_robot_condition(
-                    robot_log,
-                    timeout_s=20.0,
-                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-                )
-            except RuntimeError:
-                robot_log.send_line("HITL BTKEYS CLEAR")
-                gamepad_log.send_line("KEYS CLEAR")
-                time.sleep(0.5)
-                gamepad_log.send_line(f"CONNECT {btaddr}")
-                wait_for_robot_condition(
-                    robot_log,
-                    timeout_s=40.0,
-                    predicate=lambda s: s.get("ready") == "1" or s.get("controller_ready") == "1",
-                )
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
 
             # Arm toggle with B.
             gamepad_log.send_line("BTN B 1")
             time.sleep(0.12)
             gamepad_log.send_line("BTN B 0")
-            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1", pump_logs=[gamepad_log])
 
             # Wait for weapon state machine to finish arming (DShot setup can take a few seconds).
             wait_for_robot_condition(
                 robot_log,
                 timeout_s=20.0,
                 predicate=lambda s: s.get("weapon") in ("ARMED", "SPINNING"),
+                pump_logs=[gamepad_log],
             )
 
             # Spin at a safe low command for a short hold.
