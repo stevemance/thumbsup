@@ -153,6 +153,10 @@ static bool integration_prompt(uint32_t timeout_ms) {
     while ((to_ms_since_boot(get_absolute_time()) - start_ms) < timeout_ms) {
         int c = getchar_timeout_us(INTEGRATION_PROMPT_POLL_US);
         if (c == PICO_ERROR_TIMEOUT) {
+            // Keep motors/weapon in their safe idle signaling state while we
+            // wait for a serial keypress. Without this, the ESC can interpret
+            // the gap as "signal lost" and start beeping.
+            integration_tick();
             continue;
         }
         if (c == INTEGRATION_TRIGGER_CHAR || c == (INTEGRATION_TRIGGER_CHAR + 32)) {

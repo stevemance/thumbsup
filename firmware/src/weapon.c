@@ -672,7 +672,12 @@ bool weapon_disarm(void) {
 }
 
 bool weapon_set_speed(uint8_t speed_percent) {
-    if (weapon_state != WEAPON_STATE_ARMED && weapon_state != WEAPON_STATE_SPINNING) {
+    // Allow setting the target speed while ARMING so the motor can begin ramping
+    // immediately once the arm timeout completes (avoids requiring a second
+    // controller "nudge" after arming).
+    if (weapon_state != WEAPON_STATE_ARMED &&
+        weapon_state != WEAPON_STATE_SPINNING &&
+        weapon_state != WEAPON_STATE_ARMING) {
         return false;
     }
 

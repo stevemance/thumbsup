@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <pico/time.h>
 #include <hardware/watchdog.h>
@@ -51,6 +52,14 @@ static bool emergency_clear_in_progress = false;
 static bool watchdog_enabled = false;
 static uint32_t last_watchdog_feed = 0;
 
+// Controller neutral guard
+// Some controllers produce non-neutral axis values during pairing / initial reports.
+// For safety, require a short stable "all sticks neutral" window before allowing
+// any motor commands after a controller becomes ready.
+static bool controller_neutral_guard_active = true;
+static uint32_t controller_neutral_start_ms = 0;
+static uint32_t controller_neutral_last_log_ms = 0;
+
 // Button debouncing
 static uint16_t last_buttons = 0;
 static uint32_t last_button_change_time = 0;
@@ -66,7 +75,22 @@ static uni_gamepad_t hitl_last_gp;
 static bool hitl_last_gp_valid = false;
 
 static void hitl_timer_handler(btstack_timer_source_t* ts) {
-    hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
+    // Fast keepalive tick:
+    // - Keep DShot frames flowing even when there is no controller traffic.
+    //   Some ESCs will start beeping if they don't see frequent DShot updates.
+    //   We target WEAPON_DSHOT_UPDATE_MS (2ms) for robustness.
+    motor_control_update();
+    weapon_update();
+
+    // Slow housekeeping tick (avoid expensive work at 500Hz).
+    static uint32_t last_slow_ms = 0;
+    uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+    if (last_slow_ms == 0 || (now_ms - last_slow_ms) >= 20) {
+        hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
+        status_update();
+        safety_update();
+        last_slow_ms = now_ms;
+    }
 
     // Feed watchdog even when no controller data is arriving (e.g. controller
     // disconnect). This keeps the watchdog focused on detecting actual system
@@ -79,7 +103,7 @@ static void hitl_timer_handler(btstack_timer_source_t* ts) {
         }
     }
 
-    btstack_run_loop_set_timer(ts, 20);
+    btstack_run_loop_set_timer(ts, 2);
     btstack_run_loop_add_timer(ts);
 }
 #endif
@@ -189,6 +213,10 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
 
     hitl_last_gp_valid = false;
     memset(&hitl_last_gp, 0, sizeof(hitl_last_gp));
+
+    controller_neutral_guard_active = true;
+    controller_neutral_start_ms = 0;
+    controller_neutral_last_log_ms = 0;
 }
 
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
@@ -196,6 +224,11 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
 
     // Reset emergency stop when controller connects
     emergency_stop = false;
+
+    // Require a neutral-sticks window before allowing motion.
+    controller_neutral_guard_active = true;
+    controller_neutral_start_ms = 0;
+    controller_neutral_last_log_ms = 0;
 
     // Enable watchdog on first controller connection
     if (!watchdog_enabled) {
@@ -208,6 +241,17 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
     return UNI_ERROR_SUCCESS;
 }
 #endif
+
+static bool controller_axes_neutral(const uni_gamepad_t* gp) {
+    if (!gp) {
+        return true;
+    }
+    // Use the same raw-domain deadzones as the rest of the control code.
+    return (abs(gp->axis_x)  <= STICK_DEADZONE) &&
+           (abs(gp->axis_y)  <= STICK_DEADZONE) &&
+           (abs(gp->axis_rx) <= STICK_DEADZONE) &&
+           (abs(gp->axis_ry) <= STICK_DEADZONE);
+}
 
 static void note_controller_activity(void) {
     last_controller_input = to_ms_since_boot(get_absolute_time());
@@ -375,6 +419,49 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
             emergency_clear_in_progress = false;
             logi("Emergency stop clear cancelled - button released\n");
         }
+    }
+
+    // Startup neutral-axes guard.
+    //
+    // Keep outputs at a safe idle state until the controller reports a stable
+    // neutral position for a short time. This prevents unexpected motion on
+    // initial connect due to transient/non-zero axis values.
+    if (controller_neutral_guard_active) {
+        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+        bool neutral = controller_axes_neutral(gp);
+        if (neutral) {
+            if (controller_neutral_start_ms == 0) {
+                controller_neutral_start_ms = now_ms;
+            } else if ((now_ms - controller_neutral_start_ms) >= 500) {
+                controller_neutral_guard_active = false;
+                controller_neutral_last_log_ms = now_ms;
+                printf("SAFETY: Controller neutral guard cleared\n");
+            }
+        } else {
+            controller_neutral_start_ms = 0;
+            if (controller_neutral_last_log_ms == 0 ||
+                (now_ms - controller_neutral_last_log_ms) >= 1000) {
+                printf("SAFETY: Waiting for controller sticks to be neutral...\n");
+                controller_neutral_last_log_ms = now_ms;
+            }
+        }
+
+        // Hold all outputs in a safe idle state while the guard is active.
+        drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
+        drive_update(&stop_cmd);
+        weapon_set_speed(0);
+        if (armed_state || weapon_is_armed()) {
+            weapon_disarm();
+            armed_state = false;
+        }
+
+        last_buttons = gp ? gp->buttons : 0;
+        motor_control_update();
+        weapon_update();
+        status_update();
+        safety_update();
+        hitl_console_on_gamepad(gp);
+        return;
     }
 
     // Now check if controller state changed - skip normal processing if unchanged.
