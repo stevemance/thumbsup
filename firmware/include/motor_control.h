@@ -27,6 +27,7 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us);
 bool motor_control_set_speed(motor_channel_t channel, int8_t speed);
 void motor_control_stop_all(void);
 uint16_t motor_control_get_pulse(motor_channel_t channel);
+uint16_t motor_control_get_target_pulse(motor_channel_t channel);
 void motor_control_emergency_stop(void);
 bool motor_control_enable_weapon_pwm(void);
 void motor_control_disable_weapon_pwm(void);

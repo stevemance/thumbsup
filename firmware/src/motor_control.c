@@ -244,6 +244,14 @@ uint16_t motor_control_get_pulse(motor_channel_t channel) {
     return motors[channel].current_pulse_us;
 }
 
+uint16_t motor_control_get_target_pulse(motor_channel_t channel) {
+    if (!initialized || channel >= MOTOR_COUNT) {
+        return PWM_NEUTRAL_PULSE;
+    }
+
+    return motors[channel].target_pulse_us;
+}
+
 void motor_control_emergency_stop(void) {
     motor_control_stop_all();
 

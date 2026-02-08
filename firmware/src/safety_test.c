@@ -232,14 +232,18 @@ static bool test_integer_overflow_protection(void) {
         passed = false;
     }
 
-    // Verify clamping worked
-    uint16_t left_pulse = motor_control_get_pulse(MOTOR_LEFT_DRIVE);
-    uint16_t right_pulse = motor_control_get_pulse(MOTOR_RIGHT_DRIVE);
-
-    if (left_pulse > PWM_MAX_PULSE || right_pulse < PWM_MIN_PULSE) {
-        printf("    FAIL: Pulse clamping not working correctly\n");
+    // Verify clamping worked (target pulses are updated immediately, current pulses
+    // ramp via motor_control_update()).
+    uint16_t left_target = motor_control_get_target_pulse(MOTOR_LEFT_DRIVE);
+    uint16_t right_target = motor_control_get_target_pulse(MOTOR_RIGHT_DRIVE);
+    if (left_target != PWM_MAX_PULSE || right_target != PWM_MIN_PULSE) {
+        printf("    FAIL: Pulse clamping not working correctly (targets: %u, %u)\n",
+               left_target, right_target);
         passed = false;
     }
+
+    // CRITICAL: Never leave motors commanded to extreme values after a test.
+    motor_control_stop_all();
 
     return passed;
 }

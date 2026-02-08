@@ -548,21 +548,30 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
 
         // Weapon control with right stick Y-axis (only if armed)
         if (armed_state) {
-            int32_t raw_weapon = gp->axis_ry;
-
-            // SAFETY: Validate weapon input range
-            raw_weapon = CLAMP(raw_weapon, -512, 511);
-
-            // Apply deadzone for weapon control with proper scaling
+            // Prefer analog trigger throttle when available (0-1023). Fallback to
+            // right-stick Y magnitude (|-512..511|) so either stick direction
+            // can command weapon speed.
             int32_t weapon_speed = 0;
-            if (raw_weapon > TRIGGER_THRESHOLD) {
-                // Scale deadzone-adjusted input (safety: only positive values)
-                weapon_speed = ((raw_weapon - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
-                weapon_speed = CLAMP(weapon_speed, 0, 100);
-            }
-            // SAFETY: Negative values are explicitly ignored for weapon control
 
-            weapon_set_speed(weapon_speed);
+            int32_t raw_throttle = gp->throttle;
+            raw_throttle = CLAMP(raw_throttle, 0, 1023);
+            if (raw_throttle > 0) {
+                // Small threshold to ignore noise; scale to 0-100.
+                if (raw_throttle > 20) {
+                    weapon_speed = (raw_throttle * 100) / 1023;
+                    weapon_speed = CLAMP(weapon_speed, 0, 100);
+                }
+            } else {
+                int32_t raw_weapon = gp->axis_ry;
+                raw_weapon = CLAMP(raw_weapon, -512, 511);
+                int32_t mag = (raw_weapon < 0) ? -raw_weapon : raw_weapon;
+                if (mag > TRIGGER_THRESHOLD) {
+                    weapon_speed = ((mag - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
+                    weapon_speed = CLAMP(weapon_speed, 0, 100);
+                }
+            }
+
+            weapon_set_speed((uint8_t)weapon_speed);
         } else {
             // SAFETY: Ensure weapon is stopped when not armed
             weapon_set_speed(0);
