@@ -31,16 +31,16 @@ A complete control system for a 1lb (454g) combat robot using Raspberry Pi Pico 
 
 | Pin | Function | Description |
 |-----|----------|-------------|
-| GP2 | PWM Output | Left drive motor |
-| GP3 | PWM Output | Right drive motor |
-| GP4 | PWM Output | Weapon motor |
-| GP5 | GPIO Output | Status LED |
-| GP6 | GPIO Output | Armed LED |
-| GP7 | GPIO Output | Battery LED |
-| GP8 | GPIO Input | Safety button (optional) |
-| GP26 | ADC Input | Battery voltage monitor |
+| GP0 | PWM Output | Left drive motor signal |
+| GP1 | PWM Output | Right drive motor signal |
+| GP4 | PWM/DShot Output | Weapon motor signal |
+| GP8 | GPIO Input | Safety button (optional, pull-up) |
+| GP26 | ADC Input | Battery voltage monitor (ADC0) |
+| GP28 | Data Output | SK6812 status LEDs |
 | VSYS | Power In | 5V from ESC BEC |
 | GND | Ground | Common ground |
+
+See `docs/HARDWARE_SETUP.md` for the full wiring guide.
 
 ## Documentation
 
