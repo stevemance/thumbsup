@@ -105,6 +105,7 @@ Common suites:
 - `estop_drive`: actively drives and asserts emergency-stop brings outputs + PSU current back to baseline
 - `weapon_disarmed_guard`: commands weapon throttle while disarmed and asserts current does *not* rise
 - `weapon_spin`: requires PSU power; spins weapon and validates via PSU current and (optionally) DShot telemetry
+- `weapon_latency`: requires PSU power; measures controller->motor response latency using PSU current + robot status markers
 - `estop_weapon`: spins weapon then asserts emergency-stop cuts it and current returns to baseline
 - `safety_active`: runs the active safety invariants (estop drive + disconnect failsafe + weapon guard + estop weapon)
 - `full_e2e`: runs the full suite (smoke + drive + safety + weapon)

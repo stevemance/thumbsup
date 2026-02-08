@@ -25,6 +25,7 @@
 static bool controller_connected = false;
 static bool controller_ready = false;
 static uint32_t last_status_ms = 0;
+static uint32_t status_interval_ms = HITL_STATUS_INTERVAL_MS;
 
 static bool streq_case(const char* a, const char* b) {
     while (*a && *b) {
@@ -71,6 +72,7 @@ static void hitl_print_help(void) {
     printf("HITL commands:\n");
     printf("  HITL HELP\n");
     printf("  HITL STATUS\n");
+    printf("  HITL STATUSRATE <ms>\n");
     printf("  HITL BTADDR\n");
     printf("  HITL BTKEYS CLEAR\n");
     printf("  HITL BTKEYS LIST\n");
@@ -171,7 +173,7 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
     bool telem_ok = weapon_get_telemetry(&telem);
     uint32_t age = weapon_get_telemetry_age_ms();
 
-    printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu weapon=%s speed=%u mode=%s "
+    printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu weapon=%s speed=%u target=%u thr=%u mode=%s "
            "x=%d y=%d rx=%d ry=%d buttons=0x%04x dpad=0x%02x dl_us=%u dr_us=%u telem=%u age_ms=",
            (unsigned long)now_ms,
            controller_connected ? 1u : 0u,
@@ -181,6 +183,8 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
            (unsigned long)batt_mv,
            weapon_state_label(weapon_get_state()),
            weapon_get_speed(),
+           weapon_get_target_speed(),
+           (unsigned)weapon_get_dshot_last_throttle(),
            weapon_mode_label(weapon_get_control_mode()),
            gp ? (int)gp->axis_x : 0,
            gp ? (int)gp->axis_y : 0,
@@ -238,6 +242,29 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
 
     if (streq_case(cmd, "STATUS")) {
         hitl_print_status(last_gp);
+        return;
+    }
+
+    if (streq_case(cmd, "STATUSRATE")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        if (!value) {
+            printf("ERR HITL STATUSRATE expects <ms>\n");
+            return;
+        }
+        char* end = NULL;
+        unsigned long ms = strtoul(value, &end, 0);
+        if (!end || *end != '\0') {
+            printf("ERR HITL STATUSRATE invalid: %s\n", value);
+            return;
+        }
+        if (ms < 20) {
+            ms = 20;
+        }
+        if (ms > 2000) {
+            ms = 2000;
+        }
+        status_interval_ms = (uint32_t)ms;
+        printf("HITL STATUSRATE ms=%lu\n", ms);
         return;
     }
 
@@ -327,6 +354,7 @@ void hitl_console_init(void) {
     controller_connected = false;
     controller_ready = false;
     last_status_ms = 0;
+    status_interval_ms = HITL_STATUS_INTERVAL_MS;
     printf("HITL console enabled\n");
     hitl_print_help();
 }
@@ -344,7 +372,7 @@ void hitl_console_set_controller_ready(bool ready) {
 void hitl_console_on_gamepad(const uni_gamepad_t* gp) {
     uint32_t now_ms = to_ms_since_boot(get_absolute_time());
     hitl_poll_serial(gp);
-    if (last_status_ms == 0 || (now_ms - last_status_ms) >= HITL_STATUS_INTERVAL_MS) {
+    if (last_status_ms == 0 || (now_ms - last_status_ms) >= status_interval_ms) {
         hitl_print_status(gp);
         last_status_ms = now_ms;
     }

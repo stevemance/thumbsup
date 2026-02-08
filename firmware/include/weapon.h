@@ -38,6 +38,7 @@ bool weapon_disarm(void);
 bool weapon_set_speed(uint8_t speed_percent);
 weapon_state_t weapon_get_state(void);
 uint8_t weapon_get_speed(void);
+uint8_t weapon_get_target_speed(void);
 bool weapon_is_armed(void);
 void weapon_emergency_stop(void);
 bool weapon_get_telemetry(weapon_telemetry_t* telemetry);

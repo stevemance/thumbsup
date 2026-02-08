@@ -707,6 +707,10 @@ uint8_t weapon_get_speed(void) {
     return current_speed;
 }
 
+uint8_t weapon_get_target_speed(void) {
+    return target_speed;
+}
+
 bool weapon_is_armed(void) {
     return (weapon_state == WEAPON_STATE_ARMED ||
             weapon_state == WEAPON_STATE_SPINNING ||

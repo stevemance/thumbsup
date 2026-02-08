@@ -258,6 +258,139 @@ def plot_drive_pwm(series: StatusSeries, title: str, out_png: Path, *, pdf=None)
     return True
 
 
+@dataclass
+class WeaponSeries:
+    t_s: list[float]
+    speed: list[int]
+    target: list[int]
+    thr: list[int]
+    rpm: list[int | None]
+
+
+def parse_weapon_status_series(robot_serial_log: Path) -> WeaponSeries | None:
+    if not robot_serial_log.exists():
+        return None
+
+    t_s: list[float] = []
+    speed: list[int] = []
+    target: list[int] = []
+    thr: list[int] = []
+    rpm: list[int | None] = []
+
+    for line in robot_serial_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        parts = line.split("\t", 3)
+        if len(parts) != 4:
+            continue
+        try:
+            ts = float(parts[0].strip())
+        except ValueError:
+            continue
+        payload = parts[3].strip()
+        m = HITL_STATUS_RE.match(payload)
+        if not m:
+            continue
+        kv = parse_kv_payload(m.group(1))
+
+        sp = safe_int(kv.get("speed"))
+        tg = safe_int(kv.get("target"))
+        th = safe_int(kv.get("thr"))
+        if sp is None or tg is None or th is None:
+            continue
+
+        t_s.append(ts)
+        speed.append(sp)
+        target.append(tg)
+        thr.append(th)
+        rpm.append(safe_int(kv.get("rpm")))
+
+    if not t_s:
+        return None
+    return WeaponSeries(t_s=t_s, speed=speed, target=target, thr=thr, rpm=rpm)
+
+
+def plot_weapon_latency(step_dir: Path, title: str, out_png: Path, *, pdf=None) -> bool:
+    samples_path = step_dir / "psu_current_samples.json"
+    result_path = step_dir / "weapon_latency_result.json"
+    robot_log = step_dir / "robot_serial.log"
+    if not samples_path.exists() or not result_path.exists():
+        return False
+
+    # Import matplotlib lazily so this script can still run if invoked outside the venv.
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    samples = load_json(samples_path)
+    points = [(s.get("t_s"), s.get("phase"), s.get("current_a")) for s in samples]
+    points = [(t, p, i) for (t, p, i) in points if isinstance(t, (int, float)) and isinstance(p, str) and i is not None]
+    if not points:
+        return False
+
+    result = load_json(result_path)
+    events = (result.get("events") or {}) if isinstance(result, dict) else {}
+    marks = {
+        "cmd_up": events.get("t_cmd_up_s"),
+        "current_rise": events.get("t_current_rise_s"),
+        "cmd_down": events.get("t_cmd_down_s"),
+        "current_fall": events.get("t_current_fall_s"),
+    }
+    marks = {k: float(v) for k, v in marks.items() if isinstance(v, (int, float))}
+
+    t = [float(x[0]) for x in points]
+    phase = [str(x[1]) for x in points]
+    curr = [float(x[2]) for x in points]
+
+    palette = {
+        "baseline": "#4c78a8",
+        "step_up": "#f58518",
+        "step_down": "#54a24b",
+    }
+
+    fig, ax = plt.subplots(figsize=(10.5, 4.4), constrained_layout=True)
+    ax.plot(t, curr, color="#111111", linewidth=1.2, marker="o", markersize=3, label="current (A)")
+    ax.set_title(title)
+    ax.set_xlabel("t (s)")
+    ax.set_ylabel("current (A)")
+    ax.grid(True, alpha=0.3)
+
+    # Shade contiguous phase spans.
+    last_phase = phase[0]
+    span_start = t[0]
+    for ti, ph in zip(t[1:], phase[1:]):
+        if ph != last_phase:
+            ax.axvspan(span_start, ti, color=palette.get(last_phase, "#cccccc"), alpha=0.10, linewidth=0)
+            span_start = ti
+            last_phase = ph
+    ax.axvspan(span_start, t[-1], color=palette.get(last_phase, "#cccccc"), alpha=0.10, linewidth=0)
+
+    # Mark key events.
+    for key, x in marks.items():
+        ax.axvline(x, color="#e45756", linewidth=1.3, linestyle="--", alpha=0.9)
+        ax.text(x, max(curr), key, rotation=90, va="bottom", ha="right", fontsize=8, color="#e45756")
+
+    # Optional: overlay weapon speed/target as a secondary axis if present.
+    series = parse_weapon_status_series(robot_log)
+    if series is not None:
+        ax2 = ax.twinx()
+        ax2.plot(series.t_s, series.target, color="#2ca02c", linewidth=1.1, alpha=0.85, label="target (%)")
+        ax2.plot(series.t_s, series.speed, color="#1f77b4", linewidth=1.1, alpha=0.85, label="speed (%)")
+        ax2.set_ylabel("weapon (%)")
+        ax2.set_ylim(-2, 102)
+        ax2.grid(False)
+        # Compact legend for the right axis.
+        h2, l2 = ax2.get_legend_handles_labels()
+        if h2:
+            ax2.legend(h2, l2, loc="lower right", framealpha=0.9)
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=160)
+    if pdf is not None:
+        pdf.savefig(fig)
+    plt.close(fig)
+    return True
+
+
 def make_summary_page(report: dict[str, Any], *, pdf) -> None:
     import matplotlib
 
@@ -403,6 +536,7 @@ def main() -> None:
             for json_name in [
                 "drive_spin_result.json",
                 "weapon_spin_result.json",
+                "weapon_latency_result.json",
                 "estop_drive_result.json",
                 "weapon_disarmed_guard_result.json",
                 "estop_weapon_result.json",
@@ -426,6 +560,13 @@ def main() -> None:
                 out_png = plots_dir / f"{slugify(name)}_psu_current.png"
                 if plot_psu_current(psu_samples, f"{name} - PSU Current", out_png, pdf=pdf):
                     step_sections.append(f"![{name} PSU current]({out_png.relative_to(run_dir)})")
+                    step_sections.append("")
+
+            # Plots: weapon latency (annotated markers + speed/target).
+            if (step_dir / "weapon_latency_result.json").exists():
+                out_png = plots_dir / f"{slugify(name)}_weapon_latency.png"
+                if plot_weapon_latency(step_dir, f"{name} - Weapon Latency", out_png, pdf=pdf):
+                    step_sections.append(f"![{name} weapon latency]({out_png.relative_to(run_dir)})")
                     step_sections.append("")
 
             # Plots: drive PWM.
