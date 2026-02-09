@@ -2483,6 +2483,7 @@ def do_weapon_latency(
     psu_off_first: bool,
     leave_psu_on: bool,
     spin_axis: int,
+    spin_axis_seq: list[int] | None,
     require_telemetry: bool,
     latency_baseline_s: float,
     latency_hold_s: float,
@@ -2776,6 +2777,20 @@ def do_weapon_latency(
             spin_axis = max(-127, min(127, int(spin_axis)))
             if spin_axis < 0:
                 spin_axis = 0
+            axis_seq: list[int] | None = None
+            if spin_axis_seq:
+                axis_seq = []
+                for v in spin_axis_seq:
+                    try:
+                        iv = int(v)
+                    except Exception:
+                        continue
+                    iv = max(-127, min(127, iv))
+                    if iv < 0:
+                        iv = 0
+                    axis_seq.append(iv)
+                if not axis_seq:
+                    axis_seq = None
             latency_baseline_s = max(0.8, float(latency_baseline_s))
             latency_hold_s = max(1.0, float(latency_hold_s))
             latency_cycles = max(1, int(latency_cycles))
@@ -2789,7 +2804,8 @@ def do_weapon_latency(
             # Warm-up: right after boot/arm, some ESCs ignore the first few throttle
             # updates or telemetry can be "stuck" on stale values. Do a short spin-up
             # and stop before the measured cycles so the first measured cycle is stable.
-            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            warm_axis = (axis_seq[0] if axis_seq else spin_axis)
+            gamepad_log.send_line(f"AXIS RY {warm_axis}")
             run_window("warmup_up", min(1.5, max(0.8, latency_hold_s)))
             gamepad_log.send_line("AXIS RY 0")
             run_window("warmup_down", 1.5)
@@ -2805,9 +2821,18 @@ def do_weapon_latency(
             set_psu_phase("idle")
             psu_thread = threading.Thread(target=psu_sampler_loop, name="psu_sampler", daemon=True)
             psu_thread.start()
-            time.sleep(0.05)
+            # Wait for the sampler to produce at least one valid reading so baseline
+            # windows don't fail due to cold-start / first-SCPI latency.
+            sampler_deadline = time.monotonic() + 3.0
+            while time.monotonic() < sampler_deadline:
+                with psu_samples_lock:
+                    have_valid = any(isinstance(s.get("current_a"), (int, float)) for s in psu_samples)
+                if have_valid:
+                    break
+                time.sleep(0.05)
 
             for cycle in range(1, latency_cycles + 1):
+                axis = (axis_seq[(cycle - 1) % len(axis_seq)] if axis_seq else spin_axis)
                 # Ensure we've come fully to rest before taking a baseline for this cycle.
                 wait_for_robot_condition(
                     robot_log,
@@ -2820,6 +2845,20 @@ def do_weapon_latency(
                 base_start_s, base_end_s = run_window("baseline", latency_baseline_s)
                 baseline_values = psu_values_in_window("baseline", base_start_s, base_end_s)
                 if not baseline_values:
+                    # Retry once with a longer baseline window; if SCPI is slow, we can miss the window.
+                    retry_s = max(1.5, float(latency_baseline_s))
+                    base_start_s, base_end_s = run_window("baseline", retry_s)
+                    baseline_values = psu_values_in_window("baseline", base_start_s, base_end_s)
+                if not baseline_values:
+                    # Last resort: take a few synchronous reads (still useful for diagnostics).
+                    vals: list[float] = []
+                    for _ in range(6):
+                        v = labctl_psu_measure(psu_channel, "current")
+                        if isinstance(v, (int, float)):
+                            vals.append(float(v))
+                        time.sleep(0.02)
+                    baseline_values = vals
+                if not baseline_values:
                     raise RuntimeError("no PSU current samples for baseline")
                 baseline_med = statistics.median(baseline_values)
 
@@ -2829,7 +2868,7 @@ def do_weapon_latency(
                 # Step up.
                 status_seen.clear()
                 t_cmd_up_s = round(time.monotonic() - suite_t0, 3)
-                gamepad_log.send_line(f"AXIS RY {spin_axis}")
+                gamepad_log.send_line(f"AXIS RY {axis}")
                 up_start_s, up_end_s = run_window("step_up", latency_hold_s)
                 up_seen = dict(status_seen)
                 t_current_rise_s = psu_first_crossing_in_window("step_up", up_start_s, up_end_s, rise_threshold, above=True)
@@ -2845,6 +2884,7 @@ def do_weapon_latency(
 
                 cycle_result = {
                     "cycle": cycle,
+                    "spin_axis": axis,
                     "baseline": {
                         "duration_s": float(latency_baseline_s),
                         "median_a": float(baseline_med),
@@ -2986,6 +3026,7 @@ def do_weapon_latency(
                 "psu_voltage_set": psu_voltage,
                 "psu_current_limit_set": psu_current,
                 "spin_axis": spin_axis,
+                "spin_axis_seq": axis_seq,
                 "status_interval_ms": int(latency_status_interval_ms),
                 "latency_cycles": latency_cycles,
                 "require_telemetry": bool(require_telemetry),
@@ -3042,6 +3083,10 @@ def main() -> None:
     parser.add_argument("--psu-current", type=float, default=5.0, help="PSU current limit for active motor tests")
     parser.add_argument("--leave-psu-on", action="store_true", help="leave PSU output enabled after suite")
     parser.add_argument("--spin-axis", type=int, default=60, help="Weapon spin command (RY axis -127..127)")
+    parser.add_argument(
+        "--spin-axis-seq",
+        help="Optional comma-separated list of spin axis values to cycle per latency cycle (e.g. 20,40,60,80).",
+    )
     parser.add_argument("--spin-hold-s", type=float, default=5.0, help="Seconds to hold weapon command")
     parser.add_argument("--spin-baseline-s", type=float, default=2.0, help="Seconds to sample baseline current before spin")
     parser.add_argument("--spin-sample-interval-s", type=float, default=0.2, help="PSU current sample interval (s)")
@@ -3096,6 +3141,16 @@ def main() -> None:
         default="smoke",
     )
     args = parser.parse_args()
+    spin_axis_seq = None
+    if args.spin_axis_seq:
+        parts = [p.strip() for p in re.split(r"[,\s]+", str(args.spin_axis_seq).strip()) if p.strip()]
+        seq: list[int] = []
+        for p in parts:
+            try:
+                seq.append(int(p, 0))
+            except ValueError:
+                raise SystemExit(f"invalid --spin-axis-seq value: {p!r}")
+        spin_axis_seq = seq
 
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -3314,6 +3369,7 @@ def main() -> None:
                     psu_off_first=not args.no_psu_off,
                     leave_psu_on=args.leave_psu_on,
                     spin_axis=args.spin_axis,
+                    spin_axis_seq=spin_axis_seq,
                     require_telemetry=args.require_telemetry,
                     latency_baseline_s=args.latency_baseline_s,
                     latency_hold_s=args.latency_hold_s,

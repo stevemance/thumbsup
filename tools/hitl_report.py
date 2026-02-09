@@ -406,6 +406,7 @@ def plot_weapon_latency_cycles(step_dir: Path, title: str, out_png: Path, *, pdf
     xs: list[int] = []
     rise: list[float] = []
     fall: list[float] = []
+    axis_vals: list[int] = []
     rpm_xs: list[int] = []
     rpm_vals: list[float] = []
 
@@ -415,6 +416,7 @@ def plot_weapon_latency_cycles(step_dir: Path, title: str, out_png: Path, *, pdf
         idx = safe_int(c.get("cycle"))
         if idx is None:
             continue
+        axis = safe_int(c.get("spin_axis"))
         lat = c.get("latency_s") or {}
         if not isinstance(lat, dict):
             continue
@@ -426,6 +428,7 @@ def plot_weapon_latency_cycles(step_dir: Path, title: str, out_png: Path, *, pdf
         xs.append(idx)
         rise.append(r)
         fall.append(f)
+        axis_vals.append(axis if axis is not None else 0)
         if rp is not None:
             rpm_xs.append(idx)
             rpm_vals.append(rp)
@@ -448,6 +451,14 @@ def plot_weapon_latency_cycles(step_dir: Path, title: str, out_png: Path, *, pdf
     ax.set_ylabel("latency (s)")
     ax.grid(True, alpha=0.25)
     ax.legend(loc="upper right", framealpha=0.9)
+
+    # Overlay commanded axis sequence on a secondary axis for context.
+    if axis_vals:
+        ax2 = ax.twinx()
+        ax2.step(xs, axis_vals, where="post", color="#777777", linewidth=1.0, alpha=0.55, label="spin_axis")
+        ax2.set_ylabel("commanded axis (RY)")
+        ax2.set_ylim(-5, 132)
+        ax2.grid(False)
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=160)
