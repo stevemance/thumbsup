@@ -557,27 +557,42 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
 
         // Weapon control with right stick Y-axis (only if armed)
         if (armed_state) {
-            // Prefer analog trigger throttle when available (0-1023). Fallback to
-            // right-stick Y magnitude (|-512..511|) so either stick direction
-            // can command weapon speed.
+            // Weapon speed can be commanded either by analog pedals (0-1023) or
+            // by right-stick Y magnitude (|-512..511|). Some controllers report
+            // small non-zero pedal noise; never let that suppress stick control.
             int32_t weapon_speed = 0;
 
-            int32_t raw_throttle = gp->throttle;
-            raw_throttle = CLAMP(raw_throttle, 0, 1023);
-            if (raw_throttle > 0) {
-                // Small threshold to ignore noise; scale to 0-100.
-                if (raw_throttle > 20) {
-                    weapon_speed = (raw_throttle * 100) / 1023;
-                    weapon_speed = CLAMP(weapon_speed, 0, 100);
-                }
-            } else {
-                int32_t raw_weapon = gp->axis_ry;
-                raw_weapon = CLAMP(raw_weapon, -512, 511);
-                int32_t mag = (raw_weapon < 0) ? -raw_weapon : raw_weapon;
-                if (mag > TRIGGER_THRESHOLD) {
-                    weapon_speed = ((mag - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
-                    weapon_speed = CLAMP(weapon_speed, 0, 100);
-                }
+            // Stick magnitude mapping (0-100%).
+            int32_t stick_speed = 0;
+            int32_t raw_weapon = CLAMP(gp->axis_ry, -512, 511);
+            int32_t mag = (raw_weapon < 0) ? -raw_weapon : raw_weapon;
+            if (mag > TRIGGER_THRESHOLD) {
+                stick_speed = ((mag - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
+                stick_speed = CLAMP(stick_speed, 0, 100);
+            }
+
+            // Pedal mapping (0-100%). We consider both throttle & brake and
+            // take the max so whichever control is active wins.
+            int32_t pedal_speed = 0;
+            int32_t raw_throttle = CLAMP(gp->throttle, 0, 1023);
+            if (raw_throttle > TRIGGER_THRESHOLD) {
+                pedal_speed = (raw_throttle * 100) / 1023;
+                pedal_speed = CLAMP(pedal_speed, 0, 100);
+            }
+
+            int32_t brake_speed = 0;
+            int32_t raw_brake = CLAMP(gp->brake, 0, 1023);
+            if (raw_brake > TRIGGER_THRESHOLD) {
+                brake_speed = (raw_brake * 100) / 1023;
+                brake_speed = CLAMP(brake_speed, 0, 100);
+            }
+
+            weapon_speed = stick_speed;
+            if (pedal_speed > weapon_speed) {
+                weapon_speed = pedal_speed;
+            }
+            if (brake_speed > weapon_speed) {
+                weapon_speed = brake_speed;
             }
 
             weapon_set_speed((uint8_t)weapon_speed);
