@@ -86,6 +86,8 @@ static bool state_dirty = true;
 static bool send_pending = false;
 static uint32_t last_report_ms = 0;
 static uint16_t hid_cid = 0;
+static hci_con_handle_t hid_con_handle = 0;
+static uint32_t last_sniff_exit_ms = 0;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t poll_timer;
@@ -461,6 +463,12 @@ static void poll_timer_handler(btstack_timer_source_t* ts) {
 
     if (hid_cid) {
         uint32_t now = btstack_run_loop_get_time_ms();
+        // Some hosts enter sniff mode after short idle windows; periodically force
+        // exit to keep report latency low and deterministic.
+        if (hid_con_handle && (now - last_sniff_exit_ms) >= 200) {
+            gap_sniff_mode_exit(hid_con_handle);
+            last_sniff_exit_ms = now;
+        }
         if (state_dirty || (now - last_report_ms) >= REPORT_INTERVAL_MS) {
             request_send();
         }
@@ -496,6 +504,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t* packe
                         break;
                     }
                     hid_cid = hid_subevent_connection_opened_get_hid_cid(packet);
+                    hid_con_handle = hid_subevent_connection_opened_get_con_handle(packet);
+                    // Force exit sniff mode to keep latency deterministic. Some hosts will
+                    // enter sniff after short idle periods which can add seconds of delay.
+                    gap_sniff_mode_exit(hid_con_handle);
+                    last_sniff_exit_ms = btstack_run_loop_get_time_ms();
                     send_pending = false;
                     state_dirty = true;
                     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
@@ -504,6 +517,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t* packe
                 case HID_SUBEVENT_CONNECTION_CLOSED:
                     printf("HID disconnected\n");
                     hid_cid = 0;
+                    hid_con_handle = 0;
                     send_pending = false;
                     state_dirty = true;
                     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
@@ -541,7 +555,9 @@ int btstack_main(int argc, const char* argv[]) {
     gap_connectable_control(1);
     gap_set_class_of_device(0x2508);
     gap_set_local_name("ThumbsUp HITL Gamepad 00:00:00:00:00:00");
-    gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH | LM_LINK_POLICY_ENABLE_SNIFF_MODE);
+    // Low-latency HITL: do not enable sniff mode. Sniff can introduce multi-second
+    // wake-up latency and makes step-response / weapon latency measurements meaningless.
+    gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
     gap_set_allow_role_switch(true);
 
     l2cap_init();

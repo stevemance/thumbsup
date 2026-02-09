@@ -46,6 +46,8 @@ uint32_t weapon_get_dshot_failures(void);
 uint16_t weapon_get_dshot_last_throttle(void);
 void weapon_get_dshot_send_counts(uint32_t* attempts, uint32_t* successes);
 void weapon_get_dshot_telemetry_counts(uint32_t* requests, uint32_t* responses);
+uint32_t weapon_get_dshot_telemetry_reqbit_tx(void);
+void weapon_get_dshot_telemetry_rx_counts(uint32_t* raw, uint32_t* discarded);
 void weapon_reset_dshot_telemetry_counts(void);
 uint32_t weapon_get_telemetry_age_ms(void);
 void weapon_get_dshot_telemetry_debug(uint32_t* raw, uint32_t* decode_fail);

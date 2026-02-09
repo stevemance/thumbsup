@@ -115,7 +115,10 @@ static void print_telem_stats(void) {
     static uint32_t last_resp = 0;
     uint32_t req = 0;
     uint32_t resp = 0;
-    uint32_t raw = 0;
+    uint32_t rx_raw = 0;
+    uint32_t rx_discarded = 0;
+    uint32_t dec_frames = 0;
+    uint64_t dec_us = 0;
     uint32_t bad = 0;
     uint32_t tx = 0;
     uint32_t tx_ok = 0;
@@ -123,7 +126,9 @@ static void print_telem_stats(void) {
     bool setup_pending = false;
     bool setup_done = false;
     weapon_get_dshot_telemetry_counts(&req, &resp);
-    weapon_get_dshot_telemetry_debug(&raw, &bad);
+    weapon_get_dshot_telemetry_rx_counts(&rx_raw, &rx_discarded);
+    weapon_get_dshot_telemetry_debug(NULL, &bad);
+    weapon_get_dshot_telemetry_timing(&dec_frames, &dec_us);
     weapon_get_dshot_send_counts(&tx, &tx_ok);
     last_thr = weapon_get_dshot_last_throttle();
     weapon_get_dshot_setup_state(&setup_pending, &setup_done);
@@ -134,18 +139,22 @@ static void print_telem_stats(void) {
     uint32_t tx_rate = (dt_ms > 0) ? ((tx - last_tx) * 1000u) / dt_ms : 0;
     uint32_t req_rate = (dt_ms > 0) ? ((req - last_req) * 1000u) / dt_ms : 0;
     uint32_t resp_rate = (dt_ms > 0) ? ((resp - last_resp) * 1000u) / dt_ms : 0;
-    uint32_t decode_ok = (raw >= bad) ? (raw - bad) : 0;
-    uint32_t decode_pct = (raw > 0) ? (decode_ok * 100u) / raw : 0;
+    uint32_t reqbit = weapon_get_dshot_telemetry_reqbit_tx();
+    uint32_t decode_pct = (dec_frames > 0) ? (resp * 100u) / dec_frames : 0;
+    uint32_t decode_us_avg = (dec_frames > 0) ? (uint32_t)(dec_us / dec_frames) : 0;
     gpio_function_t fn = gpio_get_function(PIN_WEAPON_PWM);
     if (age == UINT32_MAX) {
-        printf("TELEMSTATS mode=%s req=%lu resp=%lu raw=%lu bad=%lu ok=%lu ok_pct=%lu age=-- tx=%lu ok_tx=%lu tx_rate=%lu req_rate=%lu resp_rate=%lu thr=%u fail=%lu gpio_fn=%d setup_pend=%u setup_done=%u\n",
+        printf("TELEMSTATS mode=%s req=%lu resp=%lu reqbit=%lu rx=%lu disc=%lu dec=%lu bad=%lu ok_pct=%lu dec_us=%lu age=-- tx=%lu ok_tx=%lu tx_rate=%lu req_rate=%lu resp_rate=%lu thr=%u fail=%lu gpio_fn=%d setup_pend=%u setup_done=%u\n",
                weapon_mode_label(mode),
                (unsigned long)req,
                (unsigned long)resp,
-               (unsigned long)raw,
+               (unsigned long)reqbit,
+               (unsigned long)rx_raw,
+               (unsigned long)rx_discarded,
+               (unsigned long)dec_frames,
                (unsigned long)bad,
-               (unsigned long)decode_ok,
                (unsigned long)decode_pct,
+               (unsigned long)decode_us_avg,
                (unsigned long)tx,
                (unsigned long)tx_ok,
                (unsigned long)tx_rate,
@@ -157,14 +166,17 @@ static void print_telem_stats(void) {
                setup_pending ? 1u : 0u,
                setup_done ? 1u : 0u);
     } else {
-        printf("TELEMSTATS mode=%s req=%lu resp=%lu raw=%lu bad=%lu ok=%lu ok_pct=%lu age=%lu tx=%lu ok_tx=%lu tx_rate=%lu req_rate=%lu resp_rate=%lu thr=%u fail=%lu gpio_fn=%d setup_pend=%u setup_done=%u\n",
+        printf("TELEMSTATS mode=%s req=%lu resp=%lu reqbit=%lu rx=%lu disc=%lu dec=%lu bad=%lu ok_pct=%lu dec_us=%lu age=%lu tx=%lu ok_tx=%lu tx_rate=%lu req_rate=%lu resp_rate=%lu thr=%u fail=%lu gpio_fn=%d setup_pend=%u setup_done=%u\n",
                weapon_mode_label(mode),
                (unsigned long)req,
                (unsigned long)resp,
-               (unsigned long)raw,
+               (unsigned long)reqbit,
+               (unsigned long)rx_raw,
+               (unsigned long)rx_discarded,
+               (unsigned long)dec_frames,
                (unsigned long)bad,
-               (unsigned long)decode_ok,
                (unsigned long)decode_pct,
+               (unsigned long)decode_us_avg,
                (unsigned long)age,
                (unsigned long)tx,
                (unsigned long)tx_ok,

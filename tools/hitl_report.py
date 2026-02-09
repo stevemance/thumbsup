@@ -170,6 +170,8 @@ def plot_psu_current(samples_path: Path, title: str, out_png: Path, *, pdf=None)
     # Phase coloring.
     palette = {
         "baseline": "#4c78a8",
+        "step_up": "#f58518",
+        "step_down": "#54a24b",
         "run": "#f58518",
         "drive_run": "#54a24b",
         "disarmed_cmd": "#b279a2",
@@ -391,6 +393,70 @@ def plot_weapon_latency(step_dir: Path, title: str, out_png: Path, *, pdf=None) 
     return True
 
 
+def plot_weapon_latency_cycles(step_dir: Path, title: str, out_png: Path, *, pdf=None) -> bool:
+    result_path = step_dir / "weapon_latency_result.json"
+    if not result_path.exists():
+        return False
+
+    result = load_json(result_path)
+    cycles = result.get("cycles") if isinstance(result, dict) else None
+    if not isinstance(cycles, list) or not cycles:
+        return False
+
+    xs: list[int] = []
+    rise: list[float] = []
+    fall: list[float] = []
+    rpm_xs: list[int] = []
+    rpm_vals: list[float] = []
+
+    for c in cycles:
+        if not isinstance(c, dict):
+            continue
+        idx = safe_int(c.get("cycle"))
+        if idx is None:
+            continue
+        lat = c.get("latency_s") or {}
+        if not isinstance(lat, dict):
+            continue
+        r = safe_float(lat.get("cmd_to_current_rise_s"))
+        f = safe_float(lat.get("cmd_to_current_fall_s"))
+        rp = safe_float(lat.get("cmd_to_rpm_seen_s"))
+        if r is None or f is None:
+            continue
+        xs.append(idx)
+        rise.append(r)
+        fall.append(f)
+        if rp is not None:
+            rpm_xs.append(idx)
+            rpm_vals.append(rp)
+
+    if not xs:
+        return False
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10.5, 4.2), constrained_layout=True)
+    ax.plot(xs, rise, marker="o", linewidth=1.2, label="cmd->current rise (s)", color="#f58518")
+    ax.plot(xs, fall, marker="o", linewidth=1.2, label="cmd->current fall (s)", color="#54a24b")
+    if rpm_vals:
+        ax.plot(rpm_xs, rpm_vals, marker="o", linewidth=1.2, label="cmd->rpm>0 seen (s)", color="#4c78a8")
+    ax.set_title(title)
+    ax.set_xlabel("cycle")
+    ax.set_ylabel("latency (s)")
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc="upper right", framealpha=0.9)
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=160)
+    if pdf is not None:
+        pdf.savefig(fig)
+    plt.close(fig)
+    return True
+
+
 def make_summary_page(report: dict[str, Any], *, pdf) -> None:
     import matplotlib
 
@@ -567,6 +633,10 @@ def main() -> None:
                 out_png = plots_dir / f"{slugify(name)}_weapon_latency.png"
                 if plot_weapon_latency(step_dir, f"{name} - Weapon Latency", out_png, pdf=pdf):
                     step_sections.append(f"![{name} weapon latency]({out_png.relative_to(run_dir)})")
+                    step_sections.append("")
+                out_png = plots_dir / f"{slugify(name)}_weapon_latency_cycles.png"
+                if plot_weapon_latency_cycles(step_dir, f"{name} - Weapon Latency (Cycles)", out_png, pdf=pdf):
+                    step_sections.append(f"![{name} weapon latency cycles]({out_png.relative_to(run_dir)})")
                     step_sections.append("")
 
             # Plots: drive PWM.

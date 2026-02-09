@@ -10,6 +10,7 @@
 #include <hardware/watchdog.h>
 #if !SERIAL_GAMEPAD
 #include <pico/cyw43_arch.h>
+#include <btstack.h>
 #include <btstack_run_loop.h>
 #include <uni.h>
 #include "sdkconfig.h"
@@ -156,6 +157,14 @@ static void my_platform_on_init_complete(void) {
     uni_bt_enable_new_connections_unsafe(false);
 #else
     uni_bt_enable_new_connections_unsafe(true);
+#endif
+
+    // Bluepad32 defaults to allowing sniff mode on BR/EDR links. Sniff can add large
+    // (and variable) latency, which is bad for combat responsiveness and makes HITL
+    // step-response measurements flaky. Override the BTstack default link policy
+    // before controllers connect.
+#if !BT_ALLOW_SNIFF
+    gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
 #endif
 
     // Based on runtime condition, you can delete or list the stored BT keys.
