@@ -410,9 +410,22 @@ def wait_for_robot_condition(
 
 
 def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, timeout_s: float) -> None:
-    # In HITL, we prefer the controller emulator to initiate the connection.
-    # This exercises the same "incoming connection" path as real controllers and
-    # avoids flaky host-initiated L2CAP behavior with some devices.
+    # Tear down any lingering BT connection from a previous run before
+    # attempting a fresh connect.  Without this, the robot's BT stack may
+    # see a stale/half-open link and fail to process the new pairing.
+    gamepad_log.send_line("DISCONNECT")
+    # Wait for the BT disconnect to actually complete (emulator prints
+    # "HID disconnected" when L2CAP teardown finishes), not just ACK.
+    disc_deadline = time.monotonic() + 2.0
+    while time.monotonic() < disc_deadline:
+        line = gamepad_log.read_line()
+        if line and "HID disconnected" in line:
+            break
+        robot_log.read_line()  # drain robot too
+        if not line:
+            time.sleep(0.01)
+    time.sleep(0.1)
+
     gamepad_log.send_line("RESET")
 
     robot_log.send_line("HITL BTADDR")
@@ -2474,6 +2487,47 @@ def do_weapon_spin(
     return "weapon spin passed"
 
 
+HITL_LATENCY_EVENT_RE = re.compile(r"^HITL LATENCY EVENT (\S+) (.+)$")
+HITL_LATENCY_RESULT_RE = re.compile(r"^HITL LATENCY RESULT (.+)$")
+HITL_LATENCY_DOWN_RE = re.compile(r"^HITL LATENCY DOWN (.+)$")
+HITL_CMD_RE = re.compile(r"^HITL CMD (.+)$")
+HITL_SENT_RE = re.compile(r"^HITL SENT (.+)$")
+
+
+def _median_filter(values: list[float], window: int = 3) -> list[float]:
+    """Apply a sliding-window median filter to a list of floats."""
+    if window < 2 or len(values) <= window:
+        return list(values)
+    half = window // 2
+    out: list[float] = []
+    for i in range(len(values)):
+        lo = max(0, i - half)
+        hi = min(len(values), i + half + 1)
+        out.append(float(statistics.median(values[lo:hi])))
+    return out
+
+
+def _generate_sine_axis_seq(n_cycles: int, axis_min: int, axis_max: int) -> list[int]:
+    """Generate a sine-wave axis value sequence for latency test cycles.
+
+    Returns a list of n_cycles positive axis values that trace a sine wave
+    from axis_min up through axis_max and back down. This exercises the full
+    ramp range and produces varied motor responses for better latency statistics.
+    """
+    import math
+    if n_cycles <= 1:
+        return [axis_max]
+    values: list[int] = []
+    for i in range(n_cycles):
+        # Map cycle index to a half-sine: 0 -> pi.
+        phase = math.pi * i / (n_cycles - 1)
+        frac = math.sin(phase)
+        v = round(axis_min + frac * (axis_max - axis_min))
+        v = max(axis_min, min(axis_max, v))
+        values.append(v)
+    return values
+
+
 @step("Weapon Latency Test")
 def do_weapon_latency(
     repo_root: Path,
@@ -2484,36 +2538,29 @@ def do_weapon_latency(
     leave_psu_on: bool,
     spin_axis: int,
     spin_axis_seq: list[int] | None,
-    require_telemetry: bool,
     latency_baseline_s: float,
     latency_hold_s: float,
     latency_cycles: int,
-    latency_sample_interval_s: float,
-    latency_rise_delta_a: float,
-    latency_fall_tol_a: float,
-    latency_status_interval_ms: int,
-    telem_min_rpm: int,
+    latency_rpm_threshold: int,
+    latency_telem_rate_ms: int,
+    latency_status_rate_ms: int,
+    check_drift: bool = False,
+    max_drift_ms_per_cycle: float = 2.0,
+    max_latency_ms: float = 300.0,
     out_dir: Path | None = None,
 ) -> str:
     """
-    Estimate end-to-end latency from a controller throttle command to a physical motor response.
+    Precision latency measurement using firmware-side timestamps and RPM telemetry.
 
-    We measure multiple timestamps on the host timeline:
-    - t_cmd_up_s: when we send AXIS RY <spin_axis> to the gamepad emulator.
-    - t_robot_target_seen_s: first robot HITL STATUS where target>0 (controller path to robot logic).
-    - t_robot_thr_nonzero_seen_s: first robot HITL STATUS where thr>0 (robot logic to DShot TX).
-    - t_current_rise_s: first PSU current sample >= baseline_median + latency_rise_delta_a (physical response).
+    Two-layer measurement:
+    - Layer 1 (precise): Robot firmware time_us_64() timestamps internal events
+      (gamepad RY change -> target set -> DShot sent -> RPM threshold crossed).
+    - Layer 2 (approximate): Host time.monotonic() timestamps command send and
+      response arrival (~5-10ms USB serial uncertainty).
 
-    And similarly for the falling edge when commanding back to 0.
-
-    Note: PSU sampling (via labctl) is not high-rate; this provides a coarse but repeatable estimate.
+    Emulator timestamps (HITL CMD / HITL SENT) measure emulator-internal delay.
+    BT link latency estimated as: host_total - fw_internal - emulator_internal - USB_overhead.
     """
-    if psu_channel is None:
-        raise RuntimeError("psu_channel is required for weapon_latency")
-
-    if psu_off_first:
-        labctl_psu_off(psu_channel)
-
     robot_port = resolve_robot_port()
     gamepad_port = resolve_gamepad_port()
 
@@ -2525,8 +2572,11 @@ def do_weapon_latency(
     picotool_reboot_application(gamepad_usb_ser)
     wait_for_tty_reenumerate(gamepad_port, 15)
 
-    # Power ESC supply (suite will fail if we never see a current response).
-    labctl_psu_set(psu_channel, psu_voltage, psu_current)
+    # Power ESC supply if channel provided.
+    if psu_channel is not None:
+        if psu_off_first:
+            labctl_psu_off(psu_channel)
+        labctl_psu_set(psu_channel, psu_voltage, psu_current)
 
     with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
             serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
@@ -2537,18 +2587,12 @@ def do_weapon_latency(
         robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
         gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
         suite_t0 = time.monotonic()
-        psu_samples: list[dict] = []
-        status_seen: dict[str, float] = {}
         weapon_armed = False
 
-        # PSU sampling via labctl is relatively slow and uses subprocesses.
-        # For latency work we keep robot serial reading responsive by sampling
-        # PSU current in a background thread.
+        # Optional PSU sampling (secondary data only, not used for latency calc).
         import threading
-
+        psu_samples: list[dict] = []
         psu_samples_lock = threading.Lock()
-        psu_phase_lock = threading.Lock()
-        psu_phase = {"value": "idle"}
         psu_stop = threading.Event()
         psu_thread: threading.Thread | None = None
 
@@ -2559,6 +2603,7 @@ def do_weapon_latency(
                 gamepad_log.send_line("BTN B 0")
                 gamepad_log.send_line("BTN L1 0")
                 gamepad_log.send_line("BTN R1 0")
+                robot_log.send_line("HITL LATENCY DISARM")
                 if weapon_armed:
                     time.sleep(0.2)
                     gamepad_log.send_line("BTN B 1")
@@ -2566,168 +2611,157 @@ def do_weapon_latency(
                     gamepad_log.send_line("BTN B 0")
             except Exception:
                 pass
-            if not leave_psu_on:
+            if psu_channel is not None and not leave_psu_on:
                 try:
                     labctl_psu_off(psu_channel)
                 except Exception:
                     pass
 
-        def set_psu_phase(phase: str) -> None:
-            with psu_phase_lock:
-                psu_phase["value"] = phase
-
-        def get_psu_phase() -> str:
-            with psu_phase_lock:
-                return str(psu_phase["value"])
-
         def psu_sampler_loop() -> None:
-            interval_s = max(0.02, float(latency_sample_interval_s))
-            next_deadline = time.monotonic() + interval_s
+            if psu_channel is None:
+                return
             while not psu_stop.is_set():
-                phase = get_psu_phase()
                 t_before = time.monotonic()
                 value = labctl_psu_measure(psu_channel, "current")
                 t_after = time.monotonic()
-                t_mid = (t_before + t_after) / 2.0
-
                 sample = {
                     "t_s": round(t_after - suite_t0, 3),
-                    "t_before_s": round(t_before - suite_t0, 3),
-                    "t_mid_s": round(t_mid - suite_t0, 3),
+                    "t_mid_s": round((t_before + t_after) / 2.0 - suite_t0, 3),
                     "duration_s": round(t_after - t_before, 3),
-                    "phase": phase,
                     "current_a": value,
                 }
                 with psu_samples_lock:
                     psu_samples.append(sample)
+                time.sleep(0.05)
 
-                now = time.monotonic()
-                sleep_s = next_deadline - now
-                if sleep_s > 0:
-                    time.sleep(min(sleep_s, 0.05))
-                    now = time.monotonic()
-                # Keep scheduling based on the previous deadline to avoid drift,
-                # but recover if sampling falls behind.
-                next_deadline += interval_s
-                if next_deadline < now:
-                    next_deadline = now + interval_s
+        # Collect time-series from STATUS lines and latency events from firmware.
+        time_series: list[dict] = []
+        fw_events: dict[str, object] = {}
+        emu_events: dict[str, object] = {}
+        fw_result_kv: dict[str, str] = {}
+        fw_down_kv: dict[str, str] = {}
 
-        def observe_robot_line(line: str) -> None:
-            m = HITL_STATUS_RE.match(line)
-            if not m:
-                return
-            kv = parse_kv_payload(m.group(1))
-            t_s = time.monotonic() - suite_t0
+        def observe_line(line: str, source: str) -> None:
+            """Parse both robot and emulator serial lines for latency data."""
+            t_host = round(time.monotonic() - suite_t0, 6)
 
-            # Only record the first time we see each condition.
-            def note_once(key: str, ok: bool) -> None:
-                if ok and key not in status_seen:
-                    status_seen[key] = round(t_s, 3)
+            if source == "robot":
+                # STATUS lines -> time series.
+                m = HITL_STATUS_RE.match(line)
+                if m:
+                    kv = parse_kv_payload(m.group(1))
+                    try:
+                        target = int(kv.get("target") or "0")
+                    except ValueError:
+                        target = 0
+                    try:
+                        speed = int(kv.get("speed") or "0")
+                    except ValueError:
+                        speed = 0
+                    try:
+                        thr = int(kv.get("thr") or "0")
+                    except ValueError:
+                        thr = 0
+                    try:
+                        rpm = int(kv.get("rpm") or "0")
+                    except ValueError:
+                        rpm = 0
+                    time_series.append({
+                        "t_s": t_host,
+                        "target": target,
+                        "speed": speed,
+                        "thr": thr,
+                        "rpm": rpm,
+                    })
+                    return
 
-            target = None
-            thr = None
-            speed = None
-            telem_flag = None
-            rpm = None
-            try:
-                target = int(kv.get("target") or "0")
-            except ValueError:
-                target = None
-            try:
-                thr = int(kv.get("thr") or "0")
-            except ValueError:
-                thr = None
-            try:
-                speed = int(kv.get("speed") or "0")
-            except ValueError:
-                speed = None
-            try:
-                telem_flag = int(kv.get("telem") or "0")
-            except ValueError:
-                telem_flag = None
-            try:
-                rpm = int(kv.get("rpm") or "0")
-            except ValueError:
-                rpm = None
+                # Latency events -> fw_events dict.
+                m = HITL_LATENCY_EVENT_RE.match(line)
+                if m:
+                    event_name = m.group(1)
+                    kv = parse_kv_payload(m.group(2))
+                    key = f"host_robot_{event_name}_s"
+                    if key not in fw_events:
+                        fw_events[key] = t_host
+                    t_us_str = kv.get("t_us")
+                    if t_us_str:
+                        try:
+                            fw_events[f"fw_{event_name}_us"] = int(t_us_str)
+                        except ValueError:
+                            pass
+                    return
 
-            note_once("target_nonzero", (target is not None and target > 0))
-            note_once("thr_nonzero", (thr is not None and thr > 0))
-            note_once("speed_nonzero", (speed is not None and speed > 0))
-            note_once("target_zero", (target is not None and target == 0))
-            note_once("thr_zero", (thr is not None and thr == 0))
-            note_once("speed_zero", (speed is not None and speed == 0))
-            note_once("telem_ok", (telem_flag is not None and telem_flag == 1))
-            rpm_ok = rpm is not None and rpm >= int(telem_min_rpm)
-            # Some ESCs can report non-zero/stale RPM even at zero throttle (EDT type cycling,
-            # cached values, etc). Gate the "spinning" observation on robot-side speed>0 so we
-            # don't treat idle telemetry noise as physical motion.
-            note_once("rpm_nonzero", (telem_flag == 1 and rpm_ok and speed is not None and speed > 0))
-            note_once("rpm_zero", (telem_flag == 1 and rpm is not None and (not rpm_ok) and speed is not None and speed == 0))
+                # Spinup result line.
+                m = HITL_LATENCY_RESULT_RE.match(line)
+                if m:
+                    for token in m.group(1).strip().split():
+                        if "=" in token:
+                            k, v = token.split("=", 1)
+                            fw_result_kv[k] = v
+                    return
 
-        def drain_robot_serial(max_s: float) -> None:
+                # Spindown result line.
+                m = HITL_LATENCY_DOWN_RE.match(line)
+                if m:
+                    for token in m.group(1).strip().split():
+                        if "=" in token:
+                            k, v = token.split("=", 1)
+                            fw_down_kv[k] = v
+                    return
+
+            elif source == "emulator":
+                m = HITL_CMD_RE.match(line)
+                if m:
+                    kv = parse_kv_payload(m.group(1))
+                    t_ms = kv.get("t_ms")
+                    if t_ms and "emu_cmd_ms" not in emu_events:
+                        try:
+                            emu_events["emu_cmd_ms"] = int(t_ms)
+                        except ValueError:
+                            pass
+                    return
+
+                m = HITL_SENT_RE.match(line)
+                if m:
+                    kv = parse_kv_payload(m.group(1))
+                    t_ms = kv.get("t_ms")
+                    # Only capture the first SENT after CMD was recorded
+                    # (ignore the continuous stream of idle ry=0 reports).
+                    if t_ms and "emu_cmd_ms" in emu_events and "emu_sent_ms" not in emu_events:
+                        try:
+                            emu_events["emu_sent_ms"] = int(t_ms)
+                        except ValueError:
+                            pass
+                    if "emu_cmd_ms" in emu_events and "host_emu_hid_sent_s" not in emu_events:
+                        emu_events["host_emu_hid_sent_s"] = t_host
+                    return
+
+        def drain_both(max_s: float = 0.02) -> None:
+            """Drain both serial ports, parsing lines."""
             deadline = time.monotonic() + max_s
             while time.monotonic() < deadline:
                 line = robot_log.read_line()
+                if line:
+                    observe_line(line, "robot")
+                line = gamepad_log.read_line()
+                if line:
+                    observe_line(line, "emulator")
                 if not line:
-                    break
-                observe_robot_line(line)
+                    time.sleep(0.001)
 
-        def run_window(phase: str, duration_s: float) -> tuple[float, float]:
-            """Run a timed window while keeping robot serial responsive."""
-            set_psu_phase(phase)
-            duration_s = max(0.0, float(duration_s))
-            start_s = time.monotonic() - suite_t0
-            deadline = time.monotonic() + duration_s
+        def tight_poll(timeout_s: float, until_key: str | None = None) -> None:
+            """Poll both serial ports at ~1ms until timeout or until a key appears in fw_events."""
+            deadline = time.monotonic() + timeout_s
             while time.monotonic() < deadline:
-                drain_robot_serial(0.02)
-                # Best-effort drain of the other serial log for completeness.
-                gamepad_log.read_line()
-                time.sleep(0.002)
-            end_s = time.monotonic() - suite_t0
-            return start_s, end_s
-
-        def psu_values_in_window(phase: str, start_s: float, end_s: float) -> list[float]:
-            with psu_samples_lock:
-                samples = list(psu_samples)
-            values: list[float] = []
-            for s in samples:
-                if s.get("phase") != phase:
-                    continue
-                t_mid = s.get("t_mid_s", s.get("t_s"))
-                if not isinstance(t_mid, (int, float)):
-                    continue
-                if t_mid < start_s or t_mid > end_s:
-                    continue
-                i = s.get("current_a")
-                if i is None:
-                    continue
-                try:
-                    values.append(float(i))
-                except (TypeError, ValueError):
-                    continue
-            return values
-
-        def psu_first_crossing_in_window(phase: str, start_s: float, end_s: float, threshold: float, above: bool) -> float | None:
-            with psu_samples_lock:
-                samples = list(psu_samples)
-            for s in samples:
-                if s.get("phase") != phase:
-                    continue
-                t_mid = s.get("t_mid_s", s.get("t_s"))
-                if not isinstance(t_mid, (int, float)):
-                    continue
-                if t_mid < start_s or t_mid > end_s:
-                    continue
-                i = s.get("current_a")
-                if i is None:
-                    continue
-                try:
-                    iv = float(i)
-                except (TypeError, ValueError):
-                    continue
-                if (iv >= threshold) if above else (iv <= threshold):
-                    return float(t_mid)
-            return None
+                line = robot_log.read_line()
+                if line:
+                    observe_line(line, "robot")
+                line = gamepad_log.read_line()
+                if line:
+                    observe_line(line, "emulator")
+                if until_key and until_key in fw_events:
+                    return
+                time.sleep(0.001)
 
         try:
             # Drain startup noise.
@@ -2748,13 +2782,18 @@ def do_weapon_latency(
                 pump_logs=[gamepad_log],
             )
 
-            # Tighten status rate so we can see target/throttle transitions with better resolution.
-            latency_status_interval_ms = int(latency_status_interval_ms)
-            robot_log.send_line(f"HITL STATUSRATE {latency_status_interval_ms}")
-            time.sleep(0.1)
-
             ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
             wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0", pump_logs=[gamepad_log])
+
+            # Configure fast telemetry decode and status rates AFTER BT
+            # connection is established.  Setting these before ensure_robot_ready
+            # floods the 64-byte USB CDC TX buffer, corrupting the BTADDR response.
+            latency_telem_rate_ms = max(2, int(latency_telem_rate_ms))
+            latency_status_rate_ms = max(5, int(latency_status_rate_ms))
+            robot_log.send_line(f"HITL TELEMRATE {latency_telem_rate_ms}")
+            time.sleep(0.05)
+            robot_log.send_line(f"HITL STATUSRATE {latency_status_rate_ms}")
+            time.sleep(0.1)
             # Allow the robot-side neutral-sticks guard (500ms) to clear before arming.
             time.sleep(0.7)
 
@@ -2774,9 +2813,7 @@ def do_weapon_latency(
             )
 
             # Clamp + enforce unidirectional.
-            spin_axis = max(-127, min(127, int(spin_axis)))
-            if spin_axis < 0:
-                spin_axis = 0
+            spin_axis = max(0, min(127, int(spin_axis)))
             axis_seq: list[int] | None = None
             if spin_axis_seq:
                 axis_seq = []
@@ -2785,15 +2822,23 @@ def do_weapon_latency(
                         iv = int(v)
                     except Exception:
                         continue
-                    iv = max(-127, min(127, iv))
-                    if iv < 0:
-                        iv = 0
+                    iv = max(0, min(127, iv))
                     axis_seq.append(iv)
                 if not axis_seq:
                     axis_seq = None
+
+            # Default: generate a sine-wave axis sequence for varied motor responses.
+            if axis_seq is None:
+                axis_seq = _generate_sine_axis_seq(
+                    latency_cycles,
+                    axis_min=max(20, spin_axis // 3),
+                    axis_max=spin_axis,
+                )
+
             latency_baseline_s = max(0.8, float(latency_baseline_s))
             latency_hold_s = max(1.0, float(latency_hold_s))
             latency_cycles = max(1, int(latency_cycles))
+            latency_rpm_threshold = max(1, int(latency_rpm_threshold))
 
             cycles: list[dict] = []
 
@@ -2804,11 +2849,15 @@ def do_weapon_latency(
             # Warm-up: right after boot/arm, some ESCs ignore the first few throttle
             # updates or telemetry can be "stuck" on stale values. Do a short spin-up
             # and stop before the measured cycles so the first measured cycle is stable.
-            warm_axis = (axis_seq[0] if axis_seq else spin_axis)
+            warm_axis = axis_seq[0] if axis_seq else spin_axis
             gamepad_log.send_line(f"AXIS RY {warm_axis}")
-            run_window("warmup_up", min(1.5, max(0.8, latency_hold_s)))
+            deadline = time.monotonic() + min(1.5, max(0.8, latency_hold_s))
+            while time.monotonic() < deadline:
+                drain_both(0.02)
             gamepad_log.send_line("AXIS RY 0")
-            run_window("warmup_down", 1.5)
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                drain_both(0.02)
             # Ensure we're back to rest.
             wait_for_robot_condition(
                 robot_log,
@@ -2817,23 +2866,14 @@ def do_weapon_latency(
                 pump_logs=[gamepad_log],
             )
 
-            # Start background PSU sampler now that the PSU output is enabled.
-            set_psu_phase("idle")
-            psu_thread = threading.Thread(target=psu_sampler_loop, name="psu_sampler", daemon=True)
-            psu_thread.start()
-            # Wait for the sampler to produce at least one valid reading so baseline
-            # windows don't fail due to cold-start / first-SCPI latency.
-            sampler_deadline = time.monotonic() + 3.0
-            while time.monotonic() < sampler_deadline:
-                with psu_samples_lock:
-                    have_valid = any(isinstance(s.get("current_a"), (int, float)) for s in psu_samples)
-                if have_valid:
-                    break
-                time.sleep(0.05)
+            # Start optional PSU background sampler for plot overlay.
+            if psu_channel is not None:
+                psu_thread = threading.Thread(target=psu_sampler_loop, name="psu_sampler", daemon=True)
+                psu_thread.start()
 
-            for cycle in range(1, latency_cycles + 1):
-                axis = (axis_seq[(cycle - 1) % len(axis_seq)] if axis_seq else spin_axis)
-                # Ensure we've come fully to rest before taking a baseline for this cycle.
+            for cycle_num in range(1, latency_cycles + 1):
+                axis = axis_seq[(cycle_num - 1) % len(axis_seq)]
+                # Ensure we've come fully to rest before this cycle.
                 wait_for_robot_condition(
                     robot_log,
                     timeout_s=10.0,
@@ -2841,100 +2881,167 @@ def do_weapon_latency(
                     pump_logs=[gamepad_log],
                 )
 
-                status_seen.clear()
-                base_start_s, base_end_s = run_window("baseline", latency_baseline_s)
-                baseline_values = psu_values_in_window("baseline", base_start_s, base_end_s)
-                if not baseline_values:
-                    # Retry once with a longer baseline window; if SCPI is slow, we can miss the window.
-                    retry_s = max(1.5, float(latency_baseline_s))
-                    base_start_s, base_end_s = run_window("baseline", retry_s)
-                    baseline_values = psu_values_in_window("baseline", base_start_s, base_end_s)
-                if not baseline_values:
-                    # Last resort: take a few synchronous reads (still useful for diagnostics).
-                    vals: list[float] = []
-                    for _ in range(6):
-                        v = labctl_psu_measure(psu_channel, "current")
-                        if isinstance(v, (int, float)):
-                            vals.append(float(v))
-                        time.sleep(0.02)
-                    baseline_values = vals
-                if not baseline_values:
-                    raise RuntimeError("no PSU current samples for baseline")
-                baseline_med = statistics.median(baseline_values)
+                # Reset per-cycle state.
+                time_series.clear()
+                fw_events.clear()
+                emu_events.clear()
+                fw_result_kv.clear()
+                fw_down_kv.clear()
 
-                rise_threshold = baseline_med + float(latency_rise_delta_a)
-                fall_threshold = baseline_med + float(latency_fall_tol_a)
+                # Baseline: collect STATUS time-series at rest.
+                baseline_deadline = time.monotonic() + latency_baseline_s
+                while time.monotonic() < baseline_deadline:
+                    drain_both(0.02)
 
-                # Step up.
-                status_seen.clear()
-                t_cmd_up_s = round(time.monotonic() - suite_t0, 3)
+                # Arm the firmware latency tracker.
+                robot_log.send_line(f"HITL LATENCY ARM {latency_rpm_threshold}")
+                time.sleep(0.05)
+                drain_both(0.02)
+
+                # Step up: send AXIS RY command.
+                t_host_cmd = time.monotonic()
+                t_host_cmd_s = round(t_host_cmd - suite_t0, 6)
                 gamepad_log.send_line(f"AXIS RY {axis}")
-                up_start_s, up_end_s = run_window("step_up", latency_hold_s)
-                up_seen = dict(status_seen)
-                t_current_rise_s = psu_first_crossing_in_window("step_up", up_start_s, up_end_s, rise_threshold, above=True)
 
-                # Step down.
-                status_seen.clear()
-                t_cmd_down_s = round(time.monotonic() - suite_t0, 3)
+                # Tight-poll for firmware RESULT or timeout.
+                tight_poll(timeout_s=10.0, until_key="fw_rpm_seen_us")
+
+                # Hold for steady-state, continuing to collect time-series.
+                hold_deadline = time.monotonic() + latency_hold_s
+                while time.monotonic() < hold_deadline:
+                    drain_both(0.02)
+
+                # Step down: send AXIS RY 0.
+                t_host_down = time.monotonic()
+                t_host_down_s = round(t_host_down - suite_t0, 6)
                 gamepad_log.send_line("AXIS RY 0")
-                down_window_s = max(1.5, latency_hold_s)
-                down_start_s, down_end_s = run_window("step_down", down_window_s)
-                down_seen = dict(status_seen)
-                t_current_fall_s = psu_first_crossing_in_window("step_down", down_start_s, down_end_s, fall_threshold, above=False)
+
+                # Wait for spindown (DOWN line) or rpm=0 in STATUS, or timeout.
+                down_deadline = time.monotonic() + 10.0
+                while time.monotonic() < down_deadline:
+                    line = robot_log.read_line()
+                    if line:
+                        observe_line(line, "robot")
+                    line = gamepad_log.read_line()
+                    if line:
+                        observe_line(line, "emulator")
+                    if fw_down_kv:
+                        break
+                    # Check STATUS for rpm=0.
+                    if time_series and time_series[-1].get("rpm", 999) == 0 and time_series[-1].get("speed", 1) == 0:
+                        break
+                    time.sleep(0.001)
+
+                # Cool-down.
+                time.sleep(0.5)
+                drain_both(0.1)
+
+                # --- Build cycle result ---
+                # Firmware timestamps.
+                def _fw_us(key: str) -> int | None:
+                    v = fw_events.get(key)
+                    if v is None:
+                        v = fw_result_kv.get(key.replace("fw_", "").replace("_us", "") + "_us")
+                    if v is not None:
+                        try:
+                            return int(v)
+                        except (TypeError, ValueError):
+                            pass
+                    return None
+
+                fw_ry_us = _fw_us("fw_ry_nonzero_us")
+                fw_target_us = _fw_us("fw_target_set_us")
+                fw_dshot_us = _fw_us("fw_dshot_nonzero_us")
+                fw_rpm_us = _fw_us("fw_rpm_seen_us")
+
+                # Compute firmware-side deltas.
+                def _delta_us(a: int | None, b: int | None) -> float | None:
+                    if a is None or b is None:
+                        return None
+                    return round((b - a) / 1000.0, 3)
+
+                fw_total_ms = _delta_us(fw_ry_us, fw_rpm_us)
+                fw_ry_to_target_ms = _delta_us(fw_ry_us, fw_target_us)
+                fw_target_to_dshot_ms = _delta_us(fw_target_us, fw_dshot_us)
+                fw_dshot_to_rpm_ms = _delta_us(fw_dshot_us, fw_rpm_us)
+
+                # Host-side timestamps.
+                host_emu_sent_s = emu_events.get("host_emu_hid_sent_s")
+                host_robot_ry_s = fw_events.get("host_robot_ry_nonzero_s")
+                host_robot_rpm_s = fw_events.get("host_robot_rpm_seen_s")
+                total_host_ms = None
+                if host_robot_rpm_s is not None:
+                    total_host_ms = round((float(host_robot_rpm_s) - t_host_cmd_s) * 1000.0, 1)
+
+                # Emulator internal delay.
+                emu_cmd_ms = emu_events.get("emu_cmd_ms")
+                emu_sent_ms = emu_events.get("emu_sent_ms")
+                emu_internal_ms = None
+                if isinstance(emu_cmd_ms, (int, float)) and isinstance(emu_sent_ms, (int, float)):
+                    emu_internal_ms = round(float(emu_sent_ms) - float(emu_cmd_ms), 1)
+
+                # Approximate BT link: host_total - fw_total - emu_internal - USB overhead (~4ms est).
+                bt_link_approx_ms = None
+                if total_host_ms is not None and fw_total_ms is not None:
+                    residual = total_host_ms - fw_total_ms
+                    if emu_internal_ms is not None:
+                        residual -= emu_internal_ms
+                    residual -= 4.0  # Estimated USB serial overhead (both directions).
+                    bt_link_approx_ms = round(max(0.0, residual), 1)
+
+                # Median-filter RPM time series for cleaner plots.
+                raw_rpms = [pt.get("rpm", 0) for pt in time_series]
+                filtered_rpms = _median_filter([float(r) for r in raw_rpms], window=3)
+                for i, pt in enumerate(time_series):
+                    if i < len(filtered_rpms):
+                        pt["rpm_filtered"] = int(round(filtered_rpms[i]))
 
                 cycle_result = {
-                    "cycle": cycle,
-                    "spin_axis": axis,
-                    "baseline": {
-                        "duration_s": float(latency_baseline_s),
-                        "median_a": float(baseline_med),
-                        "samples": len(baseline_values),
+                    "cycle": cycle_num,
+                    "axis_value": axis,
+                    "rpm_threshold": latency_rpm_threshold,
+                    "timestamps": {
+                        "host_cmd_sent_s": t_host_cmd_s,
+                        "host_emu_hid_sent_s": host_emu_sent_s,
+                        "host_robot_ry_event_s": host_robot_ry_s,
+                        "host_robot_rpm_event_s": host_robot_rpm_s,
+                        "host_cmd_down_s": t_host_down_s,
+                        "fw_ry_us": fw_ry_us,
+                        "fw_target_us": fw_target_us,
+                        "fw_dshot_us": fw_dshot_us,
+                        "fw_rpm_us": fw_rpm_us,
+                        "emu_cmd_ms": emu_cmd_ms,
+                        "emu_sent_ms": emu_sent_ms,
                     },
-                    "thresholds": {
-                        "rise_delta_a": float(latency_rise_delta_a),
-                        "rise_threshold_a": float(rise_threshold),
-                        "fall_tol_a": float(latency_fall_tol_a),
-                        "fall_threshold_a": float(fall_threshold),
+                    "latency_ms": {
+                        "total_host": total_host_ms,
+                        "total_fw": fw_total_ms,
+                        "emu_internal": emu_internal_ms,
+                        "bt_link_approx": bt_link_approx_ms,
+                        "fw_input_to_target": fw_ry_to_target_ms,
+                        "fw_target_to_dshot": fw_target_to_dshot_ms,
+                        "fw_dshot_to_rpm": fw_dshot_to_rpm_ms,
                     },
-                    "events": {
-                        "t_cmd_up_s": t_cmd_up_s,
-                        "t_cmd_down_s": t_cmd_down_s,
-                        "t_current_rise_s": t_current_rise_s,
-                        "t_current_fall_s": t_current_fall_s,
+                    "spindown": {
+                        "host_cmd_down_s": t_host_down_s,
+                        "fw_ry_zero_us": fw_down_kv.get("ry_us"),
+                        "fw_rpm_below_us": fw_down_kv.get("rpm_us"),
+                        "fw_total_down_us": fw_down_kv.get("total_us"),
                     },
-                    "robot_seen_s": {
-                        "up": up_seen,
-                        "down": down_seen,
-                    },
-                    "latency_s": {
-                        "cmd_to_current_rise_s": (None if t_current_rise_s is None else round(t_current_rise_s - t_cmd_up_s, 3)),
-                        "cmd_to_current_fall_s": (None if t_current_fall_s is None else round(t_current_fall_s - t_cmd_down_s, 3)),
-                        "cmd_to_target_seen_s": (None if up_seen.get("target_nonzero") is None else round(up_seen["target_nonzero"] - t_cmd_up_s, 3)),
-                        "cmd_to_thr_seen_s": (None if up_seen.get("thr_nonzero") is None else round(up_seen["thr_nonzero"] - t_cmd_up_s, 3)),
-                        "cmd_to_speed_seen_s": (None if up_seen.get("speed_nonzero") is None else round(up_seen["speed_nonzero"] - t_cmd_up_s, 3)),
-                        "cmd_to_telem_ok_seen_s": (None if up_seen.get("telem_ok") is None else round(up_seen["telem_ok"] - t_cmd_up_s, 3)),
-                        "cmd_to_rpm_seen_s": (None if up_seen.get("rpm_nonzero") is None else round(up_seen["rpm_nonzero"] - t_cmd_up_s, 3)),
-                        "cmd_down_to_target_zero_seen_s": (None if down_seen.get("target_zero") is None else round(down_seen["target_zero"] - t_cmd_down_s, 3)),
-                        "cmd_down_to_thr_zero_seen_s": (None if down_seen.get("thr_zero") is None else round(down_seen["thr_zero"] - t_cmd_down_s, 3)),
-                        "cmd_down_to_speed_zero_seen_s": (None if down_seen.get("speed_zero") is None else round(down_seen["speed_zero"] - t_cmd_down_s, 3)),
-                        "cmd_down_to_telem_ok_seen_s": (None if down_seen.get("telem_ok") is None else round(down_seen["telem_ok"] - t_cmd_down_s, 3)),
-                        "cmd_down_to_rpm_zero_seen_s": (None if down_seen.get("rpm_zero") is None else round(down_seen["rpm_zero"] - t_cmd_down_s, 3)),
-                    },
+                    "time_series": list(time_series),
                 }
                 cycles.append(cycle_result)
 
             # Stop + disarm.
             gamepad_log.send_line("AXIS RY 0")
+            robot_log.send_line("HITL LATENCY DISARM")
             wait_for_robot_condition(
                 robot_log,
                 timeout_s=12.0,
-                predicate=lambda s: s.get("speed") == "0" and s.get("target") == "0" and s.get("ry") == "0",
+                predicate=lambda s: s.get("speed") == "0" and s.get("target") == "0",
                 pump_logs=[gamepad_log],
             )
-            time.sleep(0.25)  # Respect debounce timing in firmware.
-            # Some controllers/emulators only include button presses in a single report,
-            # and our periodic HITL STATUS prints can miss that transient. Don't require
-            # observing the "buttons" bit; rely on the actual arm state transition.
+            time.sleep(0.25)
             for attempt in range(2):
                 gamepad_log.send_line("BTN B 1")
                 time.sleep(0.20)
@@ -2948,109 +3055,136 @@ def do_weapon_latency(
                     time.sleep(0.25)
             weapon_armed = False
 
-            # Snapshot telemetry debug for extra context (best-effort).
+            # Snapshot telemetry debug for extra context.
             robot_log.send_line("HITL TELEMSTATS")
             time.sleep(0.2)
             for _ in range(30):
                 robot_log.read_line()
 
-            # Stop PSU sampling before writing artifacts so the sample set is stable.
-            set_psu_phase("idle")
+            # Stop PSU sampling.
             psu_stop.set()
             if psu_thread is not None:
                 psu_thread.join(timeout=3.0)
 
-            # Persist raw current sampling.
+            # Persist PSU samples if available.
             with psu_samples_lock:
-                psu_samples_snapshot = list(psu_samples)
-            (out_dir / "psu_current_samples.json").write_text(
-                json.dumps(psu_samples_snapshot, indent=2, sort_keys=True),
-                encoding="utf-8",
-            )
-            try:
-                payload = labctl_psu_snapshot(psu_channel)
-            except Exception as exc:
-                payload = {"ok": False, "error": str(exc)}
-            (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+                psu_snapshot = list(psu_samples)
+            if psu_snapshot:
+                (out_dir / "psu_current_samples.json").write_text(
+                    json.dumps(psu_snapshot, indent=2, sort_keys=True), encoding="utf-8")
+            if psu_channel is not None:
+                try:
+                    payload = labctl_psu_snapshot(psu_channel)
+                except Exception as exc:
+                    payload = {"ok": False, "error": str(exc)}
+                (out_dir / "psu_snapshot.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
+            # --- Build summary ---
             def summarize(values: list[float]) -> dict | None:
                 if not values:
                     return None
                 return {
                     "min": round(min(values), 3),
                     "median": round(statistics.median(values), 3),
+                    "mean": round(statistics.mean(values), 3),
                     "max": round(max(values), 3),
+                    "stddev": round(statistics.stdev(values), 3) if len(values) > 1 else 0.0,
                     "samples": len(values),
                 }
 
-            rise_lat = [c["latency_s"]["cmd_to_current_rise_s"] for c in cycles if c["latency_s"]["cmd_to_current_rise_s"] is not None]
-            fall_lat = [c["latency_s"]["cmd_to_current_fall_s"] for c in cycles if c["latency_s"]["cmd_to_current_fall_s"] is not None]
-            rpm_lat = [c["latency_s"]["cmd_to_rpm_seen_s"] for c in cycles if c["latency_s"]["cmd_to_rpm_seen_s"] is not None]
-            psu_durs = []
-            for s in psu_samples_snapshot:
-                d = s.get("duration_s")
-                if isinstance(d, (int, float)):
-                    psu_durs.append(float(d))
+            total_host_vals = [c["latency_ms"]["total_host"] for c in cycles if c["latency_ms"]["total_host"] is not None]
+            total_fw_vals = [c["latency_ms"]["total_fw"] for c in cycles if c["latency_ms"]["total_fw"] is not None]
+            bt_vals = [c["latency_ms"]["bt_link_approx"] for c in cycles if c["latency_ms"]["bt_link_approx"] is not None]
+            ramp_vals = [c["latency_ms"]["fw_target_to_dshot"] for c in cycles if c["latency_ms"]["fw_target_to_dshot"] is not None]
+            motor_vals = [c["latency_ms"]["fw_dshot_to_rpm"] for c in cycles if c["latency_ms"]["fw_dshot_to_rpm"] is not None]
 
             def cycle_ok(c: dict) -> bool:
-                events = c.get("events") or {}
-                lat = c.get("latency_s") or {}
-                up_seen = (c.get("robot_seen_s") or {}).get("up") or {}
-                down_seen = (c.get("robot_seen_s") or {}).get("down") or {}
-
-                # Controller -> robot logic must be functioning.
-                ctrl_path_ok = (
-                    up_seen.get("target_nonzero") is not None
-                    and up_seen.get("thr_nonzero") is not None
-                    and up_seen.get("speed_nonzero") is not None
-                    and down_seen.get("target_zero") is not None
-                    and down_seen.get("thr_zero") is not None
-                    and down_seen.get("speed_zero") is not None
-                )
-                if not ctrl_path_ok:
-                    return False
-
-                # Physical response: prefer RPM telemetry when available; PSU current is a secondary check.
-                rpm_seen = lat.get("cmd_to_rpm_seen_s") is not None
-                curr_seen = events.get("t_current_rise_s") is not None
-                if require_telemetry:
-                    return bool(rpm_seen)
-                return bool(rpm_seen or curr_seen)
+                lat = c.get("latency_ms") or {}
+                return lat.get("total_fw") is not None and lat.get("fw_dshot_to_rpm") is not None
 
             ok = all(cycle_ok(c) for c in cycles)
 
-            first = cycles[0]
+            # --- Drift analysis ---
+            drift_info: dict[str, object] = {
+                "check_drift": check_drift,
+                "max_drift_ms_per_cycle": max_drift_ms_per_cycle,
+                "max_latency_ms": max_latency_ms,
+            }
+            drift_fail_reasons: list[str] = []
+            if len(total_fw_vals) >= 2:
+                n = len(total_fw_vals)
+                xs = list(range(n))
+                ys = total_fw_vals
+
+                # Linear regression: slope = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²)
+                sum_x = sum(xs)
+                sum_y = sum(ys)
+                sum_xy = sum(x * y for x, y in zip(xs, ys))
+                sum_x2 = sum(x * x for x in xs)
+                denom = n * sum_x2 - sum_x * sum_x
+                slope = (n * sum_xy - sum_x * sum_y) / denom if denom else 0.0
+
+                # Half-split comparison
+                mid = n // 2
+                first_half_mean = statistics.mean(ys[:mid])
+                second_half_mean = statistics.mean(ys[mid:])
+
+                max_val = max(ys)
+
+                drift_info.update({
+                    "slope_ms_per_cycle": round(slope, 4),
+                    "first_half_mean_ms": round(first_half_mean, 3),
+                    "second_half_mean_ms": round(second_half_mean, 3),
+                    "half_delta_ms": round(second_half_mean - first_half_mean, 3),
+                    "max_cycle_ms": round(max_val, 3),
+                })
+
+                if check_drift:
+                    if slope > max_drift_ms_per_cycle:
+                        drift_fail_reasons.append(
+                            f"drift slope {slope:.4f} ms/cycle exceeds limit {max_drift_ms_per_cycle}")
+                    if max_val > max_latency_ms:
+                        drift_fail_reasons.append(
+                            f"max cycle latency {max_val:.3f} ms exceeds limit {max_latency_ms}")
+
+            if drift_fail_reasons:
+                drift_info["drift_ok"] = False
+                drift_info["drift_fail_reasons"] = drift_fail_reasons
+                ok = False
+            else:
+                drift_info["drift_ok"] = True
+
             result = {
                 "ok": bool(ok),
+                "version": 2,
                 "psu_channel": psu_channel,
                 "psu_voltage_set": psu_voltage,
                 "psu_current_limit_set": psu_current,
                 "spin_axis": spin_axis,
-                "spin_axis_seq": axis_seq,
-                "status_interval_ms": int(latency_status_interval_ms),
+                "spin_axis_seq": [c["axis_value"] for c in cycles],
+                "rpm_threshold": latency_rpm_threshold,
+                "telem_rate_ms": latency_telem_rate_ms,
+                "status_rate_ms": latency_status_rate_ms,
                 "latency_cycles": latency_cycles,
-                "require_telemetry": bool(require_telemetry),
-                # Keep a single-cycle view for plotting/compatibility.
-                "baseline": first["baseline"],
-                "thresholds": first["thresholds"],
-                "events": first["events"],
-                "robot_seen_s": first["robot_seen_s"],
-                "latency_s": first["latency_s"],
-                # Full multi-cycle results.
                 "cycles": cycles,
                 "summary": {
-                    "cmd_to_current_rise_s": summarize([float(x) for x in rise_lat]),
-                    "cmd_to_current_fall_s": summarize([float(x) for x in fall_lat]),
-                    "cmd_to_rpm_seen_s": summarize([float(x) for x in rpm_lat]),
-                    "psu_query_duration_s": summarize(psu_durs),
-                    "cycles_with_rpm": len(rpm_lat),
-                    "cycles_with_current_rise": len(rise_lat),
+                    "total_host_ms": summarize(total_host_vals),
+                    "total_fw_ms": summarize(total_fw_vals),
+                    "bt_link_approx_ms": summarize(bt_vals),
+                    "fw_ramp_ms": summarize(ramp_vals),
+                    "fw_motor_telem_ms": summarize(motor_vals),
+                    "cycles_with_fw_result": len(total_fw_vals),
+                    "cycles_total": len(cycles),
                 },
+                "drift": drift_info,
             }
             (out_dir / "weapon_latency_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
 
             if not result["ok"]:
-                raise RuntimeError(f"weapon latency capture failed (result={result})")
+                fail_parts = [f"summary={json.dumps(result.get('summary'), indent=2)}"]
+                if drift_fail_reasons:
+                    fail_parts.append(f"drift={drift_fail_reasons}")
+                raise RuntimeError(f"weapon latency capture failed ({', '.join(fail_parts)})")
 
         finally:
             cleanup_best_effort()
@@ -3058,6 +3192,396 @@ def do_weapon_latency(
             gamepad_log.close()
 
     return "weapon latency passed"
+
+
+@step("Weapon Zero Cross Test")
+def do_weapon_zero_cross(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    zero_cross_axis: int,
+    zero_cross_hold_s: float,
+    zero_cross_max_ms: float,
+    zero_cross_cycles: int,
+    out_dir: Path | None = None,
+) -> str:
+    """
+    Validate smooth weapon direction reversal (zero-crossing).
+
+    Spins the weapon forward, commands reverse, and measures how long the
+    reversal takes.  Also detects the "never spins" bug (motor stuck at
+    zero speed after direction change).
+    """
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    # Reboot both devices into application mode for a known start state.
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    # Power ESC supply if channel provided.
+    if psu_channel is not None:
+        if psu_off_first:
+            labctl_psu_off(psu_channel)
+        labctl_psu_set(psu_channel, psu_voltage, psu_current)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        weapon_armed = False
+
+        def cleanup_best_effort() -> None:
+            try:
+                gamepad_log.send_line("AXIS RY 0")
+                gamepad_log.send_line("BTN A 0")
+                gamepad_log.send_line("BTN B 0")
+                gamepad_log.send_line("BTN L1 0")
+                gamepad_log.send_line("BTN R1 0")
+                if weapon_armed:
+                    time.sleep(0.2)
+                    gamepad_log.send_line("BTN B 1")
+                    time.sleep(0.30)
+                    gamepad_log.send_line("BTN B 0")
+            except Exception:
+                pass
+            if psu_channel is not None and not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        # Time-series from STATUS lines.
+        time_series: list[dict] = []
+
+        def observe_robot_line(line: str) -> None:
+            t_host = round(time.monotonic() - suite_t0, 6)
+            m = HITL_STATUS_RE.match(line)
+            if not m:
+                return
+            kv = parse_kv_payload(m.group(1))
+            try:
+                speed = int(kv.get("speed") or "0")
+            except ValueError:
+                speed = 0
+            try:
+                target = int(kv.get("target") or "0")
+            except ValueError:
+                target = 0
+            weapon_state = kv.get("weapon", "")
+            time_series.append({
+                "t_s": t_host,
+                "speed": speed,
+                "target": target,
+                "weapon": weapon_state,
+            })
+
+        def drain_both(max_s: float = 0.02) -> None:
+            deadline = time.monotonic() + max_s
+            while time.monotonic() < deadline:
+                line = robot_log.read_line()
+                if line:
+                    observe_robot_line(line)
+                line = gamepad_log.read_line()
+                if not line:
+                    time.sleep(0.001)
+
+        try:
+            # Drain startup noise.
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            gamepad_log.send_line("RESET")
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            # Force a safe, deterministic battery voltage for HITL.
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=3.0,
+                predicate=lambda s: s.get("batt_mv") == "12500",
+                pump_logs=[gamepad_log],
+            )
+
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+
+            # Configure fast status reporting for responsive speed tracking.
+            robot_log.send_line("HITL STATUSRATE 10")
+            time.sleep(0.1)
+
+            # Allow the robot-side neutral-sticks guard (500ms) to clear.
+            time.sleep(0.7)
+
+            # Arm weapon.
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1", pump_logs=[gamepad_log])
+            weapon_armed = True
+
+            # Wait for weapon state machine to finish arming.
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=20.0,
+                predicate=lambda s: s.get("weapon") in ("ARMED", "SPINNING"),
+                pump_logs=[gamepad_log],
+            )
+
+            axis = max(1, min(127, int(zero_cross_axis)))
+            zero_cross_hold_s = max(1.0, float(zero_cross_hold_s))
+            zero_cross_max_ms = max(100.0, float(zero_cross_max_ms))
+            zero_cross_cycles = max(1, int(zero_cross_cycles))
+
+            cycles: list[dict] = []
+
+            # Warm-up spin: ensures ESC is responding before measured cycles.
+            gamepad_log.send_line(f"AXIS RY {axis}")
+            deadline = time.monotonic() + min(2.0, zero_cross_hold_s)
+            while time.monotonic() < deadline:
+                drain_both(0.02)
+            gamepad_log.send_line("AXIS RY 0")
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=12.0,
+                predicate=lambda s: s.get("speed") == "0" and s.get("weapon") in ("ARMED", "SPINNING"),
+                pump_logs=[gamepad_log],
+            )
+            time.sleep(0.5)
+
+            for cycle_num in range(1, zero_cross_cycles + 1):
+                # Each cycle: forward → reverse → forward (a full round-trip).
+                cycle_reversals: list[dict] = []
+
+                for reversal_idx, (from_axis, to_axis) in enumerate([
+                    (axis, -axis),
+                    (-axis, axis),
+                ]):
+                    if reversal_idx == 0:
+                        # First reversal: start from rest, spin up to from_axis.
+                        wait_for_robot_condition(
+                            robot_log,
+                            timeout_s=12.0,
+                            predicate=lambda s: s.get("speed") == "0" and s.get("weapon") in ("ARMED", "SPINNING"),
+                            pump_logs=[gamepad_log],
+                        )
+
+                        time_series.clear()
+                        gamepad_log.send_line(f"AXIS RY {from_axis}")
+
+                        expected_sign = 1 if from_axis > 0 else -1
+                        try:
+                            wait_for_robot_condition(
+                                robot_log,
+                                timeout_s=15.0,
+                                predicate=lambda s: (
+                                    s.get("weapon") == "SPINNING" and
+                                    _parse_int(s.get("speed")) is not None and
+                                    abs(_parse_int(s.get("speed"))) > 0 and
+                                    (_parse_int(s.get("speed")) > 0) == (expected_sign > 0)
+                                ),
+                                pump_logs=[gamepad_log],
+                            )
+                        except RuntimeError:
+                            raise RuntimeError(
+                                f"cycle {cycle_num} reversal {reversal_idx}: motor never reached "
+                                f"from_axis={from_axis} direction (stuck-at-zero / never-spins bug?)"
+                            )
+
+                        # Hold at the initial speed.
+                        hold_deadline = time.monotonic() + zero_cross_hold_s
+                        while time.monotonic() < hold_deadline:
+                            drain_both(0.02)
+                    else:
+                        # Subsequent reversals: motor is already spinning in from_axis
+                        # direction from the previous reversal's hold phase. Just hold
+                        # a bit longer to confirm stable spin before reversing again.
+                        hold_deadline = time.monotonic() + zero_cross_hold_s
+                        while time.monotonic() < hold_deadline:
+                            drain_both(0.02)
+
+                    # Command reversal and measure time.
+                    time_series.clear()
+                    t0 = time.monotonic()
+                    t0_rel = round(t0 - suite_t0, 6)
+                    gamepad_log.send_line(f"AXIS RY {to_axis}")
+
+                    # Poll until speed crosses into the target direction or timeout.
+                    target_sign = 1 if to_axis > 0 else -1
+                    t_reversal_s = None
+                    stuck_at_zero = False
+                    reversal_deadline = t0 + max(zero_cross_max_ms / 1000.0 * 3, 5.0)
+                    last_nonzero_t = t0  # Track if speed stays stuck at zero.
+                    while time.monotonic() < reversal_deadline:
+                        line = robot_log.read_line()
+                        if line:
+                            observe_robot_line(line)
+                        line = gamepad_log.read_line()
+
+                        # Check latest time_series entry.
+                        if time_series:
+                            latest_speed = time_series[-1]["speed"]
+                            if latest_speed != 0:
+                                last_nonzero_t = time.monotonic()
+                            if (target_sign > 0 and latest_speed > 0) or \
+                               (target_sign < 0 and latest_speed < 0):
+                                t_reversal_s = time.monotonic() - t0
+                                break
+
+                        # Detect stuck-at-zero: speed has been 0 for >2s after the command.
+                        if (time.monotonic() - t0) > 2.0 and (time.monotonic() - last_nonzero_t) > 2.0:
+                            stuck_at_zero = True
+                            break
+
+                        time.sleep(0.001)
+
+                    t_reversal_ms = round(t_reversal_s * 1000.0, 1) if t_reversal_s is not None else None
+
+                    # Continue holding in the reversed direction to confirm stable spin.
+                    if t_reversal_s is not None:
+                        stable_deadline = time.monotonic() + min(1.0, zero_cross_hold_s)
+                        while time.monotonic() < stable_deadline:
+                            drain_both(0.02)
+
+                    reversal_data = {
+                        "from_axis": from_axis,
+                        "to_axis": to_axis,
+                        "t0_s": t0_rel,
+                        "reversal_ms": t_reversal_ms,
+                        "stuck_at_zero": stuck_at_zero,
+                        "passed": (
+                            t_reversal_ms is not None and
+                            t_reversal_ms <= zero_cross_max_ms and
+                            not stuck_at_zero
+                        ),
+                        "time_series": list(time_series),
+                    }
+                    cycle_reversals.append(reversal_data)
+
+                    if stuck_at_zero:
+                        # Motor stuck — try to recover for next reversal.
+                        gamepad_log.send_line("AXIS RY 0")
+                        time.sleep(1.0)
+                        drain_both(0.1)
+
+                # Stop between cycles.
+                gamepad_log.send_line("AXIS RY 0")
+                wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=12.0,
+                    predicate=lambda s: s.get("speed") == "0",
+                    pump_logs=[gamepad_log],
+                )
+                time.sleep(0.5)
+
+                cycle_ok = all(r["passed"] for r in cycle_reversals)
+                cycles.append({
+                    "cycle": cycle_num,
+                    "ok": cycle_ok,
+                    "reversals": cycle_reversals,
+                })
+
+            # Disarm.
+            gamepad_log.send_line("AXIS RY 0")
+            time.sleep(0.25)
+            for attempt in range(2):
+                gamepad_log.send_line("BTN B 1")
+                time.sleep(0.20)
+                gamepad_log.send_line("BTN B 0")
+                try:
+                    wait_for_robot_condition(robot_log, timeout_s=6.0, predicate=lambda s: s.get("armed") == "0")
+                    break
+                except RuntimeError:
+                    if attempt == 1:
+                        raise
+                    time.sleep(0.25)
+            weapon_armed = False
+
+            # Build result.
+            all_reversal_ms = [
+                r["reversal_ms"]
+                for c in cycles for r in c["reversals"]
+                if r["reversal_ms"] is not None
+            ]
+            any_stuck = any(
+                r["stuck_at_zero"]
+                for c in cycles for r in c["reversals"]
+            )
+            ok = all(c["ok"] for c in cycles)
+
+            def summarize(values: list[float]) -> dict | None:
+                if not values:
+                    return None
+                return {
+                    "min": round(min(values), 1),
+                    "median": round(statistics.median(values), 1),
+                    "mean": round(statistics.mean(values), 1),
+                    "max": round(max(values), 1),
+                    "stddev": round(statistics.stdev(values), 1) if len(values) > 1 else 0.0,
+                    "samples": len(values),
+                }
+
+            result = {
+                "ok": bool(ok),
+                "zero_cross_axis": axis,
+                "zero_cross_hold_s": zero_cross_hold_s,
+                "zero_cross_max_ms": zero_cross_max_ms,
+                "zero_cross_cycles": zero_cross_cycles,
+                "psu_channel": psu_channel,
+                "psu_voltage_set": psu_voltage,
+                "psu_current_limit_set": psu_current,
+                "any_stuck_at_zero": any_stuck,
+                "reversal_ms": summarize(all_reversal_ms),
+                "cycles": cycles,
+            }
+            (out_dir / "weapon_zero_cross_result.json").write_text(
+                json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
+            )
+
+            if not ok:
+                fail_parts: list[str] = []
+                if any_stuck:
+                    fail_parts.append("motor stuck at zero (never-spins bug)")
+                for c in cycles:
+                    for r in c["reversals"]:
+                        if not r["passed"] and not r["stuck_at_zero"]:
+                            fail_parts.append(
+                                f"cycle {c['cycle']} {r['from_axis']}->{r['to_axis']}: "
+                                f"{r['reversal_ms']}ms > {zero_cross_max_ms}ms limit"
+                            )
+                raise RuntimeError(
+                    f"weapon zero-cross test failed: {'; '.join(fail_parts) or 'unknown'}"
+                )
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "weapon zero-cross passed"
+
+
+def _parse_int(val: str | None) -> int | None:
+    """Parse an optional string to int, returning None on failure."""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def main() -> None:
@@ -3106,13 +3630,22 @@ def main() -> None:
     parser.add_argument("--guard-baseline-s", type=float, default=1.5, help="Seconds to sample baseline current before disarmed command")
     parser.add_argument("--guard-sample-interval-s", type=float, default=0.2, help="PSU current sample interval during guard test (s)")
     parser.add_argument("--guard-max-delta-a", type=float, default=0.08, help="Max allowed median current delta during disarmed command")
-    parser.add_argument("--latency-baseline-s", type=float, default=1.5, help="Seconds to sample baseline current for latency test")
-    parser.add_argument("--latency-hold-s", type=float, default=4.0, help="Seconds to hold throttle command during latency test")
-    parser.add_argument("--latency-cycles", type=int, default=3, help="Number of step cycles to measure latency drift")
-    parser.add_argument("--latency-sample-interval-s", type=float, default=0.05, help="PSU current sample interval for latency test (s)")
-    parser.add_argument("--latency-rise-delta-a", type=float, default=0.12, help="Delta above baseline to treat as current-rise (A)")
-    parser.add_argument("--latency-fall-tol-a", type=float, default=0.06, help="Delta above baseline to treat as current-returned (A)")
-    parser.add_argument("--latency-status-interval-ms", type=int, default=20, help="Robot HITL STATUS interval during latency test (ms)")
+    parser.add_argument("--latency-baseline-s", type=float, default=1.5, help="Seconds to collect baseline time-series before each cycle")
+    parser.add_argument("--latency-hold-s", type=float, default=2.0, help="Seconds to hold throttle command for steady-state after RPM seen")
+    parser.add_argument("--latency-cycles", type=int, default=5, help="Number of step cycles to measure (uses sine-wave axis by default)")
+    parser.add_argument("--latency-rpm-threshold", type=int, default=500, help="RPM threshold for latency crossing detection")
+    parser.add_argument("--latency-telem-rate-ms", type=int, default=2, help="Weapon telemetry decode interval during latency test (ms)")
+    parser.add_argument("--latency-status-rate-ms", type=int, default=10, help="Robot HITL STATUS interval during latency test (ms)")
+    parser.add_argument("--soak-cycles", type=int, default=20, help="Number of cycles for latency soak test")
+    parser.add_argument("--soak-axis", type=int, default=60, help="Fixed axis value for latency soak test")
+    parser.add_argument("--soak-baseline-s", type=float, default=0.8, help="Baseline seconds per cycle for soak test")
+    parser.add_argument("--soak-hold-s", type=float, default=1.5, help="Hold seconds per cycle for soak test")
+    parser.add_argument("--soak-max-drift-ms", type=float, default=2.0, help="Max acceptable drift slope (ms/cycle) for soak test")
+    parser.add_argument("--soak-max-latency-ms", type=float, default=300.0, help="Max acceptable single-cycle latency (ms) for soak test")
+    parser.add_argument("--zero-cross-axis", type=int, default=100, help="Weapon zero-cross command magnitude (RY axis 1..127, mapped to ±axis)")
+    parser.add_argument("--zero-cross-hold-s", type=float, default=3.0, help="Seconds to hold each direction before reversal")
+    parser.add_argument("--zero-cross-max-ms", type=float, default=1000.0, help="Max allowed reversal time (ms)")
+    parser.add_argument("--zero-cross-cycles", type=int, default=2, help="Number of full round-trip reversal cycles")
     parser.add_argument("--drive-forward-axis", type=int, default=-80, help="Drive forward command (LY axis -127..127)")
     parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
     parser.add_argument("--drive-hold-s", type=float, default=0.6, help="Seconds to hold each drive command")
@@ -3129,8 +3662,10 @@ def main() -> None:
             "smoke",
             "weapon_spin",
             "weapon_latency",
+            "latency_soak",
             "weapon_disarmed_guard",
             "estop_weapon",
+            "weapon_zero_cross",
             "drive_e2e",
             "disconnect_failsafe",
             "drive_spin",
@@ -3359,6 +3894,22 @@ def main() -> None:
                     out_dir=alloc_step_dir("Weapon Spin Test"),
                 )
             )
+        elif args.suite == "weapon_zero_cross":
+            results.append(
+                do_weapon_zero_cross(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    zero_cross_axis=args.zero_cross_axis,
+                    zero_cross_hold_s=args.zero_cross_hold_s,
+                    zero_cross_max_ms=args.zero_cross_max_ms,
+                    zero_cross_cycles=args.zero_cross_cycles,
+                    out_dir=alloc_step_dir("Weapon Zero Cross Test"),
+                )
+            )
         elif args.suite == "weapon_latency":
             results.append(
                 do_weapon_latency(
@@ -3370,16 +3921,36 @@ def main() -> None:
                     leave_psu_on=args.leave_psu_on,
                     spin_axis=args.spin_axis,
                     spin_axis_seq=spin_axis_seq,
-                    require_telemetry=args.require_telemetry,
                     latency_baseline_s=args.latency_baseline_s,
                     latency_hold_s=args.latency_hold_s,
                     latency_cycles=args.latency_cycles,
-                    latency_sample_interval_s=args.latency_sample_interval_s,
-                    latency_rise_delta_a=args.latency_rise_delta_a,
-                    latency_fall_tol_a=args.latency_fall_tol_a,
-                    latency_status_interval_ms=args.latency_status_interval_ms,
-                    telem_min_rpm=args.telem_min_rpm,
+                    latency_rpm_threshold=args.latency_rpm_threshold,
+                    latency_telem_rate_ms=args.latency_telem_rate_ms,
+                    latency_status_rate_ms=args.latency_status_rate_ms,
                     out_dir=alloc_step_dir("Weapon Latency Test"),
+                )
+            )
+        elif args.suite == "latency_soak":
+            results.append(
+                do_weapon_latency(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    spin_axis=args.soak_axis,
+                    spin_axis_seq=[args.soak_axis],
+                    latency_baseline_s=args.soak_baseline_s,
+                    latency_hold_s=args.soak_hold_s,
+                    latency_cycles=args.soak_cycles,
+                    latency_rpm_threshold=args.latency_rpm_threshold,
+                    latency_telem_rate_ms=args.latency_telem_rate_ms,
+                    latency_status_rate_ms=args.latency_status_rate_ms,
+                    check_drift=True,
+                    max_drift_ms_per_cycle=args.soak_max_drift_ms,
+                    max_latency_ms=args.soak_max_latency_ms,
+                    out_dir=alloc_step_dir("Latency Soak Test"),
                 )
             )
         elif args.suite == "safety_active":

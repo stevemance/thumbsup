@@ -35,10 +35,10 @@ bool weapon_init(void);
 void weapon_update(void);
 bool weapon_arm(void);
 bool weapon_disarm(void);
-bool weapon_set_speed(uint8_t speed_percent);
+bool weapon_set_speed(int8_t speed_percent);
 weapon_state_t weapon_get_state(void);
-uint8_t weapon_get_speed(void);
-uint8_t weapon_get_target_speed(void);
+int8_t weapon_get_speed(void);
+int8_t weapon_get_target_speed(void);
 bool weapon_is_armed(void);
 void weapon_emergency_stop(void);
 bool weapon_get_telemetry(weapon_telemetry_t* telemetry);
@@ -60,5 +60,9 @@ bool weapon_enable_dshot(void);
 bool weapon_enable_pwm(void);
 bool weapon_enter_config_mode(void);
 weapon_control_mode_t weapon_get_control_mode(void);
+
+// Runtime telemetry decode interval (clamped [2, 500] ms).
+// Defaults to WEAPON_DSHOT_TELEMETRY_MS from config.h.
+void weapon_set_telemetry_interval_ms(uint32_t ms);
 
 #endif // WEAPON_H

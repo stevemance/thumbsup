@@ -246,6 +246,19 @@ uint16_t dshot_throttle_from_percent(int8_t percent);
 uint16_t dshot_throttle_from_percent_unidir(uint8_t percent);
 
 /**
+ * Convert throttle percentage to DShot value for 3D mode (bidirectional spin).
+ *
+ * DShot 3D mode splits the throttle range:
+ *   0          = stop
+ *   48-1047    = reverse (48=min, 1047=max)
+ *   1048-2047  = forward (1048=min, 2047=max)
+ *
+ * @param percent Throttle percentage (-100 to +100)
+ * @return DShot throttle value (0 = stop, 48-1047 reverse, 1048-2047 forward)
+ */
+uint16_t dshot_throttle_from_percent_3d(int8_t percent);
+
+/**
  * Deinitialize DShot and free resources
  *
  * Stops the state machine, removes PIO program, and releases DMA channel.

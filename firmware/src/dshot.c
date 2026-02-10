@@ -18,10 +18,10 @@
 #define DSHOT_THROTTLE_MAX 2047
 #define EDT_FRAME_BITS 21        // EDT telemetry frame size
 #define DSHOT_BIDIR_CLKDIV_SCALE 1.0f
-#define DSHOT_TELEM_PATH_LOCK_HITS 1
+#define DSHOT_TELEM_PATH_LOCK_HITS 3
 #define DSHOT_TELEM_PATH_LOCK_ENABLE 1
 #define DSHOT_TELEM_PATH_MAX_FAILURES 3
-#define DSHOT_TELEM_PATH_FAST_ONLY 0
+#define DSHOT_TELEM_PATH_FAST_ONLY 1
 
 typedef struct {
     bool msb_first;
@@ -112,6 +112,35 @@ uint16_t dshot_throttle_from_percent_unidir(uint8_t percent) {
     }
 
     return (uint16_t)value;
+}
+
+// DShot 3D mode throttle ranges
+#define DSHOT_3D_REVERSE_MIN 48
+#define DSHOT_3D_REVERSE_MAX 1047
+#define DSHOT_3D_FORWARD_MIN 1048
+#define DSHOT_3D_FORWARD_MAX 2047
+
+uint16_t dshot_throttle_from_percent_3d(int8_t percent) {
+    if (percent == 0) {
+        return 0;  // Stop
+    }
+
+    if (percent > 0) {
+        // Forward: +1..+100 → 1048..2047
+        int32_t range = DSHOT_3D_FORWARD_MAX - DSHOT_3D_FORWARD_MIN;  // 999
+        int32_t value = DSHOT_3D_FORWARD_MIN + ((int32_t)percent * range) / 100;
+        if (value < DSHOT_3D_FORWARD_MIN) value = DSHOT_3D_FORWARD_MIN;
+        if (value > DSHOT_3D_FORWARD_MAX) value = DSHOT_3D_FORWARD_MAX;
+        return (uint16_t)value;
+    } else {
+        // Reverse: -1..-100 → 48..1047 (more negative = higher throttle in reverse)
+        int32_t mag = -percent;  // 1..100
+        int32_t range = DSHOT_3D_REVERSE_MAX - DSHOT_3D_REVERSE_MIN;  // 999
+        int32_t value = DSHOT_3D_REVERSE_MIN + (mag * range) / 100;
+        if (value < DSHOT_3D_REVERSE_MIN) value = DSHOT_3D_REVERSE_MIN;
+        if (value > DSHOT_3D_REVERSE_MAX) value = DSHOT_3D_REVERSE_MAX;
+        return (uint16_t)value;
+    }
 }
 
 // Encode DShot packet with CRC
@@ -255,6 +284,7 @@ static uint8_t edt_calculate_crc(uint16_t data) {
 
 static bool dshot_extended_frame_plausible(uint8_t type, uint8_t data);
 static uint16_t decode_throttle_hint = 0;
+static uint32_t last_good_erpm = 0;
 
 static uint32_t dshot_candidate_score(const dshot_telemetry_t* telemetry) {
     if (telemetry == NULL || !telemetry->valid) {
@@ -267,10 +297,18 @@ static uint32_t dshot_candidate_score(const dshot_telemetry_t* telemetry) {
     if (telemetry->value == 0xFFF) {
         return 1;
     }
-    if (decode_throttle_hint <= (DSHOT_THROTTLE_MIN + 200)) {
-        return UINT32_MAX - telemetry->erpm;
+    // Distance-from-expected scoring: closer to last known eRPM wins.
+    // At idle (low throttle), expect 0.  This prevents noise spikes from
+    // winning over plausible readings.
+    uint32_t expected = (decode_throttle_hint <= (DSHOT_THROTTLE_MIN + 200))
+                        ? 0 : last_good_erpm;
+    uint32_t distance = (telemetry->erpm > expected)
+                        ? (telemetry->erpm - expected)
+                        : (expected - telemetry->erpm);
+    if (distance >= (UINT32_MAX - 2)) {
+        return 2;
     }
-    return telemetry->erpm;
+    return (UINT32_MAX - 2) - distance;
 }
 
 typedef struct {
@@ -1038,6 +1076,13 @@ bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
     }
 
     state->telem_type_counts[state->last_telemetry.type & 0x0F]++;
+    // Update last_good_erpm for candidate scoring (eRPM frames only)
+    {
+        uint8_t t = state->last_telemetry.type;
+        if (t != 0x2 && t != 0x4 && t != 0x6 && t != 0xE) {
+            last_good_erpm = state->last_telemetry.erpm;
+        }
+    }
     dshot_update_extended_state(state);
     if (state->extended_telem_active) {
         uint8_t type = state->last_telemetry.type;
@@ -1294,11 +1339,34 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     // Left-align 16-bit packet so MSB shifts out first with left-shift OSR.
     state->last_packet = ((uint32_t)packet) << 16;
 
+    // Timeout for DMA waits (generous for ~53μs DShot300 frame)
+    #define DSHOT_DMA_TIMEOUT_MS 50
+
     // MAJOR FIX #1: Validate PIO FIFO state before transfer
-    // Check if previous transfer is still active
+    // Check if previous transfer is still active — use timeout to avoid infinite hang
+    // when PIO is stalled (e.g. RX FIFO full in bidirectional mode).
     if (dma_channel_is_busy(state->dma_chan)) {
         DEBUG_PRINT("WARNING: DShot DMA still busy for motor %d, waiting...\n", motor);
-        dma_channel_wait_for_finish_blocking(state->dma_chan);
+        uint32_t wait_start = to_ms_since_boot(get_absolute_time());
+        while (dma_channel_is_busy(state->dma_chan)) {
+            if ((to_ms_since_boot(get_absolute_time()) - wait_start) > DSHOT_DMA_TIMEOUT_MS) {
+                DEBUG_PRINT("CRITICAL: Previous DMA hung for motor %d, aborting\n", motor);
+                dma_channel_abort(state->dma_chan);
+                busy_wait_us(10);
+                break;
+            }
+            tight_loop_contents();
+        }
+    }
+
+    // Drain RX FIFO to prevent PIO backpressure stall (bidirectional mode).
+    // In bidirectional DShot, PIO captures an RX response after every TX frame.
+    // The RX FIFO is only 4 words deep (2 frames). If not drained, PIO stalls
+    // which blocks DREQ, causing the next DMA transfer to hang indefinitely.
+    if (state->config.bidirectional) {
+        while (pio_sm_get_rx_fifo_level(state->pio, state->sm) > 0) {
+            (void)pio_sm_get(state->pio, state->sm);
+        }
     }
 
     // Check PIO TX FIFO level - should have space for at least 1 word
@@ -1317,8 +1385,6 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
 
     // CRITICAL FIX #2 (Iteration 3): Replace blocking wait with timeout mechanism
     // Blocking wait can hang indefinitely if DMA fails, preventing emergency stop
-    // Use 50ms timeout (generous for ~50μs typical transfer time)
-    #define DSHOT_DMA_TIMEOUT_MS 50
     uint32_t start_time = to_ms_since_boot(get_absolute_time());
     bool timeout = false;
 
@@ -1354,22 +1420,8 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
         return false;
     }
 
-    // MAJOR FIX #7 (Iteration 4): Check PIO state machine status after DMA completion
-    // Verify that PIO actually consumed the data from FIFO and is transmitting
-    // TX FIFO should be draining (level decreasing) or empty if transmission complete
-    uint8_t fifo_level_after = pio_sm_get_tx_fifo_level(state->pio, state->sm);
-    if (fifo_level_after > 0) {
-        // Wait a bit for PIO to drain FIFO (typical DShot frame is ~30μs)
-        sleep_us(50);
-        uint8_t fifo_level_final = pio_sm_get_tx_fifo_level(state->pio, state->sm);
-        if (fifo_level_final >= fifo_level_after) {
-            // FIFO not draining - PIO may be stalled
-            DEBUG_PRINT("WARNING: PIO FIFO not draining for motor %d (level=%u)\n",
-                       motor, fifo_level_final);
-            // Not a critical error - data is in FIFO and will transmit eventually
-            // Return true since DMA succeeded, but log the warning
-        }
-    }
+    // PIO will drain the TX FIFO autonomously (~53µs for a DShot300 frame).
+    // No need to block here — the next send will check for DMA/FIFO readiness.
 
     return true;
 }

@@ -44,6 +44,11 @@
 #endif
 #endif
 
+#if !SERIAL_GAMEPAD
+// Active BT connection handle (for potential future per-link tuning)
+static hci_con_handle_t active_con_handle = HCI_CON_HANDLE_INVALID;
+#endif
+
 // Robot state tracking
 static bool emergency_stop = false;
 static bool armed_state = false;
@@ -66,8 +71,13 @@ static uint16_t last_buttons = 0;
 static uint32_t last_button_change_time = 0;
 #define DEBOUNCE_TIME_MS 100  // Minimum time between button state changes
 
+// Previous controller state for edge detection (file-scope so disconnect can clear).
+static uni_gamepad_t inject_prev = {0};
+static bool inject_prev_valid = false;
+
 // Declarations
 #if !SERIAL_GAMEPAD
+static uni_controller_t ctl_prev = {0};
 static void trigger_event_on_gamepad(uni_hid_device_t *d);
 
 // HITL support: keep printing status / processing commands even when there is no controller input.
@@ -147,24 +157,17 @@ static void my_platform_on_init_complete(void) {
 
     // Safe to call "unsafe" functions since they are called from BT thread
 
-    // Start scanning (autoconnect) only for non-HITL builds.
+    // Start scanning (autoconnect) unless explicitly disabled.
     //
-    // In HITL, the controller emulator initiates the connection to us. If we
-    // also scan+autoconnect, we can race the incoming connect and hit errors
-    // like "ACL Connection Already Exists" / L2CAP failures. Accepting incoming
-    // connections is still enabled by default in Bluepad32.
-#if HITL_CONSOLE
+    // HITL runs with a controller emulator that initiates the connection to us.
+    // If we also scan+autoconnect, we can race the incoming connect and hit
+    // errors like "ACL Connection Already Exists" / L2CAP failures.
+    //
+    // Note: HID status/console output (HITL_CONSOLE) is orthogonal to scan/autoconnect.
+#if HITL_NO_SCAN
     uni_bt_enable_new_connections_unsafe(false);
 #else
     uni_bt_enable_new_connections_unsafe(true);
-#endif
-
-    // Bluepad32 defaults to allowing sniff mode on BR/EDR links. Sniff can add large
-    // (and variable) latency, which is bad for combat responsiveness and makes HITL
-    // step-response measurements flaky. Override the BTstack default link policy
-    // before controllers connect.
-#if !BT_ALLOW_SNIFF
-    gap_set_default_link_policy_settings(LM_LINK_POLICY_ENABLE_ROLE_SWITCH);
 #endif
 
     // Based on runtime condition, you can delete or list the stored BT keys.
@@ -203,6 +206,8 @@ static void my_platform_on_device_connected(uni_hid_device_t *d) {
 static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
     logi("thumbsup_platform: device disconnected: %p\n", d);
 
+    active_con_handle = HCI_CON_HANDLE_INVALID;
+
     // Safety: Stop all motors and disarm weapon on disconnect
     drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
     drive_update(&stop_cmd);
@@ -226,6 +231,14 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
     controller_neutral_guard_active = true;
     controller_neutral_start_ms = 0;
     controller_neutral_last_log_ms = 0;
+
+    // Reset button/controller edge-detection state so the next connection
+    // starts clean and doesn't miss the first B-press transition.
+    last_buttons = 0;
+    last_button_change_time = 0;
+    memset(&ctl_prev, 0, sizeof(ctl_prev));
+    memset(&inject_prev, 0, sizeof(inject_prev));
+    inject_prev_valid = false;
 }
 
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
@@ -239,12 +252,23 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
     controller_neutral_start_ms = 0;
     controller_neutral_last_log_ms = 0;
 
+    // Reset button edge-detection state so the first B-press is always detected.
+    last_buttons = 0;
+    last_button_change_time = 0;
+
     // Enable watchdog on first controller connection
     if (!watchdog_enabled) {
         logi("First controller connected - enabling watchdog timer\n");
         watchdog_enable(1000, 1);  // 1 second timeout, pause on debug
         watchdog_enabled = true;
     }
+
+    // Stop periodic inquiry once we have a working controller.
+    // Periodic inquiry generates SPI traffic that contends with BT data on CYW43.
+    // We only support one controller — no need to keep scanning.
+    uni_bt_stop_scanning_unsafe();
+
+    active_con_handle = d->conn.handle;
 
     hitl_console_set_controller_ready(true);
     return UNI_ERROR_SUCCESS;
@@ -290,7 +314,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     if (calibration_mode_is_active()) {
         calibration_mode_update(gp);
         motor_control_update();  // Update motors with calibration commands
-        status_update();  // Update LED indicators
         return;  // Block all other inputs during calibration
     }
 
@@ -369,7 +392,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         };
         drive_update(&trim_cmd);
         motor_control_update();
-        status_update();
         return;
     }
 
@@ -399,9 +421,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         // Keep the rest of the system responsive / observable while e-stop is held.
         motor_control_update();
         weapon_update();
-        status_update();
         safety_update();
-        hitl_console_on_gamepad(gp);
         return;
     }
 
@@ -467,9 +487,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         last_buttons = gp ? gp->buttons : 0;
         motor_control_update();
         weapon_update();
-        status_update();
         safety_update();
-        hitl_console_on_gamepad(gp);
         return;
     }
 
@@ -480,9 +498,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         last_buttons = gp->buttons;
         motor_control_update();
         weapon_update();
-        status_update();
         safety_update();
-        hitl_console_on_gamepad(gp);
         return;
     }
 
@@ -555,23 +571,33 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         };
         drive_update(&drive_cmd);
 
+        // Sync armed_state with actual weapon state. weapon_update() can
+        // internally trigger emergency_stop (safety check), which changes
+        // weapon_state without clearing armed_state here.
+        if (armed_state && !weapon_is_armed()) {
+            armed_state = false;
+            logi("Weapon state desync: cleared armed_state\n");
+        }
+
         // Weapon control with right stick Y-axis (only if armed)
         if (armed_state) {
-            // Weapon speed can be commanded either by analog pedals (0-1023) or
-            // by right-stick Y magnitude (|-512..511|). Some controllers report
-            // small non-zero pedal noise; never let that suppress stick control.
-            int32_t weapon_speed = 0;
+            // Weapon speed can be commanded either by analog pedals (0-1023, forward only)
+            // or by right-stick Y (signed: +Y = forward, -Y = reverse).
+            // Pedals override stick only when their magnitude exceeds stick magnitude.
 
-            // Stick magnitude mapping (0-100%).
+            // Signed stick mapping (-100..+100%).
             int32_t stick_speed = 0;
             int32_t raw_weapon = CLAMP(gp->axis_ry, -512, 511);
-            int32_t mag = (raw_weapon < 0) ? -raw_weapon : raw_weapon;
-            if (mag > TRIGGER_THRESHOLD) {
-                stick_speed = ((mag - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
-                stick_speed = CLAMP(stick_speed, 0, 100);
+            if (abs(raw_weapon) > TRIGGER_THRESHOLD) {
+                if (raw_weapon > 0) {
+                    stick_speed = ((raw_weapon - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
+                } else {
+                    stick_speed = ((raw_weapon + TRIGGER_THRESHOLD) * 100) / (512 - TRIGGER_THRESHOLD);
+                }
+                stick_speed = CLAMP(stick_speed, -100, 100);
             }
 
-            // Pedal mapping (0-100%). We consider both throttle & brake and
+            // Pedal mapping (0-100%, forward-only). We consider both throttle & brake and
             // take the max so whichever control is active wins.
             int32_t pedal_speed = 0;
             int32_t raw_throttle = CLAMP(gp->throttle, 0, 1023);
@@ -587,15 +613,19 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
                 brake_speed = CLAMP(brake_speed, 0, 100);
             }
 
-            weapon_speed = stick_speed;
-            if (pedal_speed > weapon_speed) {
+            // Pedals (unsigned) override stick only if their value exceeds stick magnitude.
+            int32_t weapon_speed = stick_speed;
+            if (pedal_speed > abs(weapon_speed)) {
                 weapon_speed = pedal_speed;
             }
-            if (brake_speed > weapon_speed) {
+            if (brake_speed > abs(weapon_speed)) {
                 weapon_speed = brake_speed;
             }
 
-            weapon_set_speed((uint8_t)weapon_speed);
+#if HITL_CONSOLE
+            hitl_latency_on_ry_change(raw_weapon);
+#endif
+            weapon_set_speed((int8_t)weapon_speed);
         } else {
             // SAFETY: Ensure weapon is stopped when not armed
             weapon_set_speed(0);
@@ -608,18 +638,14 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     // CRITICAL: Update motor PWM outputs and weapon ramping
     motor_control_update();
     weapon_update();
-    status_update();
 
     // CRITICAL: Run continuous safety monitoring (battery, safety button)
     safety_update();
-
-    hitl_console_on_gamepad(gp);
 }
 
 #if !SERIAL_GAMEPAD
 static void my_platform_on_controller_data(uni_hid_device_t *d,
                                            uni_controller_t *ctl) {
-    static uni_controller_t prev = {0};
     bool state_changed = true;
     uni_gamepad_t *gp;
 
@@ -631,9 +657,9 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
         hitl_last_gp = *gp;
         hitl_last_gp_valid = true;
 
-        state_changed = memcmp(&prev, ctl, sizeof(*ctl)) != 0;
+        state_changed = memcmp(&ctl_prev, ctl, sizeof(*ctl)) != 0;
         if (state_changed) {
-            prev = *ctl;
+            ctl_prev = *ctl;
         }
 
         process_gamepad_input(gp, state_changed);
@@ -731,9 +757,6 @@ void system_set_failsafe(bool active) {
 }
 
 void bluetooth_platform_inject_gamepad(const uni_gamepad_t* gp) {
-    static uni_gamepad_t prev = {0};
-    static bool prev_valid = false;
-
     if (gp == NULL) {
         return;
     }
@@ -741,11 +764,11 @@ void bluetooth_platform_inject_gamepad(const uni_gamepad_t* gp) {
     note_controller_activity();
 
     bool state_changed = true;
-    if (prev_valid && memcmp(&prev, gp, sizeof(*gp)) == 0) {
+    if (inject_prev_valid && memcmp(&inject_prev, gp, sizeof(*gp)) == 0) {
         state_changed = false;
     }
-    prev = *gp;
-    prev_valid = true;
+    inject_prev = *gp;
+    inject_prev_valid = true;
 
     process_gamepad_input((uni_gamepad_t*)gp, state_changed);
 }

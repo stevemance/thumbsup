@@ -89,14 +89,17 @@
 #define RPM_TO_PWM_PERCENT(rpm) ((rpm) * 100 / MAX_WHEEL_RPM)
 
 // Safety Configuration
-#define WEAPON_ARM_TIMEOUT  5000  // Weapon arm timeout in milliseconds
+#define WEAPON_ARM_TIMEOUT  500   // Weapon arm timeout in milliseconds
 #define FAILSAFE_TIMEOUT    1500  // Connection loss failsafe timeout (ms) - increased for reliability
 // Weapon response / ramping
 //
-// Combat wants a responsive weapon. Keep a short slew limit to avoid huge
-// inrush steps, but target sub-500ms full-scale response.
-#define WEAPON_SPINUP_TIME   350  // Weapon ramp-up time (ms)
-#define WEAPON_SPINDOWN_TIME 200  // Weapon ramp-down time (ms)
+// Weapon slew limiting:
+//
+// We need enough ramping to avoid ESC/motor desync and supply brownouts during
+// aggressive throttle changes (especially on bench supplies / long leads).
+// Keep this reasonably quick, but prioritize stability over absolute snap.
+#define WEAPON_SPINUP_TIME   1500  // Weapon ramp-up time (ms)
+#define WEAPON_SPINDOWN_TIME 400   // Weapon ramp-down time (ms)
 #define WEAPON_RAMP_STEPS   100   // Higher = smoother ramps (step size ~= 1% for 100)
 #define WEAPON_DSHOT_UPDATE_MS     2   // Minimum DShot update interval (ms) (500 Hz)
 #define WEAPON_DSHOT_TELEMETRY_MS  50  // Telemetry request interval (ms)
@@ -109,6 +112,19 @@
 // frames (CRC matches by chance). Reject mechanically-impossible RPM spikes to keep
 // HITL and competition logic stable.
 #define WEAPON_TELEM_MAX_RPM 25000  // D2822/17 @ 3S (~14k RPM) -> keep generous headroom
+// Telemetry IIR filter: RPM alpha = 2/4 = 0.5 (fast, smooths single-frame spikes 50%)
+#define WEAPON_TELEM_RPM_ALPHA_NUM     2
+#define WEAPON_TELEM_RPM_ALPHA_DEN     4
+// V/I/T alpha = 1/4 = 0.25 (slow, these change on second timescales)
+#define WEAPON_TELEM_SLOW_ALPHA_NUM    1
+#define WEAPON_TELEM_SLOW_ALPHA_DEN    4
+// Max RPM change per frame (rejects noise spikes, generous for real spinup)
+#define WEAPON_TELEM_MAX_RPM_DELTA     5000
+// Range bounds for V/I/T at weapon layer
+#define WEAPON_TELEM_MAX_VOLTAGE_CV    2520   // 25.2V (2x nominal 3S)
+#define WEAPON_TELEM_MIN_VOLTAGE_CV    500    // 5V minimum
+#define WEAPON_TELEM_MAX_CURRENT_CA    2000   // 20A (2x motor max 9.9A)
+#define WEAPON_TELEM_MAX_TEMP_C        120    // 120C
 #define WEAPON_DSHOT_SETUP_RETRY_MS 500  // Retry interval for DShot setup commands (ms)
 #define WEAPON_DSHOT_SETUP_MAX_ATTEMPTS 5  // Max setup retries before arming anyway
 
@@ -136,10 +152,6 @@
 #define BT_DEVICE_NAME      "ThumbsUp_Robot"
 #define BT_MAX_RETRIES      3
 #define BT_SCAN_TIMEOUT     10000 // Scanning timeout in ms
-// Link policy: sniff mode can introduce large, variable latency (100ms to seconds).
-// For combat responsiveness and deterministic HITL measurements, keep sniff disabled by default.
-#define BT_ALLOW_SNIFF      0
-
 // Battery Monitoring
 #define BATTERY_LOW_VOLTAGE 9600  // Low battery threshold (mV) for 3S
 #define BATTERY_CRITICAL    9000  // Critical battery voltage (mV)

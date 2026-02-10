@@ -58,7 +58,12 @@ static const uint8_t hid_descriptor_gamepad[] = {
     0x05, 0x01,  // Usage Page (Generic Desktop)
     0x09, 0x30,  // Usage (X)
     0x09, 0x31,  // Usage (Y)
-    // Bluepad32's Android HID profile maps:
+    0x15, 0x81,  // Logical Minimum (-127)
+    0x25, 0x7F,  // Logical Maximum (127)
+    0x75, 0x08,  // Report Size (8)
+    0x95, 0x02,  // Report Count (2)
+    0x81, 0x02,  // Input (Data,Var,Abs)
+    // Right stick axes. Bluepad32 maps:
     // - Z  -> axis_rx
     // - Rz -> axis_ry
     0x09, 0x32,  // Usage (Z)
@@ -66,7 +71,7 @@ static const uint8_t hid_descriptor_gamepad[] = {
     0x15, 0x81,  // Logical Minimum (-127)
     0x25, 0x7F,  // Logical Maximum (127)
     0x75, 0x08,  // Report Size (8)
-    0x95, 0x04,  // Report Count (4)
+    0x95, 0x02,  // Report Count (2)
     0x81, 0x02,  // Input (Data,Var,Abs)
     0xC0,        // End Collection
     0xC0         // End Collection
@@ -85,6 +90,7 @@ static gamepad_state_t gp_state;
 static bool state_dirty = true;
 static bool send_pending = false;
 static uint32_t last_report_ms = 0;
+static uint32_t last_cmd_ms = 0;
 static uint16_t hid_cid = 0;
 static hci_con_handle_t hid_con_handle = 0;
 static uint32_t last_sniff_exit_ms = 0;
@@ -234,6 +240,10 @@ static void send_report(void) {
     send_pending = false;
     state_dirty = false;
     last_report_ms = btstack_run_loop_get_time_ms();
+
+    // HITL latency instrumentation: log the time the HID report was sent.
+    printf("HITL SENT t_ms=%lu ry=%d\n",
+           (unsigned long)last_report_ms, (int)(int8_t)gp_state.ry);
 }
 
 static void request_send(void) {
@@ -446,7 +456,17 @@ static void serial_poll(void) {
         if (ch == '\r' || ch == '\n') {
             if (len > 0) {
                 line[len] = '\0';
+                // Snapshot line + dirty flag before handle_line modifies them.
+                char line_snap[SERIAL_LINE_MAX];
+                strncpy(line_snap, line, sizeof(line_snap));
+                line_snap[sizeof(line_snap) - 1] = '\0';
+                bool was_dirty = state_dirty;
                 handle_line(line);
+                // HITL latency instrumentation: log the time a command changed gamepad state.
+                if (state_dirty && !was_dirty) {
+                    last_cmd_ms = btstack_run_loop_get_time_ms();
+                    printf("HITL CMD t_ms=%lu %s\n", (unsigned long)last_cmd_ms, line_snap);
+                }
                 len = 0;
             }
         } else if (len + 1 < sizeof(line)) {

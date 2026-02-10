@@ -70,6 +70,12 @@ add_executable(thumbsup_hitl
     src/test_mode.c
 )
 
+add_executable(thumbsup_debug
+    ${CORE_SOURCES}
+    src/bluetooth_platform.c
+    src/test_mode.c
+)
+
 add_executable(thumbsup_integration
     ${CORE_SOURCES}
     src/bluetooth_platform.c
@@ -87,6 +93,8 @@ pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 pico_generate_pio_header(thumbsup ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 pico_generate_pio_header(thumbsup_hitl ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 pico_generate_pio_header(thumbsup_hitl ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
+pico_generate_pio_header(thumbsup_debug ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
+pico_generate_pio_header(thumbsup_debug ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 pico_generate_pio_header(thumbsup_integration ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
 pico_generate_pio_header(thumbsup_integration ${CMAKE_CURRENT_LIST_DIR}/src/dshot.pio)
 pico_generate_pio_header(thumbsup_serial ${CMAKE_CURRENT_LIST_DIR}/src/ws2812.pio)
@@ -97,6 +105,9 @@ target_include_directories(thumbsup PRIVATE
     include
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
 target_include_directories(thumbsup_hitl PRIVATE
+    include
+    ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
+target_include_directories(thumbsup_debug PRIVATE
     include
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include)
 target_include_directories(thumbsup_integration PRIVATE
@@ -133,6 +144,23 @@ target_link_libraries(thumbsup PUBLIC
 )
 
 target_link_libraries(thumbsup_hitl PUBLIC
+    pico_stdlib
+    pico_cyw43_arch_none  # Bluetooth support
+    pico_btstack_classic
+    pico_btstack_cyw43
+    hardware_pwm
+    hardware_adc
+    hardware_gpio
+    hardware_uart
+    hardware_watchdog
+    hardware_pio
+    hardware_dma
+    hardware_flash
+    hardware_sync
+    bluepad32
+)
+
+target_link_libraries(thumbsup_debug PUBLIC
     pico_stdlib
     pico_cyw43_arch_none  # Bluetooth support
     pico_btstack_classic
@@ -226,11 +254,28 @@ target_compile_definitions(thumbsup PRIVATE
 pico_enable_stdio_usb(thumbsup 1)
 pico_enable_stdio_uart(thumbsup 0)
 
-target_compile_definitions(thumbsup_hitl PRIVATE
+target_compile_definitions(thumbsup_debug PRIVATE
     HITL_CONSOLE=1
     AM32_ONEWIRE=1
     PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
     PICO_STDIO_USB_STDOUT_TIMEOUT_US=0
+    CFG_TUD_CDC_TX_BUFSIZE=512
+    PICO_STDIO_USB_ENABLE_TINYUSB_INIT=1
+    PICO_STDIO_USB_ENABLE_IRQ_BACKGROUND_TASK=1
+    PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_BOOTSEL=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_FLASH_BOOT=1
+    USBD_MANUFACTURER=\"${THUMBSUP_USB_MANUFACTURER}\"
+    USBD_PRODUCT=\"${THUMBSUP_USB_PRODUCT}\"
+)
+
+target_compile_definitions(thumbsup_hitl PRIVATE
+    HITL_CONSOLE=1
+    HITL_NO_SCAN=1
+    AM32_ONEWIRE=1
+    PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=0
+    CFG_TUD_CDC_TX_BUFSIZE=512
     PICO_STDIO_USB_ENABLE_TINYUSB_INIT=1
     PICO_STDIO_USB_ENABLE_IRQ_BACKGROUND_TASK=1
     PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=1
@@ -243,8 +288,13 @@ target_compile_definitions(thumbsup_hitl PRIVATE
 pico_enable_stdio_usb(thumbsup_hitl 1)
 pico_enable_stdio_uart(thumbsup_hitl 0)
 
+# Competition-debug build: full competition stack + serial HITL console output.
+pico_enable_stdio_usb(thumbsup_debug 1)
+pico_enable_stdio_uart(thumbsup_debug 0)
+
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(thumbsup)
 pico_add_extra_outputs(thumbsup_hitl)
+pico_add_extra_outputs(thumbsup_debug)
 pico_add_extra_outputs(thumbsup_integration)
 pico_add_extra_outputs(thumbsup_serial)
