@@ -574,9 +574,12 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         // Sync armed_state with actual weapon state. weapon_update() can
         // internally trigger emergency_stop (safety check), which changes
         // weapon_state without clearing armed_state here.
+        // We must also call weapon_disarm() to transition from EMERGENCY_STOP
+        // to DISARMED, otherwise weapon_arm() will refuse (requires DISARMED).
         if (armed_state && !weapon_is_armed()) {
+            weapon_disarm();
             armed_state = false;
-            logi("Weapon state desync: cleared armed_state\n");
+            logi("Weapon state desync: cleared armed_state (disarmed)\n");
         }
 
         // Weapon control with right stick Y-axis (only if armed)

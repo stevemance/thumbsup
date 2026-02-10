@@ -137,11 +137,15 @@ static bool test_weapon_safety_checks(void) {
     // Test that weapon cannot be armed with low battery
     weapon_state_t initial_state = weapon_get_state();
 
-    // Simulate low battery condition
+    // Simulate low battery condition (only when battery ADC is wired up)
+#if BATTERY_ADC_ENABLED
     if (safety_check_arm_conditions(BATTERY_LOW_VOLTAGE - 100)) {
         printf("    FAIL: Safety allows arming with low battery\n");
         passed = false;
     }
+#else
+    printf("    (battery ADC disabled — skipping low-battery arm test)\n");
+#endif
 
     // Test that weapon cannot be armed with safety button pressed
     // This would require mocking the GPIO read, which we'll skip for now
@@ -172,6 +176,7 @@ static bool test_failsafe_conditions(void) {
 static bool test_battery_monitoring(void) {
     bool passed = true;
 
+#if BATTERY_ADC_ENABLED
     // Test battery voltage reading function
     uint32_t battery_mv = read_battery_voltage();
 
@@ -180,6 +185,9 @@ static bool test_battery_monitoring(void) {
         printf("    WARN: Battery voltage reading seems out of range (%dmV)\n", battery_mv);
         // Don't fail the test as this might be due to no battery connected
     }
+#else
+    printf("    (battery ADC disabled — skipping voltage read)\n");
+#endif
 
     // Test battery safety thresholds are reasonable
     if (BATTERY_LOW_VOLTAGE >= BATTERY_MAX_VOLTAGE) {

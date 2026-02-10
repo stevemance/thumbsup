@@ -41,11 +41,20 @@ bool safety_check_arm_conditions(uint32_t battery_voltage_mv) {
 }
 
 bool safety_check_battery(uint32_t battery_voltage_mv) {
+#if !BATTERY_ADC_ENABLED
+    (void)battery_voltage_mv;
+    return true;  // ADC not wired — skip check
+#else
     return battery_voltage_mv >= BATTERY_LOW_VOLTAGE;
+#endif
 }
 
 bool safety_is_button_pressed(void) {
+#if !SAFETY_BUTTON_ENABLED
+    return false;  // No physical button — never "pressed"
+#else
     return !gpio_get(PIN_SAFETY_BUTTON);
+#endif
 }
 
 void safety_update(void) {

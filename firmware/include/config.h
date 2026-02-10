@@ -89,7 +89,14 @@
 #define RPM_TO_PWM_PERCENT(rpm) ((rpm) * 100 / MAX_WHEEL_RPM)
 
 // Safety Configuration
-#define WEAPON_ARM_TIMEOUT  500   // Weapon arm timeout in milliseconds
+//
+// Hardware safety inputs: set to 0 when the corresponding hardware is not
+// wired up.  Floating ADC / GPIO pins cause spurious emergency stops.
+#define BATTERY_ADC_ENABLED     0   // Set to 1 when battery voltage divider is wired to GP26
+#define SAFETY_BUTTON_ENABLED   0   // Set to 1 when physical e-stop button is wired to GP8
+#define WEAPON_ARM_TIMEOUT  2000  // Weapon arm timeout (ms).  Must allow ESC to
+                                  // settle after DShot 3D mode setup to avoid
+                                  // direction bias on first stick input.
 #define FAILSAFE_TIMEOUT    1500  // Connection loss failsafe timeout (ms) - increased for reliability
 // Weapon response / ramping
 //
@@ -101,6 +108,25 @@
 #define WEAPON_SPINUP_TIME   1500  // Weapon ramp-up time (ms)
 #define WEAPON_SPINDOWN_TIME 400   // Weapon ramp-down time (ms)
 #define WEAPON_RAMP_STEPS   100   // Higher = smoother ramps (step size ~= 1% for 100)
+// Direction-change priming (AM32 ESC 3D mode workaround).
+//
+// The AM32 sensorless startup fails on the first attempt at a new direction
+// because the direction-change code (main.c:1063) sets old_routine=1, which
+// skips startMotor() → no initial commutate() → stale BEMF state → motor
+// won't spin.  Sending DShot=0 triggers the BEMF timeout (22.5ms) and sets
+// running=0.  The next throttle command starts cleanly because the ESC's
+// internal direction flag (`forward`) was already flipped on the first
+// (failed) attempt.
+//
+// Phase 1 (PRIME_PULSE): Send new direction's minimum DShot value to flip
+//   the ESC's internal direction flag.  The throttle maps to adjusted_input
+//   ~46 (below startup threshold), so the motor won't actually spin.
+// Phase 2 (PRIME_RESET): Send DShot=0 so the BEMF timeout fires (22.5ms)
+//   and resets running=0.
+// Phase 3: Normal ramp in new direction — ESC direction already correct,
+//   clean startup succeeds.
+#define WEAPON_PRIME_PULSE_MS 20    // Send min-DShot in new direction (ms)
+#define WEAPON_PRIME_RESET_MS 30    // Send DShot=0 to reset ESC state (ms)
 #define WEAPON_DSHOT_UPDATE_MS     2   // Minimum DShot update interval (ms) (500 Hz)
 #define WEAPON_DSHOT_TELEMETRY_MS  50  // Telemetry request interval (ms)
 #define WEAPON_DSHOT_TELEMETRY_BURST 4  // Decode up to N consecutive EDT frames per interval (helps catch RPM/V/I/T cycle)

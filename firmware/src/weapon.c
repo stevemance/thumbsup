@@ -108,7 +108,10 @@ static void weapon_run_dshot_setup_locked(uint32_t now_ms) {
 
     bool ok = dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
     ok = ok && dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
-    ok = ok && dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_SPIN_DIRECTION_NORMAL);
+    // Note: SPIN_DIRECTION_NORMAL intentionally omitted.  Sending it right
+    // before the first throttle command biases the ESC's internal direction
+    // state, causing one direction to be rejected until a ~2s zero-hold
+    // clears the lockout.  The ESC defaults to normal direction anyway.
     weapon_poll_telemetry_locked();
 
     if (ok && dshot_extended_telemetry_seen(MOTOR_WEAPON)) {
@@ -601,7 +604,7 @@ bool weapon_init(void) {
         // it stays powered, so a single setup at boot is sufficient.
         dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
         dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
-        dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_SPIN_DIRECTION_NORMAL);
+        // SPIN_DIRECTION_NORMAL omitted — see arming setup comment.
         dshot_setup_done = true;
     } else {
         DEBUG_PRINT("Weapon system initialized in PWM mode (DShot init failed)\n");
@@ -626,11 +629,14 @@ void weapon_update(void) {
             return;
         }
 #else
+        // Only check battery voltage in the fast path (runs every 2ms).
+        // The safety button is checked separately by safety_update() which
+        // uses a violation counter with threshold — a single noise glitch on
+        // the floating GP8 pin (no physical button installed) won't trigger
+        // an unrecoverable emergency stop.
         uint32_t battery_mv = read_battery_voltage();
-
-        // Emergency disarm if safety conditions are violated
-        if (!safety_check_arm_conditions(battery_mv)) {
-            DEBUG_PRINT("SAFETY VIOLATION: Force disarming weapon\n");
+        if (!safety_check_battery(battery_mv)) {
+            DEBUG_PRINT("SAFETY VIOLATION: Low battery in weapon_update\n");
             weapon_emergency_stop();
             return;
         }
@@ -673,6 +679,12 @@ void weapon_update(void) {
         case WEAPON_STATE_ARMED:
         case WEAPON_STATE_SPINNING:
             {
+                // Direction reversal tracking.  Persists across ticks.
+                static bool reversal_active = false;
+                // Prime phase: 0=idle, 1=pulse (new dir min DShot), 2=reset (DShot=0)
+                static uint8_t prime_phase = 0;
+                static uint32_t prime_start_ms = 0;
+
                 bool speed_changed = false;
                 if (current_speed != target_speed) {
 #if INTEGRATION_TEST_AUTO
@@ -680,41 +692,73 @@ void weapon_update(void) {
                     last_ramp_time = current_time;
                     speed_changed = true;
 #else
-                    // Signed ramp: use spindown rate when moving toward zero,
-                    // spinup rate when moving away from zero. During an active
-                    // direction reversal (target on opposite side of zero from
-                    // current), use the fast spindown rate for both phases so
-                    // the full reversal completes in ~640ms instead of ~1520ms.
-                    static bool reversal_active = false;
+                    // Detect direction reversal: current and target on
+                    // opposite sides of zero.
                     if ((current_speed > 0 && target_speed < 0) ||
                         (current_speed < 0 && target_speed > 0)) {
                         reversal_active = true;
                     }
-                    if (current_speed == target_speed) {
-                        reversal_active = false;
+
+                    // Direction-change prime: trigger on ANY start from
+                    // zero, not just during reversals.  This handles:
+                    //   - Initial start after arming (ESC may need dir flip)
+                    //   - Slow direction change (stop, wait, new direction)
+                    //   - Fast reversal through zero (ramp crosses zero)
+                    // Phase 1: send min DShot in target direction → ESC
+                    //   flips its internal direction flag.
+                    // Phase 2: send DShot=0 → BEMF timeout resets running.
+                    bool in_prime = false;
+                    if (current_speed == 0 && target_speed != 0) {
+                        if (prime_phase == 0) {
+                            prime_phase = 1;
+                            prime_start_ms = current_time;
+                        }
+                        if (prime_phase == 1) {
+                            in_prime = true;
+                            if (current_time - prime_start_ms >= WEAPON_PRIME_PULSE_MS) {
+                                prime_phase = 2;
+                                prime_start_ms = current_time;
+                            }
+                        } else if (prime_phase == 2) {
+                            if (current_time - prime_start_ms >= WEAPON_PRIME_RESET_MS) {
+                                // Prime complete — keep reversal_active so
+                                // ramp-up uses fast spindown rate.
+                                prime_phase = 0;
+                                prime_start_ms = 0;
+                            } else {
+                                in_prime = true;
+                            }
+                        }
                     }
 
-                    int8_t step_dir = (target_speed > current_speed) ? +1 : -1;
-                    bool moving_toward_zero = (abs(current_speed + step_dir) < abs(current_speed));
-                    uint32_t ramp_interval_ms = (moving_toward_zero || reversal_active)
-                        ? (WEAPON_SPINDOWN_TIME / WEAPON_RAMP_STEPS)
-                        : (WEAPON_SPINUP_TIME / WEAPON_RAMP_STEPS);
-                    if (ramp_interval_ms < 1) {
-                        ramp_interval_ms = 1;
-                    }
-
-                    if (current_time - last_ramp_time >= ramp_interval_ms) {
-                        static const int8_t ramp_step = (100 + WEAPON_RAMP_STEPS - 1) / WEAPON_RAMP_STEPS;
-                        if (target_speed > current_speed) {
-                            int16_t next = (int16_t)current_speed + ramp_step;
-                            current_speed = (int8_t)(next > target_speed ? target_speed : next);
-                        } else {
-                            int16_t next = (int16_t)current_speed - ramp_step;
-                            current_speed = (int8_t)(next < target_speed ? target_speed : next);
+                    if (!in_prime) {
+                        // Signed ramp: use spindown rate when moving toward
+                        // zero, spinup rate when moving away.  During an
+                        // active reversal both phases use the fast spindown
+                        // rate so the full reversal completes in ~690ms
+                        // (320ms down + 50ms prime + 320ms up) at ±80%.
+                        int8_t step_dir = (target_speed > current_speed) ? +1 : -1;
+                        bool moving_toward_zero = (abs(current_speed + step_dir) < abs(current_speed));
+                        uint32_t ramp_interval_ms = (moving_toward_zero || reversal_active)
+                            ? (WEAPON_SPINDOWN_TIME / WEAPON_RAMP_STEPS)
+                            : (WEAPON_SPINUP_TIME / WEAPON_RAMP_STEPS);
+                        if (ramp_interval_ms < 1) {
+                            ramp_interval_ms = 1;
                         }
 
-                        last_ramp_time = current_time;
-                        speed_changed = true;
+                        if (current_time - last_ramp_time >= ramp_interval_ms) {
+                            static const int8_t ramp_step = (100 + WEAPON_RAMP_STEPS - 1) / WEAPON_RAMP_STEPS;
+                            if (target_speed > current_speed) {
+                                int16_t next = (int16_t)current_speed + ramp_step;
+                                current_speed = (int8_t)(next > target_speed ? target_speed : next);
+                            } else {
+                                int16_t next = (int16_t)current_speed - ramp_step;
+                                current_speed = (int8_t)(next < target_speed ? target_speed : next);
+                            }
+
+                            last_ramp_time = current_time;
+                            speed_changed = true;
+                        }
                     }
 #endif
                     if (speed_changed) {
@@ -728,11 +772,20 @@ void weapon_update(void) {
                     }
                 }
 
-                // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
-                // This prevents race condition where control_mode changes between
-                // read and command execution
-                // MAJOR #1 (Iteration 3): VERIFIED - This is NOT a race condition.
-                // Mutex is properly acquired here before reading control_mode.
+                // Clear reversal state when ramp reaches its target
+                // (placed outside the != block so it actually executes).
+                if (current_speed == target_speed) {
+                    reversal_active = false;
+                    prime_phase = 0;
+                    prime_start_ms = 0;
+                }
+
+                // DShot 3D mode: minimum throttle values that trigger a
+                // direction change in AM32 without actually spinning the
+                // motor (adjusted_input ~46, below startup threshold 47).
+                #define DSHOT_3D_FWD_MIN 1048
+                #define DSHOT_3D_REV_MIN 48
+
                 mutex_enter_blocking(&mode_mutex);
                 switch (control_mode) {
                     case WEAPON_MODE_PWM:
@@ -744,7 +797,18 @@ void weapon_update(void) {
                         break;
 
                     case WEAPON_MODE_DSHOT: {
-                        uint16_t dshot_throttle = dshot_throttle_from_percent_3d(current_speed);
+                        uint16_t dshot_throttle;
+                        if (prime_phase == 1) {
+                            // Prime pulse: send new direction's min DShot
+                            // to trigger ESC direction flip.
+                            dshot_throttle = (target_speed > 0)
+                                ? DSHOT_3D_FWD_MIN : DSHOT_3D_REV_MIN;
+                        } else if (prime_phase == 2) {
+                            // Prime reset: DShot=0 triggers BEMF timeout.
+                            dshot_throttle = 0;
+                        } else {
+                            dshot_throttle = dshot_throttle_from_percent_3d(current_speed);
+                        }
                         weapon_send_dshot_locked(current_time, dshot_throttle, speed_changed);
                         break;
                     }
@@ -809,14 +873,15 @@ bool weapon_arm(void) {
     arm_start_time = to_ms_since_boot(get_absolute_time());
     mutex_enter_blocking(&mode_mutex);
     if (control_mode == WEAPON_MODE_DSHOT && dshot_initialized) {
-        // Only re-run DShot setup commands (EDT enable, 3D mode, spin direction)
-        // if they haven't been completed yet.  These blocking commands stall the
-        // btstack run loop for ~60ms per attempt and can trigger watchdog resets
-        // on back-to-back runs.  The ESC retains its settings while powered, so
-        // re-setup is unnecessary after the initial weapon_init() setup.
-        if (!dshot_setup_done) {
-            weapon_mark_dshot_setup_pending();
-        }
+        // Always re-run DShot setup commands (EDT enable, 3D mode, spin
+        // direction) during arming.  The boot-time setup in weapon_init()
+        // fires after only 200ms of idle — the ESC is often still booting
+        // and silently ignores the commands.  By the time the user arms
+        // (seconds after power-on), the ESC is guaranteed to be ready.
+        // Without 3D mode active, positive-direction throttle values
+        // (1048-2047) appear as mid-range throttle to the ESC and it
+        // refuses to start the motor from standstill.
+        weapon_mark_dshot_setup_pending();
         dshot_telemetry_pending = 0;
     }
     mutex_exit(&mode_mutex);
@@ -833,6 +898,7 @@ bool weapon_disarm(void) {
 
     // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
     mutex_enter_blocking(&mode_mutex);
+    bool need_dshot_reinit = false;
     switch (control_mode) {
         case WEAPON_MODE_PWM:
             motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
@@ -842,6 +908,10 @@ bool weapon_disarm(void) {
             if (dshot_initialized) {
                 dshot_send_throttle(MOTOR_WEAPON, 0, false);
                 dshot_telemetry_pending = 0;
+            } else {
+                // DShot was destroyed (e.g. by emergency_stop forcing GPIO to SIO).
+                // Re-initialize after releasing the mutex.
+                need_dshot_reinit = true;
             }
             break;
 
@@ -850,6 +920,12 @@ bool weapon_disarm(void) {
             break;
     }
     mutex_exit(&mode_mutex);
+
+    // Reinitialize DShot outside the mutex (weapon_set_control_mode acquires it).
+    if (need_dshot_reinit) {
+        DEBUG_PRINT("Reinitializing DShot after emergency stop\n");
+        weapon_set_control_mode(WEAPON_MODE_DSHOT);
+    }
 
     DEBUG_PRINT("Weapon disarmed\n");
     status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
@@ -924,12 +1000,15 @@ void weapon_emergency_stop(void) {
     // Method 1: PWM - always try to stop via PWM
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
 
-    // Method 2: DShot - if initialized, send stop command
+    // Method 2: DShot - if initialized, send stop command then properly deinit
     // Note: Read dshot_initialized without mutex - this is acceptable for emergency stop
     // Worst case: we skip DShot stop if flag race occurs, but GPIO force-low still works
     if (dshot_initialized) {
         dshot_send_throttle(MOTOR_WEAPON, 0, false);
         dshot_telemetry_pending = 0;
+        // Properly release PIO resources so reinit doesn't leak state machines.
+        dshot_deinit(MOTOR_WEAPON);
+        dshot_initialized = false;
     }
 
     // Method 3: Direct GPIO control - force pin low as last resort

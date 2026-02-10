@@ -40,13 +40,17 @@ struct uni_platform* get_my_platform(void);
 static void init_hardware(void) {
     // Note: stdio_init_all() is called in main() before this function
 
+#if BATTERY_ADC_ENABLED
     adc_init();
     adc_gpio_init(PIN_BATTERY_ADC);
     adc_select_input(0);
+#endif
 
+#if SAFETY_BUTTON_ENABLED
     gpio_init(PIN_SAFETY_BUTTON);
     gpio_set_dir(PIN_SAFETY_BUTTON, GPIO_IN);
     gpio_pull_up(PIN_SAFETY_BUTTON);
+#endif
 
 #if !SERIAL_GAMEPAD
     printf("\n=================================\n");
@@ -62,6 +66,10 @@ uint32_t read_battery_voltage(void) {
     if (hitl_overrides_get_battery_mv(&override_mv)) {
         return override_mv;
     }
+
+#if !BATTERY_ADC_ENABLED
+    return BATTERY_MAX_VOLTAGE;  // ADC not wired — report nominal full voltage
+#endif
 
     uint16_t adc_raw = adc_read();
 
@@ -85,7 +93,11 @@ uint32_t read_battery_voltage(void) {
 
 static void check_config_mode_entry(void) {
     // Enter config mode if safety button held during boot
+#if SAFETY_BUTTON_ENABLED
     if (!gpio_get(PIN_SAFETY_BUTTON)) {
+#else
+    if (false) {
+#endif
         printf("\n=================================\n");
         printf("  AM32 Configuration Mode\n");
         printf("=================================\n\n");

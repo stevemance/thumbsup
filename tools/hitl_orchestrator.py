@@ -3644,7 +3644,7 @@ def main() -> None:
     parser.add_argument("--soak-max-latency-ms", type=float, default=300.0, help="Max acceptable single-cycle latency (ms) for soak test")
     parser.add_argument("--zero-cross-axis", type=int, default=100, help="Weapon zero-cross command magnitude (RY axis 1..127, mapped to ±axis)")
     parser.add_argument("--zero-cross-hold-s", type=float, default=3.0, help="Seconds to hold each direction before reversal")
-    parser.add_argument("--zero-cross-max-ms", type=float, default=1000.0, help="Max allowed reversal time (ms)")
+    parser.add_argument("--zero-cross-max-ms", type=float, default=1000.0, help="Max allowed reversal time (ms), ~690ms expected with prime sequence")
     parser.add_argument("--zero-cross-cycles", type=int, default=2, help="Number of full round-trip reversal cycles")
     parser.add_argument("--drive-forward-axis", type=int, default=-80, help="Drive forward command (LY axis -127..127)")
     parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
