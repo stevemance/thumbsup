@@ -25,8 +25,17 @@ jobs:
         path: pico-sdk
         submodules: true
 
+    - name: Checkout Bluepad32
+      uses: actions/checkout@v4
+      with:
+        repository: ricardoquesada/bluepad32
+        path: bluepad32
+        submodules: true
+
     - name: Set SDK Path
-      run: echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
+      run: |
+        echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
+        echo "BLUEPAD32_ROOT=$GITHUB_WORKSPACE/bluepad32" >> $GITHUB_ENV
 
     - name: Create build directory
       run: mkdir -p firmware/build

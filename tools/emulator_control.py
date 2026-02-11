@@ -13,19 +13,7 @@ except ImportError as exc:
     print(f"Missing pyserial: {exc}")
     sys.exit(1)
 
-
-def find_pico_ports(product_hint=None):
-    ports = serial.tools.list_ports.comports()
-    matches = []
-    for port in ports:
-        if product_hint:
-            product = (port.product or "").lower()
-            description = (port.description or "").lower()
-            if product_hint.lower() not in product and product_hint.lower() not in description:
-                continue
-        if "2E8A" in port.hwid or "Pico" in port.description or "RP2040" in port.description:
-            matches.append(port.device)
-    return matches
+from common import find_pico_ports
 
 
 def resolve_port(args):

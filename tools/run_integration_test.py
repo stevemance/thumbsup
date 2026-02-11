@@ -13,6 +13,8 @@ try:
 except ImportError:
     serial = None
 
+from common import find_pico_port, run_cmd
+
 
 DEFAULT_VOLTAGE = 12.6
 DEFAULT_CURRENT = 3.0
@@ -28,44 +30,9 @@ DEFAULT_COOLDOWN_S = 10
 DEFAULT_ARM_S = 5
 
 
-def run_cmd(args, check=True, capture_output=True):
-    result = subprocess.run(
-        args,
-        capture_output=capture_output,
-        text=True,
-        check=False,
-    )
-    if check and result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        stdout = (result.stdout or "").strip()
-        detail = stderr or stdout or "unknown error"
-        raise RuntimeError(f"command failed: {' '.join(args)}\n{detail}")
-    return result
-
-
 def ensure_pyserial():
     if serial is None:
         raise RuntimeError("pyserial not installed. Try: pip install pyserial")
-
-
-def find_pico_port():
-    ports = serial.tools.list_ports.comports()
-    pico_ports = []
-    for port in ports:
-        if port.vid == 0x2E8A or (port.hwid and "2E8A" in port.hwid):
-            pico_ports.append(port.device)
-            continue
-        if port.description and "Pico" in port.description:
-            pico_ports.append(port.device)
-
-    if pico_ports:
-        return pico_ports[0]
-
-    acm_ports = [p.device for p in ports if "ttyACM" in p.device]
-    if len(acm_ports) == 1:
-        return acm_ports[0]
-
-    return None
 
 
 def wait_for_port(timeout_s):

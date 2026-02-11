@@ -1,5 +1,9 @@
+# Claude Code
+.claude/
+
 # Build directories
 build/
+firmware/build_diagnostic/
 *.build/
 cmake-build-*/
 controller_emulator/build/

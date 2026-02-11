@@ -143,15 +143,13 @@ The firmware consists of:
 - `src/trim_mode.c` - Dynamic trim adjustment
 - `src/am32_config.c` - AM32 ESC configuration
 - `src/dshot.c` - DShot digital protocol
-- `src/diagnostic_mode.c` - WiFi diagnostic mode (optional build)
-- `src/web_server.c` - Web dashboard (diagnostic mode)
 
 ### Configuration Files
 
 - `include/config.h` - System configuration and pin definitions
 - `include/sdkconfig.h` - Bluepad32 SDK configuration
 - `include/btstack_config.h` - BTstack Bluetooth configuration
-- `CMakeLists.txt` - Build system with DIAGNOSTIC_MODE option
+- `CMakeLists.txt` - Build system configuration
 
 ## Troubleshooting
 
@@ -259,24 +257,10 @@ Create `.vscode/settings.json`:
 }
 ```
 
-## Building Diagnostic Mode
-
-To build the WiFi diagnostic version instead:
-
-```bash
-cd firmware
-mkdir build-diagnostic
-cd build-diagnostic
-cmake .. -DDIAGNOSTIC_MODE=ON
-make -j8
-```
-
-This creates a separate firmware with WiFi access point and web dashboard.
-
 ## Next Steps
 
 After building successfully:
 1. Flash the firmware to your Pico W
-2. Pair your Bluetooth gamepad (competition mode) or connect to WiFi (diagnostic mode)
+2. Pair your Bluetooth gamepad
 3. Test the system following [safety procedures](safety_procedures.md)
 4. See [User Manual](USER_MANUAL.md) for operation instructions

@@ -52,12 +52,12 @@ typedef struct {
 
 static dshot_motor_state_t motor_states[MAX_DSHOT_MOTORS] = {0};
 
-// CRITICAL FIX #3: Reference counting for shared PIO programs
+// Reference counting for shared PIO programs
 // Multiple motors may share the same PIO program, so track usage
 static uint8_t pio_program_refcount_tx = 0;
 static uint8_t pio_program_refcount_bidir = 0;
 
-// MAJOR FIX #8 (Iteration 3): Mutex for thread-safe PIO reference counting
+// Mutex for thread-safe PIO reference counting
 // Refcounts are modified during init/deinit and must be protected from races
 static mutex_t pio_refcount_mutex;
 static bool pio_mutex_initialized = false;
@@ -74,16 +74,8 @@ uint16_t dshot_throttle_from_percent(int8_t percent) {
         return 0;  // Disarmed
     }
 
-    // MAJOR FIX #3 (Iteration 4): Rewrite formula to avoid negative intermediates
-    // Old formula: value = (percent * range) / 100 + (range / 2) + MIN
-    // For percent=-100: value = (-100 * 1999) / 100 + 999 + 48 = -1999 + 1047 = -952 (underflow)
-    //
-    // New approach: Map percent range [-100, +100] to throttle range [MIN, MAX]
-    // Using linear interpolation without negative intermediates:
-    //   percent = -100 → throttle = MIN (48)
-    //   percent = +100 → throttle = MAX (2047)
-    //
-    // Formula: throttle = MIN + ((percent + 100) * (MAX - MIN)) / 200
+    // Map percent [-100, +100] to throttle [MIN, MAX] using linear interpolation
+    // Uses (percent + 100) to avoid negative intermediates that would underflow
     int32_t throttle_range = DSHOT_THROTTLE_MAX - DSHOT_THROTTLE_MIN;  // 1999
     int32_t normalized_percent = (int32_t)percent + 100;  // 0 to 200
     int32_t value = DSHOT_THROTTLE_MIN + (normalized_percent * throttle_range) / 200;
@@ -150,15 +142,13 @@ static uint16_t encode_dshot_packet(uint16_t throttle, bool telemetry_request, b
     // [4]    = 1-bit telemetry request
     // [3:0]  = 4-bit CRC (calculated on bits [15:4])
 
-    // CRITICAL FIX #4: Correct bit positioning
     // Place throttle in final position [15:5]
     uint16_t packet = (throttle & 0x7FF) << 5;
 
     // Place telemetry request in final position [4]
     packet |= (telemetry_request ? 1 : 0) << 4;
 
-    // CRITICAL FIX #5: Calculate CRC on the 12-bit payload (bits [15:4])
-    // Shift right by 4 to get payload into [11:0] for CRC function
+    // CRC covers the 12-bit payload (bits [15:4])
     uint8_t crc = dshot_calculate_crc(packet >> 4);
     if (invert_crc) {
         crc = (uint8_t)(~crc) & 0x0F;
@@ -184,33 +174,11 @@ static float calculate_clk_div(dshot_speed_t speed) {
         default: bit_period_ns = 3330; break;
     }
 
-    // CRITICAL FIX #1 (Iteration 2): PIO program uses 16 cycles per bit
-    // Each bit in dshot.pio consists of:
-    //   1. out y, 1              = 1 cycle
-    //   2. jmp !y, bit_zero      = 1 cycle
-    //   3. set pins, 1 [7 or 3]  = 8 or 4 cycles
-    //   4. set pins, 0 [3 or 7]  = 4 or 8 cycles
-    //   5. jmp x--, bitloop      = 1 cycle
-    //   Total: 1+1+12+1+1 = 16 cycles (bit 1)
-    //   Total: 1+1+6+7+1  = 16 cycles (bit 0)
+    // PIO program uses 16 cycles per bit (both bit-1 and bit-0 paths)
     uint32_t cycles_per_bit = 16;
 
-    // Calculate required PIO frequency to achieve desired bit timing
-    // Formula: pio_freq = (1 MHz * cycles_per_bit * 1000) / bit_period_ns
-    //
-    // CRITICAL FIX #1: Updated calculations for 16 cycles per bit
-    // DShot150 (6670ns):  pio_freq = (1,000,000 * 16 * 1000) / 6670 = 2,398,801 Hz (~2.40 MHz)
-    //                     clk_div = 125 MHz / 2.40 MHz = 52.10
-    // DShot300 (3330ns):  pio_freq = (1,000,000 * 16 * 1000) / 3330 = 4,801,920 Hz (~4.80 MHz)
-    //                     clk_div = 125 MHz / 4.80 MHz = 26.03
-    // DShot600 (1670ns):  pio_freq = (1,000,000 * 16 * 1000) / 1670 = 9,580,838 Hz (~9.58 MHz)
-    //                     clk_div = 125 MHz / 9.58 MHz = 13.05
-    // DShot1200 (830ns):  pio_freq = (1,000,000 * 16 * 1000) / 830 = 19,277,108 Hz (~19.3 MHz)
-    //                     clk_div = 125 MHz / 19.3 MHz = 6.48
-    //
-    // IMPORTANT: Use uint64_t to prevent overflow
-    //   Max intermediate: 1,000,000 * 16 * 1000 = 16,000,000,000 (fits in uint64_t)
-    //   Would overflow uint32_t (max 4,294,967,295)
+    // pio_freq = (1 MHz * cycles_per_bit * 1000) / bit_period_ns
+    // uint64_t required: intermediate exceeds uint32_t max
     uint64_t pio_freq_hz = (1000000ULL * cycles_per_bit * 1000ULL) / bit_period_ns;
 
     float clk_div = (float)sys_clk_hz / (float)pio_freq_hz;
@@ -231,7 +199,7 @@ static const uint8_t gcr_decode_table[32] = {
     0xFF, 0x00, 0x08, 0x01, 0xFF, 0x04, 0x0C, 0xFF   // 0x18-0x1F
 };
 
-// MAJOR FIX #3: GCR table validation with known test vectors
+// GCR table validation with known test vectors
 // Returns true if GCR table is correct
 static bool validate_gcr_table(void) {
     // Test vectors: known GCR encoded values and their expected decoded 4-bit values
@@ -1111,7 +1079,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         return false;
     }
 
-    // MAJOR FIX #3: Validate GCR decode table on first initialization
+    // Validate GCR decode table on first initialization
     static bool gcr_validated = false;
     if (!gcr_validated) {
         if (!validate_gcr_table()) {
@@ -1122,7 +1090,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         DEBUG_PRINT("GCR decode table validated successfully\n");
     }
 
-    // MAJOR FIX #8 (Iteration 3): Initialize mutex on first use
+    // Initialize mutex on first use
     if (!pio_mutex_initialized) {
         mutex_init(&pio_refcount_mutex);
         pio_mutex_initialized = true;
@@ -1136,7 +1104,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     // Select PIO instance (use PIO0 for all motors, different state machines)
     state->pio = pio0;
 
-    // CRITICAL FIX #2: Dynamically allocate state machine to avoid race with WS2812
+    // Dynamically allocate state machine to avoid race with WS2812
     state->sm = pio_claim_unused_sm(state->pio, true);
     if (state->sm == (uint)-1) {
         DEBUG_PRINT("ERROR: No PIO state machines available\n");
@@ -1150,17 +1118,14 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         return false;
     }
 
-    // CRITICAL FIX #3: Add PIO program with reference counting
-    // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+    // Add PIO program with reference counting; mutex protects refcounts
     mutex_enter_blocking(&pio_refcount_mutex);
 
     if (config->bidirectional) {
         if (pio_program_refcount_bidir == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_bidirectional_program);
         } else {
-            // MAJOR FIX #7 (Iteration 2): Validate that we found the program
-            // Reuse existing program offset (all motors using same PIO will have same offset)
-            // Find existing offset from another initialized motor with same program
+            // Reuse existing program offset from another initialized motor
             bool found = false;
             for (int i = 0; i < MAX_DSHOT_MOTORS; i++) {
                 if (motor_states[i].initialized && motor_states[i].config.bidirectional) {
@@ -1188,8 +1153,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         if (pio_program_refcount_tx == 0) {
             state->pio_offset = pio_add_program(state->pio, &dshot_tx_program);
         } else {
-            // MAJOR FIX #7 (Iteration 2): Validate that we found the program
-            // Reuse existing program offset
+            // Reuse existing program offset from another initialized motor
             bool found = false;
             for (int i = 0; i < MAX_DSHOT_MOTORS; i++) {
                 if (motor_states[i].initialized && !motor_states[i].config.bidirectional) {
@@ -1217,8 +1181,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     state->dma_chan = dma_claim_unused_channel(true);
     if (state->dma_chan < 0) {
         DEBUG_PRINT("ERROR: No DMA channels available\n");
-        // MAJOR FIX #4 (Iteration 2): Clean up PIO program on DMA allocation failure
-        // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+        // Clean up PIO program on DMA allocation failure
         mutex_enter_blocking(&pio_refcount_mutex);
         if (config->bidirectional) {
             pio_program_refcount_bidir--;
@@ -1234,9 +1197,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
         mutex_exit(&pio_refcount_mutex);
         pio_sm_unclaim(state->pio, state->sm);
 
-        // MAJOR FIX #4 (Iteration 4): Initialize fields individually instead of memset
-        // memset() on entire structure could corrupt adjacent memory if size is wrong
-        // Explicit field initialization is safer and more maintainable
+        // Initialize fields individually (safer than memset on partial struct)
         state->initialized = false;
         state->pio = NULL;
         state->sm = 0;
@@ -1314,7 +1275,7 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
         return false;
     }
 
-    // MAJOR FIX #2 (Iteration 4): NULL pointer checks before dereferencing
+    // NULL pointer checks before dereferencing
     if (state->pio == NULL) {
         DEBUG_PRINT("CRITICAL: NULL PIO pointer for motor %d\n", motor);
         return false;
@@ -1342,8 +1303,7 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     // Timeout for DMA waits (generous for ~53μs DShot300 frame)
     #define DSHOT_DMA_TIMEOUT_MS 50
 
-    // MAJOR FIX #1: Validate PIO FIFO state before transfer
-    // Check if previous transfer is still active — use timeout to avoid infinite hang
+    // Check if previous transfer is still active; timeout avoids infinite hang
     // when PIO is stalled (e.g. RX FIFO full in bidirectional mode).
     if (dma_channel_is_busy(state->dma_chan)) {
         DEBUG_PRINT("WARNING: DShot DMA still busy for motor %d, waiting...\n", motor);
@@ -1383,8 +1343,7 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
     // Start DMA transfer
     dma_channel_start(state->dma_chan);
 
-    // CRITICAL FIX #2 (Iteration 3): Replace blocking wait with timeout mechanism
-    // Blocking wait can hang indefinitely if DMA fails, preventing emergency stop
+    // Timeout instead of blocking wait — prevents hang if DMA fails during e-stop
     uint32_t start_time = to_ms_since_boot(get_absolute_time());
     bool timeout = false;
 
@@ -1411,9 +1370,7 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
         return false;
     }
 
-    // MAJOR FIX #4 (Iteration 3): Check transfer_count instead of IRQ status
-    // MAJOR FIX #7 (Iteration 4): Verify PIO consumed data after DMA completion
-    // DMA completion only means data was written to PIO FIFO, not that PIO transmitted it
+    // Verify DMA transfer completed (transfer_count == 0)
     uint32_t remaining = dma_channel_hw_addr(state->dma_chan)->transfer_count;
     if (remaining != 0) {
         DEBUG_PRINT("ERROR: DMA transfer incomplete for motor %d (remaining=%u)\n", motor, remaining);
@@ -1536,8 +1493,7 @@ bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry) {
         return false;
     }
 
-    // MAJOR FIX #6 (Iteration 2): Check telemetry freshness (max 100ms age)
-    // Stale telemetry could indicate ESC communication loss or malfunction
+    // Reject stale telemetry — may indicate ESC communication loss
     uint32_t age_ms = to_ms_since_boot(get_absolute_time()) - state->last_telemetry.timestamp_ms;
     #define TELEMETRY_MAX_AGE_MS 100
     if (age_ms > TELEMETRY_MAX_AGE_MS) {
@@ -1658,11 +1614,10 @@ void dshot_deinit(motor_channel_t motor) {
     // Stop and disable state machine
     pio_sm_set_enabled(state->pio, state->sm, false);
 
-    // CRITICAL FIX #2: Unclaim state machine
+    // Unclaim state machine
     pio_sm_unclaim(state->pio, state->sm);
 
-    // CRITICAL FIX #3: Remove PIO program only if this is the last user
-    // MAJOR FIX #8 (Iteration 3): Protect refcount operations with mutex
+    // Remove PIO program only if this is the last user; mutex protects refcounts
     mutex_enter_blocking(&pio_refcount_mutex);
     if (state->config.bidirectional) {
         pio_program_refcount_bidir--;
@@ -1677,7 +1632,7 @@ void dshot_deinit(motor_channel_t motor) {
     }
     mutex_exit(&pio_refcount_mutex);
 
-    // MAJOR FIX #5: Properly cleanup DMA channel before unclaiming
+    // Cleanup DMA channel before unclaiming
     if (state->dma_chan >= 0) {
         // Abort any active DMA transfer
         dma_channel_abort(state->dma_chan);

@@ -13,11 +13,8 @@
 #define AM32_BAUD_RATE          19200
 #define AM32_BAUDRATE_CMD       115200  // For bootloader mode
 #define AM32_SIGNAL_PIN         PIN_WEAPON_PWM
-// MAJOR FIX #6: Reply timeout may need adjustment based on hardware testing
-// 100ms should be sufficient for most operations, but slow ESCs or operations
-// like EEPROM read/write may require longer timeouts. Monitor actual response
-// times during hardware testing and increase if timeouts occur frequently.
-#define AM32_REPLY_TIMEOUT      300     // ms (may need increase for slow operations)
+// 300ms covers slow operations like EEPROM read/write on AM32.
+#define AM32_REPLY_TIMEOUT      300     // ms
 
 // AM32 Protocol Commands
 #define AM32_CMD_KEEPALIVE      0xFF
@@ -164,7 +161,6 @@ bool am32_set_led(uint8_t led_state);
 
 // MSP protocol support
 bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len);
-// CRITICAL FIX #3 (Iteration 4): Add buffer_size parameter to prevent overflow
 bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint16_t* len);
 
 // Firmware update (bootloader mode)

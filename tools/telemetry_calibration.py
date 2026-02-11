@@ -22,6 +22,8 @@ except ImportError as exc:
     print(f"Missing pyserial: {exc}")
     sys.exit(1)
 
+from common import find_pico_port
+
 
 CYCLE_RE = re.compile(r"^=== Cycle\s+(\d+)")
 STEP_START_RE = re.compile(r"STEP_START index=(\d+) throttle=(\d+) hold=(\d+)ms")
@@ -32,14 +34,6 @@ RPM_SAMPLE_RE = re.compile(
     r"(?: path=([a-z]+) inv=(\d+) pick=([a-z]+)(?: off=(\d+))?)?)|erpm=-- rpm=--) "
     r"V=([0-9.\-]+|--) I=([0-9.\-]+|--) T=([0-9\-]+|--)"
 )
-
-
-def find_pico_port():
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        if "2E8A" in port.hwid or "Pico" in port.description or "RP2040" in port.description:
-            return port.device
-    return None
 
 
 def read_psu_snapshot(channel):

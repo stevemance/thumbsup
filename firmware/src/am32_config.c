@@ -1,8 +1,6 @@
 /**
  * AM32 ESC Serial Configuration Protocol Implementation
  *
- * CRITICAL FIX #5: Comprehensive protocol documentation
- * CRITICAL FIX #3 (Iteration 2): Hardware requirements documentation
  *
  * ============================================================================
  * HARDWARE REQUIREMENTS - READ THIS BEFORE USING AM32 CONFIG MODE
@@ -137,10 +135,10 @@
 
 // AM32 general timeouts
 #define AM32_MODE_SWITCH_DELAY_MS 100   // Delay after mode switch
-// MAJOR FIX #2: EEPROM write requires 200-500ms for reliable persistence
-#define AM32_SAVE_DELAY_MS        500   // EEPROM write delay (minimum 200ms, using 500ms for safety)
+// EEPROM write requires 200-500ms for reliable persistence
+#define AM32_SAVE_DELAY_MS        500
 
-// MINOR FIX: Named constants for response size validation
+// Named constants for response size validation
 #define AM32_MIN_SETTINGS_SIZE    32    // Minimum expected settings response size
 #define AM32_MIN_INFO_SIZE        16    // Minimum expected info response size
 #define AM32_MIN_TELEMETRY_SIZE   12    // Minimum expected telemetry response size
@@ -470,9 +468,7 @@ bool am32_send_command(uint8_t cmd, const uint8_t* data, uint16_t len) {
         return false;
     }
 
-    // CRITICAL FIX #1: Standard AM32/MSP checksum - simple XOR of all bytes
-    // Protocol format: [CMD] [LEN_L] [LEN_H] [DATA...] [CHECKSUM]
-    // Checksum = CMD ^ LEN_L ^ LEN_H ^ DATA[0] ^ DATA[1] ^ ... ^ DATA[n-1]
+    // AM32/MSP checksum: XOR of all packet bytes
     uint8_t checksum = cmd;
     checksum ^= (len & 0xFF);
     checksum ^= ((len >> 8) & 0xFF);
@@ -497,8 +493,7 @@ bool am32_send_command(uint8_t cmd, const uint8_t* data, uint16_t len) {
 }
 
 bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) {
-    // SAFETY: Validate parameters
-    // MAJOR FIX #5 (Iteration 4): Explicit zero-length validation
+    // Validate parameters
     if (buffer == NULL || len == NULL) {
         DEBUG_PRINT("CRITICAL: NULL parameters to am32_receive_response\n");
         return false;
@@ -530,15 +525,13 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
                 expected_len = byte;
             } else if (received == 1) {
                 expected_len |= (byte << 8);
-                // MAJOR FIX #5 (Iteration 2): Check actual buffer size FIRST, then sanity check
-                // This ensures we protect against buffer overflow before other validations
+                // Check buffer size first to prevent overflow
                 if (expected_len > max_buffer_size) {
                     DEBUG_PRINT("ERROR: Response too large for buffer (%u > %u)\n",
                                expected_len, max_buffer_size);
                     return false;
                 }
-                // MAJOR FIX #1: Validate max length to prevent timeout on huge values
-                // Maximum reasonable response is 512 bytes (prevents waiting for len=65535)
+                // Cap at 512 bytes to prevent timeout on bogus lengths
                 #define AM32_MAX_RESPONSE_LEN 512
                 if (expected_len > AM32_MAX_RESPONSE_LEN) {
                     DEBUG_PRINT("ERROR: Response exceeds maximum (%u > %u)\n",
@@ -549,8 +542,7 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
             }
             received++;
         } else {
-            // SAFETY: Strict bounds checking
-            // MAJOR FIX #6 (Iteration 3): Upgrade truncation to ERROR level and fail
+            // Strict bounds checking
             uint16_t data_index = received - 2;
             if (data_index < expected_len && data_index < max_buffer_size) {
                 buffer[data_index] = byte;
@@ -564,7 +556,7 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
             received++;
 
             if (received >= expected_len + 2) {
-                // MAJOR FIX #6 (Iteration 3): Ensure *len reflects actual data written
+                // Ensure *len reflects actual data written
                 *len = (expected_len < max_buffer_size) ? expected_len : max_buffer_size;
                 // Return false if truncation occurred
                 if (expected_len > max_buffer_size) {
@@ -632,9 +624,7 @@ bool am32_write_settings(const am32_config_t* config) {
         return false;
     }
 
-    // MINOR FIX: Validate config parameter ranges before writing to ESC
-    // MAJOR FIX #6 (Iteration 4): Comprehensive range validation
-    // This prevents sending invalid values that could damage the ESC or motor
+    // Validate ranges to prevent sending values that could damage ESC or motor
     if (config->temperature_limit > 150) {
         DEBUG_PRINT("ERROR: Temperature limit too high (%d > 150°C)\n", config->temperature_limit);
         return false;
@@ -655,7 +645,7 @@ bool am32_write_settings(const am32_config_t* config) {
         DEBUG_PRINT("ERROR: Invalid PWM frequency (%d, must be 24, 48, or 96 kHz)\n", config->pwm_frequency);
         return false;
     }
-    // MAJOR FIX #6 (Iteration 4): Additional parameter validation
+    // Additional parameter validation
     if (config->demag_compensation > 2) {
         DEBUG_PRINT("ERROR: Demag compensation out of range (%d, must be 0-2)\n", config->demag_compensation);
         return false;
@@ -825,10 +815,7 @@ bool am32_passthrough_mode(void) {
         return false;
     }
 
-    // CRITICAL FIX #4 (Iteration 4): Use non-blocking getchar to prevent infinite loop
-    // Original code used getchar_timeout_us(0) to check if available, then blocking getchar()
-    // This creates race: interrupt could consume char between the two calls → hang forever
-    // Fix: Use getchar_timeout_us(1000) for non-blocking read with short timeout
+    // Use non-blocking getchar to avoid race between readability check and read
     while (true) {
         // SAFETY: Feed watchdog to prevent resets (only if enabled)
         if (watchdog_hw->ctrl & WATCHDOG_CTRL_ENABLE_BITS) {
@@ -836,8 +823,6 @@ bool am32_passthrough_mode(void) {
         }
 
         // USB -> AM32
-        // CRITICAL FIX #4 (Iteration 4): Use getchar_timeout_us(1000) instead of getchar()
-        // This prevents blocking forever if character is consumed between check and read
         int c = getchar_timeout_us(1000);
         if (c != PICO_ERROR_TIMEOUT) {
             if (c == 0x1B) {  // ESC key to exit
@@ -1124,8 +1109,7 @@ bool am32_msp_send(uint8_t cmd, const uint8_t* payload, uint16_t len) {
 }
 
 bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint16_t* len) {
-    // CRITICAL FIX #3 (Iteration 4): Buffer overflow protection
-    // Validate buffer_size parameter and payload_len from wire before writing
+    // Validate buffer_size and payload_len from wire before writing
     if (cmd == NULL || payload == NULL || len == NULL || buffer_size == 0) {
         DEBUG_PRINT("CRITICAL: Invalid parameters to am32_msp_receive\n");
         return false;
@@ -1159,8 +1143,7 @@ bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint
                 break;
             case 3:  // Payload length
                 payload_len = byte;
-                // CRITICAL FIX #3 (Iteration 4): Validate payload_len before accepting it
-                // Malicious ESC could send payload_len=255 for caller's 32-byte buffer
+                // Reject payload larger than caller's buffer
                 if (payload_len > buffer_size) {
                     DEBUG_PRINT("ERROR: MSP payload too large (%u > %u), rejecting\n",
                                payload_len, buffer_size);
@@ -1180,7 +1163,7 @@ bool am32_msp_receive(uint8_t* cmd, uint8_t* payload, uint16_t buffer_size, uint
                 }
                 break;
             case 5:  // Payload
-                // CRITICAL FIX #3 (Iteration 4): Double-check bounds before write
+                // Bounds check before write
                 if (idx < payload_len && idx < buffer_size) {
                     payload[idx++] = byte;
                     calc_checksum ^= byte;

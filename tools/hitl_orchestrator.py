@@ -33,35 +33,11 @@ except ImportError as exc:
     print(f"Missing pyserial: {exc}")
     sys.exit(1)
 
+from common import HITL_STATUS_RE, parse_kv_payload, run_cmd, slugify
 
-HITL_STATUS_RE = re.compile(r"^HITL STATUS (.+)$")
 HITL_EVENT_RE = re.compile(r"^HITL EVENT (.+)$")
 HITL_BTADDR_RE = re.compile(r"^HITL BTADDR ([0-9A-Fa-f:]{17})$")
 LSUSB_RP2_BOOT_RE = re.compile(r"^Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+2e8a:0003\b")
-
-
-def run_cmd(
-    args: list[str],
-    *,
-    check: bool = True,
-    capture_output: bool = True,
-    cwd: str | None = None,
-    env: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess:
-    result = subprocess.run(
-        args,
-        capture_output=capture_output,
-        text=True,
-        check=False,
-        cwd=cwd,
-        env=env,
-    )
-    if check and result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        stdout = (result.stdout or "").strip()
-        detail = stderr or stdout or "unknown error"
-        raise RuntimeError(f"command failed: {' '.join(args)}\n{detail}")
-    return result
 
 
 def lsusb_rp2_bootsel_devices() -> set[tuple[int, int]]:
@@ -293,11 +269,6 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def slugify(name: str) -> str:
-    # Lowercase, keep alnum, convert runs of other chars to underscores.
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-
-
 @dataclass
 class StepResult:
     name: str
@@ -306,16 +277,6 @@ class StepResult:
     started_at: str
     finished_at: str
     artifacts_dir: str | None = None
-
-
-def parse_kv_payload(payload: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for token in payload.strip().split():
-        if "=" not in token:
-            continue
-        k, v = token.split("=", 1)
-        out[k] = v
-    return out
 
 
 class SerialLogger:

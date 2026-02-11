@@ -11,6 +11,8 @@ import time
 import argparse
 from datetime import datetime
 
+from common import find_pico_port
+
 # ANSI color codes
 class Colors:
     HEADER = '\033[95m'
@@ -21,19 +23,6 @@ class Colors:
     RED = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
-
-def find_pico_port():
-    """Find the Raspberry Pi Pico serial port automatically"""
-    ports = serial.tools.list_ports.comports()
-
-    for port in ports:
-        # Check for Pico identifiers
-        if "2E8A:0005" in port.hwid:  # Raspberry Pi Pico vendor/product ID
-            return port.device
-        if "Pico" in port.description:
-            return port.device
-
-    return None
 
 def format_message(msg, timestamp=True):
     """Format and colorize debug messages"""

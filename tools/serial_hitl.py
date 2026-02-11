@@ -18,28 +18,13 @@ except ImportError as exc:
     print(f"Missing pyserial: {exc}")
     sys.exit(1)
 
+from common import find_pico_port
+
 
 TELEM_RE = re.compile(
     r"^TELEM valid=(\d+) age=(--|\d+)"
     r"(?: erpm=(\d+) rpm=(\d+) V=([0-9.]+) I=([0-9.]+) T=(\d+))?"
 )
-
-
-def find_pico_port(product_hint=None):
-    if product_hint is None:
-        hitl = Path("/dev/ttyHITL_ROBOT")
-        if hitl.exists():
-            return str(hitl)
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        if product_hint:
-            product = (port.product or "").lower()
-            description = (port.description or "").lower()
-            if product_hint.lower() not in product and product_hint.lower() not in description:
-                continue
-        if "2E8A" in port.hwid or "Pico" in port.description or "RP2040" in port.description:
-            return port.device
-    return None
 
 
 def format_wall(start_wall, t_s):

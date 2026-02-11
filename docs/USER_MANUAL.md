@@ -1,415 +1,528 @@
-# ThumbsUp Combat Robot User Manual
+# ThumbsUp Combat Robot - User Manual
+
+**Firmware Version 1.0.0**
+
+---
 
 ## Table of Contents
-1. [Safety Warning](#safety-warning)
-2. [Controller Layout](#controller-layout)
-3. [Startup Procedure](#startup-procedure)
-4. [Safety Test Suite](#safety-test-suite)
-5. [LED Indicators](#led-indicators)
-6. [Operating Procedures](#operating-procedures)
-7. [Emergency Procedures](#emergency-procedures)
-8. [Troubleshooting](#troubleshooting)
-9. [Battery Management](#battery-management)
-10. [Competition Checklist](#competition-checklist)
+
+1. [Overview](#overview)
+2. [Hardware Summary](#hardware-summary)
+3. [Controller Pairing](#controller-pairing)
+4. [Status LEDs](#status-leds)
+5. [Driving](#driving)
+6. [Weapon Control](#weapon-control)
+7. [Emergency Stop](#emergency-stop)
+8. [Safety System](#safety-system)
+9. [Special Modes](#special-modes)
+10. [ESC Configuration](#esc-configuration)
+11. [Troubleshooting](#troubleshooting)
+12. [Competition Checklist](#competition-checklist)
+13. [Quick Reference Card](#quick-reference-card)
 
 ---
 
-## Safety Warning
+## Overview
 
-⚠️ **DANGER: HIGH-SPEED ROTATING WEAPON** ⚠️
+ThumbsUp is a Bluetooth-controlled combat robot built on the Raspberry Pi Pico W
+(RP2040). It uses a Bluetooth gamepad for control and communicates with its weapon
+ESC over the DShot300 digital protocol with bidirectional telemetry.
 
-This combat robot contains a high-speed spinning weapon capable of causing serious injury or death.
-
-**ALWAYS:**
-- Operate in approved combat robot arenas only
-- Wear safety glasses
-- Maintain safe distance (minimum 10 feet) when armed
-- Have emergency stop procedures ready
-- Follow all competition safety rules
-- Keep weapon pointed away from people
-
-**NEVER:**
-- Operate without safety gear
-- Bypass safety systems
-- Operate with damaged components
-- Leave armed robot unattended
+The robot has two drive motors (left/right, arcade-style mixing) and one brushless
+weapon motor controlled through an AM32 ESC.
 
 ---
 
-## Controller Layout
+## Hardware Summary
 
-The ThumbsUp robot uses standard Bluetooth gamepads (Xbox, PlayStation, or compatible).
+| Component | Detail |
+|-----------|--------|
+| MCU | Raspberry Pi Pico W (RP2040, dual-core ARM Cortex-M0+) |
+| Drive Motors | 2x brushed DC (PWM control) |
+| Weapon Motor | FingerTech Silver Spark F2822-1100KV (brushless, 14 poles) |
+| Weapon ESC | AT32F421-based, running AM32 firmware |
+| Weapon Protocol | DShot300 with bidirectional EDT telemetry |
+| Controller | Bluetooth gamepad via Bluepad32 (Switch Pro, Xbox, PS4/PS5, etc.) |
+| Status LEDs | 2x SK6812 addressable RGB LEDs (GRB format) on GP28 |
+| Battery | 3S LiPo (11.1V nominal, 12.6V full) |
 
-### Control Mappings
+### Pin Assignments
 
-| Control | Function | Description |
-|---------|----------|-------------|
-| **Left Stick Y-axis** | Forward/Reverse | Push forward to drive forward, pull back to reverse |
-| **Left Stick X-axis** | Turning | Left/right for tank-style turning |
-| **Right Stick Y-axis** | Weapon Speed | Push forward to spin weapon (only when armed) |
-| **A Button** | Clear Emergency Stop | Hold for 2 seconds to clear E-stop |
-| **B Button** | Arm/Disarm Toggle | Press to arm or disarm weapon |
-| **L1 + R1** | Emergency Stop | Press both simultaneously for immediate shutdown |
-| **System Button** | Controller Features | Activates rumble and LED test |
-
-### Control Details
-
-#### Drive Controls
-- **Deadzone**: 30 units (of 512) - prevents drift
-- **Exponential curve**: 30% default - smoother control at low speeds
-- **Max speed**: Limited to 80% for safety
-- **Mixing**: Tank-style with automatic speed limiting when turning
-
-#### Weapon Control
-- **Trigger threshold**: 50 units - prevents accidental activation
-- **Ramp-up time**: 2 seconds - gradual acceleration
-- **Speed control**: Proportional from 0-100%
-- **Safety interlock**: Must be armed first (B button)
-
-#### Emergency Stop
-- **Activation**: L1 + R1 pressed together
-- **Effect**: Immediate shutdown of all motors
-- **Clear procedure**: Hold A button for 2 seconds
-- **Visual indication**: All LEDs flash rapidly
+| Pin | Function |
+|-----|----------|
+| GP0 | Left drive motor PWM |
+| GP1 | Right drive motor PWM |
+| GP4 | Weapon motor (UART1 TX / DShot) |
+| GP28 | SK6812 status LEDs (2 LEDs) |
+| GP8 | Safety button (optional, active low with pull-up) |
+| GP26 | Battery voltage monitor (ADC0, optional) |
 
 ---
 
-## Startup Procedure
+## Controller Pairing
 
-### 1. Pre-Power Checks
-- [ ] Inspect robot for damage
-- [ ] Verify weapon is clear of obstructions
-- [ ] Check battery voltage (11.1V minimum)
-- [ ] Ensure arena is clear
-- [ ] Safety gear on all personnel
+ThumbsUp uses the Bluepad32 library and supports most Bluetooth gamepads:
 
-### 2. Power On Sequence
-1. Connect battery
-2. Power on robot (main switch)
-3. Observe LED sequence:
-   - All LEDs flash once (power-on test)
-   - Status LED turns on (system booting)
-   - WiFi LED blinks (Bluetooth initializing)
+- Nintendo Switch Pro Controller (primary tested controller)
+- Xbox Wireless Controller
+- PlayStation DualShock 4 / DualSense
+- 8BitDo controllers
+- Generic Bluetooth HID gamepads
 
-### 3. System Initialization
-The robot initializes and tests safety systems on startup:
-- Motor controllers initialize to safe (stopped) state
-- Weapon safety interlocks engage
-- Battery monitor calibrates
-- Addressable LEDs perform startup animation
-- Bluetooth radio initializes
+### Pairing Procedure
 
-Status LED will show:
-- **Blue pulse**: System initializing
-- **Green**: Ready, waiting for controller
-- **Cyan**: Controller connected, ready to operate
+1. **Power on** the robot. The system LED (LED 0) will pulse **dim blue** during
+   boot.
+2. The LED changes to **solid green** when the robot is ready and scanning for
+   controllers.
+3. Put your controller into **pairing mode**:
+   - *Switch Pro*: Hold the small button on the back near the USB port.
+   - *Xbox*: Hold the pairing button on top.
+   - *PS4/PS5*: Hold Share + PS button simultaneously.
+4. When connected, the system LED turns **solid cyan** (green-blue).
+5. A brief **neutral guard** activates: the robot waits ~500 ms for all sticks to
+   be centered before accepting input. This prevents accidental motion from
+   transient axis values during pairing.
+6. The robot is now ready to drive.
 
-### 4. Controller Connection
-1. Turn on Bluetooth gamepad
-2. Wait for pairing (Status LED solid)
-3. Test connection with small stick movement
-4. Verify drive response
+After the first controller connection, the hardware watchdog is enabled. If the
+firmware hangs, the watchdog will automatically reboot the system.
 
 ---
 
-## Status LED System
+## Status LEDs
 
-The robot uses 2 SK6812 addressable RGB LEDs for status indication:
+ThumbsUp has two SK6812 addressable LEDs that provide at-a-glance status.
 
-### LED 0: System Status
-Shows overall robot state and health
+- **LED 0** (System LED): Overall system state.
+- **LED 1** (Weapon LED): Weapon state.
 
-### LED 1: Weapon Status
-Shows weapon arming and activity state
+### System LED (LED 0)
 
-See LED Indicators section below for complete pattern details.
+| Color | Effect | Meaning |
+|-------|--------|---------|
+| Dim Blue | Pulsing | **Booting** - firmware is initializing |
+| Green | Solid | **Ready** - waiting for controller connection |
+| Cyan (green-blue) | Solid | **Connected** - controller paired and active |
+| Yellow | Blinking fast | **Failsafe** - controller connection lost |
+| Orange | Solid | **Low Battery** - battery below 9.6V |
+| Red | Solid | **Critical Battery** - battery below 9.0V |
+| Red | Solid | **Error** - safety violation detected |
+| Red | Blinking fast | **Emergency Stop** - E-stop active |
+| Purple | Pulsing | **Test Mode** - controller test mode active |
 
----
+### Weapon LED (LED 1)
 
-## LED Indicators
+| Color | Effect | Meaning |
+|-------|--------|---------|
+| Off | - | **Disarmed** - weapon is safe |
+| Yellow/Amber | Solid | **Arming** - ESC arm sequence in progress |
+| Orange | Solid | **Armed** - weapon ready, not spinning |
+| Red | Solid | **Spinning** - weapon motor active |
+| Red | Blinking fast | **Emergency Stop** - weapon E-stopped |
 
-The robot uses 2 SK6812 addressable RGB LEDs (GP28):
+### Special Mode LED Patterns
 
-### LED 0: System Status LED
-| Color | Pattern | Meaning |
-|-------|---------|---------|
-| Dim Blue | Solid | Booting/initializing |
-| Green | Solid | Ready, no controller connected |
-| Cyan | Solid | Controller connected, normal operation |
-| Yellow | Blinking | Failsafe - connection lost |
-| Orange | Solid | Low battery warning |
-| Orange | Blinking | Critical battery |
-| Red | Solid/Blinking | Error or emergency stop |
-| Purple | Pulsing | Test/diagnostic/calibration mode |
+| Mode | LED 0 | LED 1 |
+|------|-------|-------|
+| Calibration Mode | Purple/Cyan alternating | Purple/Cyan alternating |
+| Calibration Complete | Green slow blink | Green slow blink |
+| Trim Mode | Teal solid | Teal solid |
+| Trim: Sample Captured | Bright green flash (750 ms) | - |
+| Trim: Sample Removed | Bright red flash (750 ms) | - |
+| Trim: Fitting Curves | Orange pulsing | - |
+| Safety Test Failure | Red fast blink | Red fast blink |
 
-### LED 1: Weapon Status LED
-| Color | Pattern | Meaning |
-|-------|---------|---------|
-| Off | - | Weapon disarmed (safe) |
-| Amber/Yellow | Blinking | Arming sequence in progress |
-| Orange | Solid | Armed but not spinning |
-| Red | Solid | ⚠️ WEAPON SPINNING - DANGER ⚠️ |
-| Red | Fast Blinking | Emergency stop active |
+### Pico W Onboard LED
 
-### Trim Mode LED Feedback
-During trim calibration (L3+R3 hold):
-| Color | Pattern | Meaning |
-|-------|---------|---------|
-| Green | Blink | Sample captured (A button) |
-| Red | Blink | Sample removed (B button) |
-| Orange | Pulse | Fitting curves |
-| Green | Solid | Calibration complete |
-| Red | 3x Blinks | Error - not enough samples |
-
-### WiFi/Bluetooth LED (Built-in on Pico W)
-| Pattern | Meaning |
-|---------|---------|
-| ON during boot | Initializing |
-| OFF after init | Normal operation (Competition mode) |
-| Blinking | Bluetooth activity |
-| Solid ON | Diagnostic mode active (WiFi AP) |
+The built-in LED on the Pico W turns on during boot initialization and turns off
+once Bluetooth is ready. It is not used during normal operation.
 
 ---
 
-## Operating Procedures
+## Driving
 
-### Normal Operation
+Drive uses **arcade-style mixing** on the **left analog stick**.
 
-1. **Pre-match Setup**
-   - Power on robot
-   - Wait for safety tests to complete (5-10 seconds)
-   - Verify all LEDs show correct state
-   - Connect controller
-   - Test drive movement (weapon still disarmed)
+### Left Stick Mapping
 
-2. **Entering Arena**
-   - Keep weapon DISARMED
-   - Use slow movements
-   - Position robot
-   - Verify clear surroundings
+| Axis | Direction | Action |
+|------|-----------|--------|
+| Y-axis | Push forward (up) | Drive forward |
+| Y-axis | Pull backward (down) | Drive backward |
+| X-axis | Push right | Turn right |
+| X-axis | Push left | Turn left |
+| Diagonal | Any combination | Combined driving and turning |
 
-3. **Match Start**
-   - Press B button to ARM weapon (red LED on)
-   - Use right stick to control weapon speed
-   - Drive with left stick
-   - Monitor battery LED
+### Drive Parameters
 
-4. **Match End**
-   - Press B button to DISARM weapon
-   - Wait for weapon to stop spinning (up to 30 seconds)
-   - Verify Armed LED is OFF
-   - Safe to approach
+| Parameter | Value |
+|-----------|-------|
+| Maximum Drive Speed | 75% of motor maximum |
+| Maximum Turn Speed | 70% of motor maximum |
+| Stick Deadzone | 15 (out of 512 raw range) |
+| Expo Curve | 70% cubic |
 
-### Advanced Operations
+### Expo Curve
 
-#### Exponential Control Adjustment
-The drive controls use 30% exponential curve by default for smoother low-speed control. This cannot be adjusted without recompiling.
+The 70% expo curve provides fine control at low stick deflections while preserving
+full power at the extremes. At 50% stick, the actual output is much lower than 50%,
+making precise maneuvering easier. Full-throw still reaches full speed.
 
-#### Weapon Speed Ramping
-- Weapon accelerates gradually over 2 seconds
-- Prevents current spikes and mechanical shock
-- Full speed available after ramp period
+### Arcade Mixing
 
-#### Tank Mixing Algorithm
-- Forward + Turn inputs are mixed
-- Automatic speed limiting maintains control
-- Turning takes priority over forward speed
+The left stick Y-axis controls forward/backward speed and the X-axis controls
+turning. These are combined:
+
+- **Left motor** = forward + turn
+- **Right motor** = forward - turn
+
+If the combined values exceed 100%, both channels are scaled proportionally to
+maintain the turn ratio.
+
+### Motor Linearization
+
+The firmware includes a motor linearization system that compensates for non-linear
+ESC response and left/right motor asymmetry. This uses calibrated power-law curves
+(RPM = a * sqrt(throttle - deadband)) to ensure that equal stick input produces
+equal wheel speeds on both sides.
 
 ---
 
-## Emergency Procedures
+## Weapon Control
 
-### Emergency Stop (E-Stop)
+The weapon uses DShot300 digital protocol with bidirectional telemetry to control a
+brushless motor through an AM32 ESC.
 
-**To Activate:**
-1. Press L1 + R1 simultaneously
-2. All motors stop immediately
-3. All LEDs flash rapidly
-4. Robot enters safe mode
+### Arming and Disarming
 
-**To Clear:**
-1. Ensure hazard is resolved
-2. Hold A button for 2 seconds
-3. Listen for confirmation (serial output)
-4. LEDs return to normal
-5. Re-arm weapon if needed (B button)
+| Action | Control |
+|--------|---------|
+| **Arm weapon** | Press **B** button |
+| **Disarm weapon** | Press **B** button again |
 
-### Controller Signal Loss
+### Arming Sequence
 
-**Automatic Response:**
-- Failsafe activates after 1.5 seconds
-- All motors stop
-- Weapon disarms
-- Status LED flashes rapidly
+1. Press B. The weapon LED turns **yellow/amber** (arming).
+2. The firmware sends DShot throttle-zero for ~2 seconds to arm the ESC.
+3. A direction-change prime sequence is sent (required for AM32 3D mode startup).
+4. The weapon LED turns **orange** (armed, not spinning).
+5. Use the right stick to control weapon speed.
 
-**Recovery:**
-1. Re-establish controller connection
-2. Clear emergency stop (hold A for 2 seconds)
-3. Resume operation
+### Arming Will Be Rejected If
 
-### Low Battery
+- Emergency stop is active.
+- Battery voltage is below the low-battery threshold (9.6V).
+- The weapon is already in an emergency stop state (must clear E-stop first, then
+  re-arm).
 
-**Warning (11.1V):**
-- Battery LED blinks yellow
-- Weapon can still be armed
-- Return to safe area soon
+### Weapon Speed Control
 
-**Critical (10.5V):**
-- Battery LED flashes red rapidly
-- Weapon automatically disarms
-- Cannot re-arm weapon
-- Drive power reduced
-- IMMEDIATELY stop operation
+| Control | Action |
+|---------|--------|
+| Right Stick Y forward (up) | Increase weapon speed (forward spin) |
+| Right Stick Y backward (down) | Reverse weapon spin (3D mode) |
+| Right Stick centered | Weapon at idle (0% throttle while armed) |
 
-### Safety Button
+The weapon uses **bidirectional (3D mode)** throttle:
 
-**If pressed during operation:**
-- Weapon immediately disarms
-- Cannot re-arm until released
-- Drive remains operational
-- Used for referee safety stops
+| Stick Position | DShot Range | Direction |
+|----------------|-------------|-----------|
+| Centered (0%) | 0 (idle) | Stopped |
+| Forward +1% to +100% | 1048-2047 | Forward spin |
+| Backward -1% to -100% | 48-1047 | Reverse spin |
+
+A deadzone threshold is applied to the right stick to prevent accidental weapon
+activation.
+
+### Weapon Telemetry
+
+When armed, the ESC reports telemetry via Extended DShot Telemetry (EDT):
+
+| Field | Description |
+|-------|-------------|
+| eRPM | Electrical RPM |
+| RPM | Mechanical RPM (eRPM / 7 pole pairs) |
+| Voltage | ESC input voltage |
+| Current | Motor current draw |
+| Temperature | ESC temperature |
+
+Telemetry is visible on the USB serial console.
+
+---
+
+## Emergency Stop
+
+### Triggering Emergency Stop
+
+**Press both shoulder buttons simultaneously: L1 + R1.**
+
+When triggered:
+- All motors immediately stop (drive and weapon).
+- Both LEDs flash **red rapidly**.
+- All further motor input is blocked.
+- The weapon is disarmed.
+
+### Clearing Emergency Stop
+
+**Press and hold the A button for 2 seconds.**
+
+1. Press and hold A.
+2. After 2000 ms of continuous hold, the E-stop clears.
+3. System LED returns to **cyan** (connected).
+4. Weapon LED returns to **off** (disarmed).
+5. If A is released early, the clear is cancelled.
+
+After clearing, the weapon must be re-armed with the B button.
+
+---
+
+## Safety System
+
+The safety system runs continuously every 10 ms.
+
+### Safety Checks
+
+| Check | Threshold | Action |
+|-------|-----------|--------|
+| Battery Low | Below 9.6V | System LED orange; weapon arm rejected |
+| Battery Critical | Below 9.0V | System LED red; weapon disarmed |
+| Connection Loss | No input for 1500 ms | Failsafe: all motors stop |
+| Safety Violations | 5 cumulative | Emergency stop triggered |
+| Boot Self-Test | On power-up | Validates all subsystems |
+
+### Failsafe (Connection Loss)
+
+If the controller stops sending data for 1500 ms:
+
+1. All drive motors stop.
+2. The weapon is disarmed.
+3. System LED turns **yellow** (blinking fast).
+4. When the controller reconnects, the neutral guard reactivates (sticks must be
+   centered before motion resumes).
+
+### Boot Safety Test
+
+On power-up, the firmware runs a self-test. If it fails:
+
+- Both LEDs flash **red rapidly**.
+- "CRITICAL SAFETY FAILURE - DO NOT OPERATE" is printed to USB serial.
+- The system halts permanently. The robot will not respond to any input.
+- Power cycle is required after resolving the issue.
+
+---
+
+## Special Modes
+
+### Controller Test Mode
+
+**Purpose:** Displays raw controller input on USB serial for debugging.
+
+| Action | Control |
+|--------|---------|
+| Enter | Hold both shoulder buttons (L + R) for 1 second |
+| Exit | Hold both shoulder buttons (L + R) for 1 second again |
+
+While active:
+- System LED turns **purple** (pulsing).
+- All stick axes, buttons, D-pad, gyroscope, and accelerometer data are displayed
+  at 20 Hz.
+- All motor outputs are disabled.
+
+### Trim Calibration Mode
+
+**Purpose:** Captures drive samples to calibrate motor trim correction, fixing the
+robot pulling to one side during straight-line driving.
+
+| Action | Control |
+|--------|---------|
+| Enter | Hold **D-pad Up + D-pad Right** for 2 seconds |
+| Exit | Hold **D-pad Up + D-pad Right** for 2 seconds again |
+| Capture sample | Press **A** while driving |
+| Remove last sample | Press **B** |
+
+While active:
+- Both LEDs turn **teal** (solid).
+- Full driving is enabled. Drive in a straight line, then press A to capture a
+  sample.
+- Minimum 5 samples required for a valid calibration.
+- On exit, the firmware fits trim correction curves and saves to flash.
+- Trim data persists across power cycles.
+- Weapon is kept disarmed during trim mode.
+
+### Motor Calibration Mode
+
+**Purpose:** Steps through predefined throttle levels for measuring motor RPM with
+an external tachometer.
+
+| Action | Control |
+|--------|---------|
+| Enter | Hold **X + Y** buttons for 1 second |
+| Exit | Hold **X + Y** buttons for 1 second again |
+| Next step | Press **A** |
+| Repeat step | Press **B** |
+
+While active:
+- LEDs alternate **purple** and **cyan** every 500 ms.
+- Each step applies a specific PWM percentage to both drive motors.
+- Instructions and expected values are printed to USB serial.
+
+**Ensure wheels are elevated and the robot is secured before entering this mode.**
+
+---
+
+## ESC Configuration
+
+The AM32 ESC can be configured at boot via the physical safety button.
+
+### Entering ESC Config Mode
+
+1. Wire the safety button to GP8 (active low, internal pull-up enabled).
+2. Hold the safety button while powering on the robot.
+3. A menu appears on USB serial:
+
+```
+AM32 Configuration Mode
+
+Options:
+1. Press 'C' to configure ESC
+2. Press 'P' for passthrough mode
+3. Press 'T' for throttle calibration
+4. Press 'D' to apply defaults
+5. Press any other key to exit
+```
+
+### Configuration Options
+
+| Key | Function |
+|-----|----------|
+| **C** | Write weapon-optimized settings to ESC and save |
+| **P** | Passthrough: connects USB serial directly to ESC for use with the AM32 web configurator at am32.ca |
+| **T** | Runs ESC throttle calibration sequence |
+| **D** | Apply and save default weapon settings |
+| Other | Exit config mode, continue to normal operation |
+
+### Default Weapon ESC Settings
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Motor Poles | 14 | FingerTech F2822 motor |
+| Current Limit | 10A | Motor rated max is 9.9A |
+| Temperature Limit | 140 C | AM32 standard |
+| Startup Power | 100% | Reliable starts under load |
+| 3D Mode | Enabled | Bidirectional weapon spin |
+| Stuck Rotor Protection | Off | Avoid false trips in combat |
+| Low-Voltage Cutoff | Off | Handled by firmware battery monitor |
 
 ---
 
 ## Troubleshooting
 
-### Robot Won't Start
+### LED Diagnostics
 
-| Problem | Possible Cause | Solution |
-|---------|---------------|----------|
-| No LEDs | No power | Check battery connection |
-| All LEDs flashing | Failed safety test | Check serial output for specific failure |
-| Status LED off | System crash | Power cycle robot |
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| No LEDs at all | No power | Check USB or battery connection |
+| Blue pulsing forever | Boot stalled | Check USB serial for errors |
+| Green, never cyan | Controller not pairing | Put controller in pairing mode |
+| Yellow blinking | Connection lost | Reconnect controller; check range |
+| Orange system LED | Low battery | Charge battery (below 9.6V) |
+| Red system LED | Critical battery or error | Charge battery; check serial log |
+| Both LEDs red fast blink | Emergency stop | Hold A for 2 sec to clear |
+| B press ignored | E-stop active or low battery | Clear E-stop; check battery |
+| Weapon arms, won't spin | Right stick not moved | Push right stick forward |
 
-### Controller Issues
+### ESC Beep Patterns
 
-| Problem | Possible Cause | Solution |
-|---------|---------------|----------|
-| Won't connect | Bluetooth off | Ensure gamepad is in pairing mode |
-| No response | Not paired | Delete pairing and reconnect |
-| Delayed response | Interference | Move closer, check for 2.4GHz interference |
-| Erratic control | Low controller battery | Charge gamepad |
+| Pattern | Meaning |
+|---------|---------|
+| Continuous beeping (~3 sec interval) | No DShot signal or update rate too slow |
+| Single tone on power-up | ESC armed successfully |
+| Silent during operation | Normal (ESC receiving valid throttle) |
+| Beeping during throttle | Error: check DShot wiring or ESC config |
 
-### Weapon Problems
+### USB Serial Console
 
-| Problem | Possible Cause | Solution |
-|---------|---------------|----------|
-| Won't arm | Low battery | Charge battery above 11.1V |
-| Won't arm | Safety button pressed | Release safety button |
-| Won't arm | In E-stop | Clear E-stop (hold A for 2 seconds) |
-| No speed control | Not armed | Press B button to arm first |
-| Stops suddenly | Failsafe triggered | Check controller connection |
+Connect via USB for diagnostic output (USB CDC, auto-detected baud rate). The
+firmware prints:
 
-### Drive Issues
-
-| Problem | Possible Cause | Solution |
-|---------|---------------|----------|
-| Won't move | E-stop active | Clear E-stop |
-| Drifting | Stick calibration | Re-center stick, reconnect controller |
-| One side weak | Motor issue | Check motor connections |
-| Erratic movement | Low battery | Charge battery |
-
----
-
-## Battery Management
-
-### Battery Specifications
-- **Type**: 3S LiPo (11.1V nominal)
-- **Capacity**: 2200mAh minimum recommended
-- **Discharge rate**: 25C minimum
-- **Connector**: XT60
-
-### Voltage Thresholds
-- **Maximum**: 12.6V (fully charged)
-- **Nominal**: 11.1V (storage charge)
-- **Low Warning**: 11.1V
-- **Critical**: 10.5V
-- **Cutoff**: 10.0V (permanent damage below)
-
-### Battery Care
-1. **Never over-discharge** below 10.0V
-2. **Store at 11.4V** (storage charge)
-3. **Balance charge** every 10 cycles
-4. **Monitor temperature** during use
-5. **Replace** if swollen or damaged
-
-### Runtime Estimates
-- **Competition match**: 3-5 minutes active combat
-- **Testing**: 10-15 minutes light use
-- **Standby**: 30+ minutes (weapon off)
+- Boot status and firmware version
+- Controller connect/disconnect events
+- Drive and weapon commands (logged every 500 ms when active)
+- DShot telemetry (RPM, voltage, current, temperature)
+- Safety violations and emergency stop events
 
 ---
 
 ## Competition Checklist
 
-### Pre-Event (Day Before)
-- [ ] Charge all batteries to storage level
-- [ ] Test all systems
-- [ ] Verify controller pairing
-- [ ] Check all mechanical components
-- [ ] Review competition rules
-- [ ] Prepare spare parts
-
-### At Venue
-- [ ] Safety inspection passed
-- [ ] Frequency/channel confirmed
-- [ ] Weight verified
-- [ ] Fully charge batteries
-- [ ] Test in practice arena
-- [ ] Brief team on safety procedures
-
 ### Pre-Match
-- [ ] Fresh battery installed
-- [ ] Safety tests pass
-- [ ] Controller connected
-- [ ] Team positions confirmed
-- [ ] Safety gear on
+
+- [ ] Battery fully charged (12.6V)
+- [ ] Robot powered on, safety tests pass (LEDs not red)
+- [ ] Controller paired (system LED cyan)
+- [ ] Drive tested (both directions)
+- [ ] Weapon arm/disarm tested (B button)
+- [ ] Emergency stop tested (L1 + R1, then hold A to clear)
 - [ ] Weapon guard removed
 
-### Post-Match
-- [ ] Weapon disarmed
-- [ ] Power off
-- [ ] Inspect for damage
-- [ ] Note any issues
-- [ ] Recharge if needed
+### During Match
 
-### Emergency Contacts
-- **Event Safety Officer**: [Get at venue]
-- **Medical Emergency**: 911
-- **Fire Extinguisher**: [Locate at venue]
+- Arm weapon with B when match starts.
+- Control weapon speed with right stick.
+- Drive with left stick.
+- Monitor system LED for battery warnings.
+
+### Post-Match
+
+- [ ] Disarm weapon (B button)
+- [ ] Wait for weapon to fully stop
+- [ ] Verify weapon LED is off
+- [ ] Power off robot
+- [ ] Install weapon guard
+- [ ] Inspect for damage
 
 ---
 
 ## Quick Reference Card
 
-### Essential Controls
-- **Drive**: Left stick
-- **Weapon speed**: Right stick (when armed)
-- **Arm/Disarm**: B button
-- **EMERGENCY STOP**: L1 + R1
-- **Clear E-stop**: Hold A (2 seconds)
-
-### LED Quick Guide
-- **Blue solid**: Ready
-- **Red solid**: WEAPON ARMED
-- **All flashing**: EMERGENCY/FAULT
-- **Green**: Battery good
-- **Yellow blink**: Battery low
-
-### Safety Priorities
-1. **People safety** - Always first
-2. **E-stop** - When in doubt, stop
-3. **Disarm** - After every match
-4. **Battery** - Monitor constantly
-5. **Distance** - Stay back when armed
+```
++-------------------------------------------------------------------+
+|                   ThumbsUp Controller Map                         |
++-------------------------------------------------------------------+
+|                                                                   |
+|  Left Stick              Right Stick         Face Buttons         |
+|  +---+                   +---+               +---+                |
+|  | ^ | Forward           | ^ | Weapon Fwd      Y                 |
+|  |< >| Turn              |   |              X     A               |
+|  | v | Reverse           | v | Weapon Rev      B                 |
+|  +---+                   +---+               +---+                |
+|                                                                   |
+|  CONTROLS:                                                        |
+|    B              Arm / Disarm weapon (toggle)                    |
+|    A (hold 2s)    Clear emergency stop                            |
+|    L1 + R1        EMERGENCY STOP (immediate)                     |
+|    L + R (hold)   Enter/exit controller test mode                 |
+|    X + Y (hold)   Enter/exit motor calibration mode               |
+|    D-Up+Right     Enter/exit trim mode (hold 2s)                  |
+|                                                                   |
+|  STATUS LEDs:        System (LED 0)       Weapon (LED 1)          |
+|    Boot              Blue pulse            Off                    |
+|    Ready             Green solid           Off                    |
+|    Connected         Cyan solid            Off                    |
+|    Weapon Armed      Cyan solid            Orange solid           |
+|    Weapon Spinning   Cyan solid            Red solid              |
+|    E-Stop            Red fast blink        Red fast blink         |
+|    Failsafe          Yellow blink          Off                    |
+|    Low Battery       Orange solid          ---                    |
+|                                                                   |
+|  BATTERY:                                                         |
+|    Full        12.6V    Normal       11.1V                        |
+|    Low         9.6V     Critical     9.0V                         |
+|                                                                   |
++-------------------------------------------------------------------+
+```
 
 ---
 
-## Revision History
-- v1.0 - Initial manual (December 2024)
-- Firmware version: 1.0.0
-- Compatible controllers: Xbox, PlayStation, generic Bluetooth gamepads
-
----
-
-**Remember: Safety First, Combat Second!**
+*ThumbsUp firmware v1.0.0*

@@ -19,10 +19,8 @@
 // 500ms is enough for ESC initialisation while keeping total arm time short.
 #define WEAPON_DSHOT_SETUP_DELAY_MS 500
 
-// MINOR FIX: Move extern declarations to file scope for cleaner code organization
 extern uint32_t read_battery_voltage(void);
 
-// CRITICAL FIX #2 & #6: Add mutex for safe mode switching (enum is in weapon.h)
 static weapon_state_t weapon_state = WEAPON_STATE_DISARMED;
 static weapon_control_mode_t control_mode = WEAPON_MODE_PWM;  // Default to PWM
 static mutex_t mode_mutex;  // Mutex for thread-safe mode switching
@@ -65,10 +63,7 @@ static bool dshot_setup_pending = false;
 static bool dshot_setup_done = false;
 static uint32_t dshot_telemetry_interval_ms = WEAPON_DSHOT_TELEMETRY_MS;
 static bool initialized = false;
-// CRITICAL FIX #2 (Iteration 4): Protect dshot_initialized with mode_mutex
-// This flag is accessed by weapon_update() and mode switch functions
-// Race scenario: weapon_update checks flag, then mode switch calls dshot_deinit(),
-// then weapon_update uses freed resources → use-after-free
+// Protected by mode_mutex — accessed by weapon_update() and mode switch functions.
 static volatile bool dshot_initialized = false;
 
 static void weapon_poll_telemetry_locked(void);
@@ -318,7 +313,6 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
     weapon_poll_telemetry_locked();
 }
 
-// CRITICAL FIX #2 & #6: Mode switching functions with mutex protection
 static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
     // Must be disarmed to change modes
     if (weapon_state != WEAPON_STATE_DISARMED) {
@@ -343,8 +337,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
         }
     }
 
-    // CRITICAL FIX #2 (Iteration 2): Disable current mode with proper GPIO cleanup
-    // CRITICAL FIX #1 (Iteration 3): Add verification that previous owner released GPIO
+    // Disable current mode with proper GPIO cleanup
     switch (control_mode) {
         case WEAPON_MODE_PWM:
             // Stop PWM output
@@ -356,9 +349,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
             // Reset GPIO to SIO before handing off
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
-            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
-            sleep_ms(2);
-            // Verify GPIO is in safe state
+            sleep_ms(2);  // Let hardware settle before verifying
             if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
                 DEBUG_PRINT("WARNING: GPIO %d not in SIO after PWM cleanup\n", PIN_WEAPON_PWM);
             }
@@ -390,9 +381,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
             // Reset GPIO to SIO after DShot (PIO cleanup)
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
-            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
-            sleep_ms(2);
-            // Verify GPIO is in safe state
+            sleep_ms(2);  // Let hardware settle before verifying
             if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
                 DEBUG_PRINT("WARNING: GPIO %d not in SIO after DShot cleanup\n", PIN_WEAPON_PWM);
             }
@@ -400,29 +389,15 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
 
         case WEAPON_MODE_CONFIG:
             am32_exit_config_mode();
-            // CRITICAL FIX #1 (Iteration 3): Delay for hardware to settle
-            sleep_ms(2);
-            // Verify GPIO is in safe state (AM32 should set to SIO)
+            sleep_ms(2);  // Let hardware settle before verifying
             if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
                 DEBUG_PRINT("WARNING: GPIO %d not in SIO after AM32 cleanup\n", PIN_WEAPON_PWM);
             }
             break;
     }
 
-    // CRITICAL FIX #1 (Iteration 3): Verify GPIO is available before claiming
-    // MAJOR FIX #1 (Iteration 4): Document GPIO conflict window limitation
-    // LIMITATION: There is a small race window between GPIO verification (line below)
-    // and mode initialization (lines 112-147). If another thread/interrupt claims
-    // the GPIO in this window, initialization may fail or cause conflicts.
-    //
-    // MITIGATION: This system is single-threaded with cooperative multitasking,
-    // and mode_mutex is held during this entire function, preventing concurrent
-    // mode switches. The only risk is from interrupts, but no interrupt handlers
-    // in this system modify GPIO functions.
-    //
-    // HARDWARE TESTING: Verify on actual hardware that no GPIO conflicts occur
-    // during rapid mode switching (PWM ↔ DShot ↔ Config). Use logic analyzer to
-    // confirm clean transitions.
+    // Verify GPIO is in SIO before claiming for the new mode.
+    // Safe: mode_mutex is held and no ISR modifies GPIO functions.
     if (gpio_get_function(PIN_WEAPON_PWM) != GPIO_FUNC_SIO) {
         DEBUG_PRINT("ERROR: GPIO %d not in SIO state before mode switch (func=%d)\n",
                    PIN_WEAPON_PWM, gpio_get_function(PIN_WEAPON_PWM));
@@ -481,7 +456,6 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                     dshot_setup_done = false;
                     DEBUG_PRINT("Weapon control mode: DShot300\n");
                 } else {
-                    // MAJOR FIX #5 (Iteration 3): Fallback to PWM if DShot init fails
                     DEBUG_PRINT("ERROR: Failed to initialize DShot, falling back to PWM\n");
                     if (!motor_control_enable_weapon_pwm()) {
                         DEBUG_PRINT("ERROR: Failed to initialize weapon PWM\n");
@@ -550,7 +524,6 @@ bool weapon_init(void) {
         return true;
     }
 
-    // CRITICAL FIX #6: Initialize mode switching mutex
     mutex_init(&mode_mutex);
 
     weapon_state = WEAPON_STATE_DISARMED;
@@ -826,7 +799,6 @@ void weapon_update(void) {
             current_speed = 0;
             target_speed = 0;
 
-            // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
             mutex_enter_blocking(&mode_mutex);
             switch (control_mode) {
                 case WEAPON_MODE_PWM:
@@ -840,7 +812,6 @@ void weapon_update(void) {
                     break;
 
                 case WEAPON_MODE_CONFIG:
-                    // Motor already stopped in config mode
                     break;
             }
             mutex_exit(&mode_mutex);
@@ -896,7 +867,6 @@ bool weapon_disarm(void) {
     current_speed = 0;
     target_speed = 0;
 
-    // MAJOR FIX #3 (Iteration 2): Acquire mutex BEFORE reading control_mode
     mutex_enter_blocking(&mode_mutex);
     bool need_dshot_reinit = false;
     switch (control_mode) {
@@ -985,24 +955,16 @@ bool weapon_is_armed(void) {
 }
 
 void weapon_emergency_stop(void) {
-    // CRITICAL FIX #1 (Iteration 4): Defense-in-depth emergency stop
-    // Use ALL stop methods regardless of mode to ensure motor stops
-    // This prevents race conditions where mode could change between read and execution
-
     weapon_state = WEAPON_STATE_EMERGENCY_STOP;
     current_speed = 0;
     target_speed = 0;
 
-    // CRITICAL: Disable motor hardware IMMEDIATELY using all available methods
-    // Try ALL methods without checking mode - defense in depth approach
-    // Even if one method is wrong for current mode, motor WILL stop
-
-    // Method 1: PWM - always try to stop via PWM
+    // Defense in depth: try ALL stop methods regardless of current mode
+    // to guarantee motor stops even if mode state is inconsistent.
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
 
-    // Method 2: DShot - if initialized, send stop command then properly deinit
-    // Note: Read dshot_initialized without mutex - this is acceptable for emergency stop
-    // Worst case: we skip DShot stop if flag race occurs, but GPIO force-low still works
+    // Read dshot_initialized without mutex — acceptable for e-stop because
+    // the GPIO force-low below guarantees the motor stops regardless.
     if (dshot_initialized) {
         dshot_send_throttle(MOTOR_WEAPON, 0, false);
         dshot_telemetry_pending = 0;
@@ -1011,12 +973,10 @@ void weapon_emergency_stop(void) {
         dshot_initialized = false;
     }
 
-    // Method 3: Direct GPIO control - force pin low as last resort
-    // Disable PWM slice
+    // Last resort: force GPIO low directly
     uint slice_num = pwm_gpio_to_slice_num(PIN_WEAPON_PWM);
     pwm_set_enabled(slice_num, false);
 
-    // Force GPIO low directly
     gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
     gpio_set_dir(PIN_WEAPON_PWM, GPIO_OUT);
     gpio_put(PIN_WEAPON_PWM, 0);

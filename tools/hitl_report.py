@@ -18,22 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
-HITL_STATUS_RE = re.compile(r"^HITL STATUS (.+)$")
-
-
-def slugify(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-
-
-def parse_kv_payload(payload: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for token in payload.strip().split():
-        if "=" not in token:
-            continue
-        k, v = token.split("=", 1)
-        out[k] = v
-    return out
+from common import HITL_STATUS_RE, parse_kv_payload, slugify
 
 
 def load_json(path: Path) -> Any:
