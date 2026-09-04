@@ -1,0 +1,141 @@
+{
+  "output_dir": "hardware/datasheets/pdf",
+  "notes": "Locked BOM URLs. Prefer manufacturer or JLC/LCSC binary PDFs. HTML is a failure unless optional=true. Run: python3 hardware/tools/download_datasheets.py",
+  "datasheets": [
+    {
+      "id": "AT32F421",
+      "part": "ARTERY AT32F421K8U7",
+      "lcsc": "C2965611",
+      "urls": [
+        "https://www.arterychip.com/download/DS/DS_AT32F421_EN_V2.04.pdf",
+        "https://www.arterychip.com/download/DS/DS_AT32F421_EN_V2.03.pdf",
+        "https://datasheet.lcsc.com/datasheet/pdf/e2c6ab9dbe58d8dcacfeaeeb700ada79.pdf?productCode=C2965611"
+      ]
+    },
+    {
+      "id": "FD6288Q",
+      "part": "Fortior FD6288Q",
+      "lcsc": "C328453",
+      "urls": [
+        "https://jlcpcb.com/api/file/downloadByFileSystemAccessId/8588881702156439552",
+        "https://www.lcsc.com/datasheet/lcsc_datasheet_1811131655_Fortior-Tech-FD6288Q_C328453.pdf"
+      ]
+    },
+    {
+      "id": "HYG015N04LS1C2",
+      "part": "Huayi HYG015N04LS1C2 40V MOSFET",
+      "lcsc": "C2874970",
+      "urls": [
+        "https://wmsc.lcsc.com/wmsc/upload/file/pdf/v2/lcsc/2108150330_HUAYI-HYG015N04LS1C2_C2874970.pdf"
+      ]
+    },
+    {
+      "id": "INA226",
+      "part": "TI INA226AIDGSR",
+      "lcsc": "C49851",
+      "urls": [
+        "https://www.ti.com/lit/ds/symlink/ina226.pdf",
+        "https://www.lcsc.com/datasheet/lcsc_datasheet_2312041157_Texas-Instruments-INA226AIDGSR_C49851.pdf"
+      ]
+    },
+    {
+      "id": "AP63205",
+      "part": "Diodes AP63205WU-7 5V buck",
+      "lcsc": "C2071056",
+      "urls": [
+        "https://www.diodes.com/assets/Datasheets/AP63200-AP63201-AP63203-AP63205.pdf"
+      ]
+    },
+    {
+      "id": "AP2112",
+      "part": "Diodes AP2112K-3.3TRG1 LDO",
+      "lcsc": "C51118",
+      "urls": [
+        "https://www.diodes.com/assets/Datasheets/AP2112.pdf"
+      ]
+    },
+    {
+      "id": "PicoW",
+      "part": "Raspberry Pi Pico W",
+      "urls": [
+        "https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf"
+      ]
+    },
+    {
+      "id": "PicoW-pinout",
+      "part": "Pico W pinout",
+      "urls": [
+        "https://datasheets.raspberrypi.com/picow/pico-w-pinout.pdf",
+        "https://datasheets.raspberrypi.com/picow/PicoW-A4-Pinout.pdf"
+      ]
+    },
+    {
+      "id": "W25Q128JV",
+      "part": "Winbond W25Q128JVSIQ",
+      "lcsc": "C97521",
+      "urls": [
+        "https://www.winbond.com/resource-files/w25q128jv_dtr%20revc%2003272018%20plus.pdf",
+        "https://www.lcsc.com/datasheet/lcsc_datasheet_1811142111_Winbond-Elec-W25Q128JVSIQ_C97521.pdf"
+      ]
+    },
+    {
+      "id": "LSM6DS3TR-C",
+      "part": "ST LSM6DS3TR-C 6-axis IMU",
+      "lcsc": "C967633",
+      "urls": [
+        "https://www.st.com/resource/en/datasheet/lsm6ds3tr-c.pdf",
+        "https://www.lcsc.com/datasheet/lcsc_datasheet_2409291604_STMicroelectronics-LSM6DS3TR-C_C967633.pdf"
+      ]
+    },
+    {
+      "id": "ADXL375",
+      "part": "ADI ADXL375BCCZ ±200g",
+      "lcsc": "C579466",
+      "urls": [
+        "https://www.analog.com/media/en/technical-documentation/data-sheets/adxl375.pdf",
+        "https://datasheet.lcsc.com/lcsc/2204121100_Analog-Devices-ADXL375BCCZ_C579466.pdf"
+      ]
+    },
+    {
+      "id": "SMBJ15A",
+      "part": "Yangjie SMBJ15A",
+      "lcsc": "C699013",
+      "urls": [
+        "https://jlcpcb.com/api/file/downloadByFileSystemAccessId/8588915736487714816",
+        "https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_Yangzhou-Yangjie-Elec-Tech-SMBJ15A_C699013.pdf"
+      ]
+    },
+    {
+      "id": "SK6812MINI-C",
+      "part": "OPSCO SK6812MINI-C",
+      "lcsc": "C7423117",
+      "urls": [
+        "https://wmsc.lcsc.com/wmsc/upload/file/pdf/v2/lcsc/2306121444_OPSCO-Optoelectronics-SK6812MINI-C_C7423117.pdf"
+      ]
+    },
+    {
+      "id": "RLP25FEGR002",
+      "part": "TA-I 2mOhm 2512 shunt",
+      "lcsc": "C459679",
+      "urls": [
+        "https://wmsc.lcsc.com/wmsc/upload/file/pdf/v2/lcsc/2304140030_TA-I-Tech-RLP25FEGR002_C459679.pdf"
+      ]
+    },
+    {
+      "id": "AM32-hardware-design",
+      "part": "AM32 hardware design wiki",
+      "urls": [
+        "https://wiki.am32.ca/development/Hardware-Design.html"
+      ],
+      "optional": true,
+      "note": "HTML wiki; stored as .html"
+    },
+    {
+      "id": "TI-SLUA887",
+      "part": "TI bootstrap circuitry app note",
+      "urls": [
+        "https://www.ti.com/lit/an/slua887a/slua887a.pdf"
+      ]
+    }
+  ]
+}

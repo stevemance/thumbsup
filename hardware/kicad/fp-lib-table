@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "thumbsup")(type "KiCad")(uri "${KIPRJMOD}/thumbsup.pretty")(options "")(descr "ThumbsUp custom footprints"))
+)

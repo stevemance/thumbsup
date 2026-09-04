@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "thumbsup")(type "KiCad")(uri "${KIPRJMOD}/thumbsup.kicad_sym")(options "")(descr "ThumbsUp custom symbols"))
+)

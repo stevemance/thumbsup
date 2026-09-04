@@ -163,3 +163,14 @@ Recent commits focused on:
 - [AM32 Firmware Documentation](https://wiki.am32.ca/)
 - [DShot Protocol Guide](https://brushlesswhoop.com/dshot-and-bidirectional-dshot/)
 - [Hardware Bringup Plan](HARDWARE_BRINGUP_PLAN.md)
+
+## Hardware (custom board, `hardware/`)
+
+- The schematic in `hardware/kicad/` is **generated**: connectivity lives in
+  `hardware/tools/sch/circuit.py` (SKiDL), placement in `hardware/tools/sch/layouts.py`.
+  Never hand-edit the `.kicad_sch` files.
+- Rebuild + check: `hardware/tools/.venv/bin/python hardware/tools/sch/build.py --render`
+  (runs KiCad ERC and a SKiDL↔KiCad netlist equivalence check; previews in `kicad/preview/`).
+- SPICE checks (via KiCad's libngspice, no ngspice binary needed): `hardware/tools/spice/`.
+- Review findings and every deviation from the original spec: `hardware/REVIEW.md`.
+- Pin map for the board (differs from the hand-wired robot in `config.h`): `hardware/PINMAP.md`.

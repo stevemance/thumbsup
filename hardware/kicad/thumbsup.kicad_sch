@@ -1,0 +1,516 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "442b975b-0ba5-480e-99fa-0ca5adb30167")
+	(paper "A3")
+	(title_block
+		(title "ThumbsUp v1")
+		(date "2026-09-03")
+		(rev "v1.1")
+		(company "ThumbsUp")
+	)
+	(lib_symbols)
+	(text "ThumbsUp v1 — 1 lb antweight control / power / 3× AM32 ESC board"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0.0000)
+		(effects
+			(font
+				(size 3 3)
+				(bold yes)
+			)
+			(justify left bottom)
+		)
+		(uuid "4d315a31-830e-47e1-b89c-fe516f6dec30")
+	)
+	(text "Generated from hardware/tools/sch/circuit.py (SKiDL).  Do not edit the .kicad_sch files by hand; edit the Python and rebuild."
+		(exclude_from_sim no)
+		(at 20.32 30.48 0.0000)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+			(justify left bottom)
+		)
+		(uuid "dcbcd460-c8e2-42f9-b9c2-501ccb196e03")
+	)
+	(text "Cross-sheet signals are global labels; rails are power symbols.  Sheet order follows the power flow."
+		(exclude_from_sim no)
+		(at 20.32 35.56 0.0000)
+		(effects
+			(font
+				(size 1.5 1.5)
+			)
+			(justify left bottom)
+		)
+		(uuid "b098cdf4-a6f5-452c-ab71-a12c620e89f1")
+	)
+	(sheet
+		(at 30.48 50.8)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "96a998df-fcbd-4dff-9cac-f565dc7245e4")
+		(property "Sheetname" "Pack input, TVS, shunt, reverse polarity"
+			(at 30.48 50.0884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_pack.kicad_sch"
+			(at 30.48 71.7046 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 121.92 50.8)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "574e1d22-0068-4c7c-8fc5-dfe5b666346c")
+		(property "Sheetname" "5 V buck, 3V3 LDOs, monitors"
+			(at 121.92 50.0884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_rails.kicad_sch"
+			(at 121.92 71.7046 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 213.36 50.8)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "287db678-992b-49ce-ba38-b46d0c531413")
+		(property "Sheetname" "Pico W and control I/O"
+			(at 213.36 50.0884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_pico.kicad_sch"
+			(at 213.36 71.7046 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 30.48 83.82)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "28b2069d-3def-415c-986b-5a6863eefc9c")
+		(property "Sheetname" "INA226 x4, IMU, high-g"
+			(at 30.48 83.1084 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_sense.kicad_sch"
+			(at 30.48 104.7246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 121.92 83.82)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "4739b528-ade1-45ff-aa22-194a18dd3ad2")
+		(property "Sheetname" "Log flash and status LEDs"
+			(at 121.92 83.1084 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_io.kicad_sch"
+			(at 121.92 104.7246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 213.36 83.82)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "579599ba-0584-417f-9df9-15e2486b44e1")
+		(property "Sheetname" "ESC L control (AM32)"
+			(at 213.36 83.1084 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_l.kicad_sch"
+			(at 213.36 104.7246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 30.48 116.84)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "bfafb3fe-2c53-4f9f-8e75-b56538aecc0a")
+		(property "Sheetname" "ESC L power stage"
+			(at 30.48 116.1284 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_l_bridge.kicad_sch"
+			(at 30.48 137.7446 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 121.92 116.84)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "6ecf7724-cd52-4050-b9e9-e4e32c2273f5")
+		(property "Sheetname" "ESC R control (AM32)"
+			(at 121.92 116.1284 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_r.kicad_sch"
+			(at 121.92 137.7446 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 213.36 116.84)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "58eefe35-7367-431f-af30-15ad42873806")
+		(property "Sheetname" "ESC R power stage"
+			(at 213.36 116.1284 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_r_bridge.kicad_sch"
+			(at 213.36 137.7446 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 30.48 149.86)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "05f0c711-345d-4361-9b5e-957f2ebc0660")
+		(property "Sheetname" "ESC W control (AM32) + weapon enable"
+			(at 30.48 149.1484 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_w.kicad_sch"
+			(at 30.48 170.7646 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 121.92 149.86)
+		(size 76.2 20.32)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "30aa62ba-8a93-406e-b04a-004be30d6756")
+		(property "Sheetname" "ESC W power stage"
+			(at 121.92 149.1484 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "thumbsup_esc_w_bridge.kicad_sch"
+			(at 121.92 170.7646 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project None
+				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)
