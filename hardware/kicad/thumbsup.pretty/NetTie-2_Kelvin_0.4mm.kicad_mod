@@ -1,0 +1,13 @@
+(footprint "NetTie-2_Kelvin_0.4mm"
+	(version 20241229)
+	(generator "thumbsup_symbols")
+	(layer "F.Cu")
+	(descr "Kelvin net-tie for the 2512 shunt gap: 0.4 mm copper-only pads, 0.8 mm pitch")
+	(attr smd exclude_from_pos_files exclude_from_bom)
+	(property "Reference" "REF**" (at 0 -4 0) (layer "F.SilkS") (effects (font (size 1 1) (thickness 0.15))))
+	(property "Value" "NetTie-2_Kelvin_0.4mm" (at 0 4 0) (layer "F.Fab") (effects (font (size 1 1) (thickness 0.15))))
+	(net_tie_pad_groups "1, 2")
+	(pad "1" smd circle (at -0.4 0) (size 0.4 0.4) (layers "F.Cu"))
+	(pad "2" smd circle (at 0.4 0) (size 0.4 0.4) (layers "F.Cu"))
+	(fp_line (start -0.6 0) (end 0.6 0) (stroke (width 0.2) (type default)) (layer "F.Cu"))
+)

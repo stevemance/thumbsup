@@ -1,98 +1,130 @@
-# ThumbsUp v1 — layout brief
+# ThumbsUp v1 — layout (rev v1.2, 2026-09-04)
 
-Everything the PCB layout needs that the schematic cannot say. Numbers come from the
-datasheets in `datasheets/pdf/`, the SPICE checks in `tools/spice/`, and the 2026-09-03
-review (`REVIEW.md` §6). Reference designators are those in `kicad/`.
+The board is **generated**: `tools/pcb/build_pcb.py` builds `kicad/thumbsup.kicad_pcb`
+from the schematic netlist, the chassis-derived outline (`mech/board_outline.json`), the
+placement in `tools/pcb/placement.py`, the hand copper in `tools/pcb/copper.py`, and then
+Freerouting for the logic nets (`tools/pcb/route.py`).  Never hand-edit the `.kicad_pcb`;
+change the scripts and rebuild:
 
-## 1. Board, stackup, fab
+```
+hardware/tools/.venv/bin/python hardware/tools/sch/build.py          # schematic + netlist
+/usr/bin/python3 hardware/tools/pcb/build_pcb.py --render            # place, copper, route, DRC, previews
+/usr/bin/python3 hardware/tools/pcb/fab.py                           # Gerbers / BOM / CPL for JLC
+```
+
+`build_pcb.py --no-route` skips Freerouting (fast, for placement work).  Previews land in
+`kicad/preview/pcb_*.png`; the DRC report in `kicad/drc.json`.
+
+## 1. Mechanical (from the chassis 3MF, `tools/mech/chassis.py`)
+
+Board frame: origin = chassis (76.0, 174.5), x to the right, y toward the drum.  The
+outline is the PCB bay of `models/Chassis - Main Chassis.3mf` with 1 mm wall clearance:
+a 104.5 × 37.5 bay with 16.5 mm chamfers at the back corners and 9.5 mm notches at the
+front corners, plus a 46.5 × 13.5 neck (x 33..79.5, y 37.5..51) under the drum.  `chassis.py
+outline` re-runs the fit check (walls, bosses, floor height) — 0 offending cells.
 
 | Item | Decision |
 |---|---|
-| Outline | ≤ 90 × 60 mm (C-4); final outline from the chassis floor (`models/Chassis - Main Chassis.3mf`, 121 × 98.8 × 33.6 mm envelope). Export the floor and drum-mount positions to DXF on User.Drawings before placing. |
-| Stackup | JLC 4-layer 1.6 mm FR-4, **2 oz outer**, 1 oz inner (2 oz inner only if orderable with Standard PCBA in the same order — confirm before placement). L1 power stages + phase copper + VBAT pours; L2 solid GND; L3 signals + +VDRV/+5V/3V3 distribution; L4 VBAT/phase mirror pours + thermal copper under FET tabs. |
-| Rules | Signals 0.2 / 0.2 mm; 2 oz absolute minimum 0.16 / 0.16 mm; vias 0.3 mm drill / 0.6 mm pad; ≥ 0.25 mm clearance around power pours; no tracks between 0.5 mm-pitch QFN pads (fan out outward). |
-| Mounting | H1–H4 M3 (3.2 mm) on the pack sheet — move them to the chassis hole positions. FID1–FID3 1 mm fiducials, 3 per side that carries SMT. Leave 5 mm rail space for the JLC panel. |
-| Assembly | JLC Standard PCBA, top side only. Hand-soldered after SMT: Pico W (castellations; keep the module outline and the 4 USB-shell pads clear), J1/J4 XT30, J2/J3 headers, J20/J30/J40 SWD headers, motor pads. Everything else SMT including the 470 µF hybrid cans. |
-| Silk | "+" next to J1 pad 2 and J4 pad 2, "3S ONLY" next to J1, "ARM" at J2, phase letters at the motor pads, TP names. |
+| Mounting | 3 × M2.5 on **bosses to add to the print** at board (3.7, 18.8), (101.5, 20.5), (52.8, 47.3) = chassis (79.7, 155.7), (177.5, 154.0), (128.8, 127.2); 3 mm standoffs. Bottom-side parts ≤ 2.5 mm tall (tallest is the 2 mm inductor). |
+| Wall slots | J1 (XT30, x 16.6..31) and the Pico's micro-USB (x 61.7..74.1) mate through slots in the back wall at y = 0. |
+| Under the drum | Neck parts ≤ 8 mm: J3 needs a ≤ 8 mm header (5 mm-pin low-profile) or soldered leads; no cans / XT30 / switch there. |
+| Lid bosses | Ø7 lid-screw bosses at chassis (79,171) and (176,171) are cleared by the corner chamfers. |
+| Fiducials | FID1 (11, 36), FID2 (47.3, 49), FID3 (99.7, 25.7), top side. |
 
-## 2. Net classes and currents
+## 2. Stackup, rules, fab
 
-Design point: pack trunk **20 A continuous / 30 A for ≤ 2 s** (the XT30 is rated 15 A
-continuous / 30 A instantaneous and is the limiting element; realistic draw is 14 A).
+| Item | Decision |
+|---|---|
+| Stackup | JLC 4-layer 1.6 mm, **2 oz outer / 1 oz inner**. F.Cu: power stages, phase copper, VBAT and I_x+ pours. In1 (`GND`): ground plane with an 8 mm VBAT corridor (cans → left edge of the L block → along the front → R can; 1 oz ≈ 7 A continuous, enough for the geared drive motors — the weapon is fed on F.Cu). In2 (`SIG`): signals only. B.Cu: VBAT_PACK/VBAT under J1 and under the W high row, solid GND pour everywhere else (thermal spokes starve in the packed bottom). Freerouting also routes signals on In1 where it needs to, so the plane is a fill around those tracks, not a solid sheet; the B.Cu pour is the solid ground. |
+| Rules | Board minimum 0.15 / 0.15 mm (JLC 2 oz); Default class 0.15 clearance, 0.15 tracks; vias 0.25 drill / 0.45 pad (hand vias 0.3 / 0.6); hole-to-copper 0.2. Power copper: `kicad/thumbsup.kicad_dru` applies **0.35 mm** wherever a zone meets a POWER_20A/30A item, so the 0.5 mm-pitch driver / INA226 pins that carry VBAT or a phase are not flagged pad-to-pad. |
+| Net classes | POWER_30A (VBAT_PACK, VBAT, MOTOR_W_*, I_W+), POWER_20A (MOTOR_L/R_*, I_L+, I_R+): pours only. GATE 0.3 mm, VDRV 0.8 mm, 3V3 0.3 mm, SENSE 0.15 mm (patterns in `build_pcb.py`, written into `thumbsup.kicad_pro`). |
+| Assembly | JLC Standard PCBA, **both sides**: top = FETs, shunts, cans, TPs, LEDs, SWD pads; bottom = everything else (AT32 / HX6288 / INA180 under their FET block, INA226 at their shunts, buck, LDOs, flash, IMUs, level shifter, passives). Hand-soldered after SMT: Pico W (castellations), J1 XT30, J2/J3 headers, the nine motor leads. |
+| Mask | JLC needs 0.20 mm between pads for a mask dam at 2 oz; the VSSOP-10 (0.15) and LGA-14 (0.175) simply get no dam between those pads. |
 
-| Class | Nets | Current | Copper |
-|---|---|---|---|
-| POWER_30A | VBAT_PACK, VBAT_LINK, VBAT, MOTOR_W_A/B/C, I_W+ | 15 A cont / 30 A pk | pours only, ≥ 8 mm at 2 oz, L1 + L4 mirror stitched with ≥ 16 vias |
-| POWER_20A | MOTOR_L/R_A/B/C, I_L+, I_R+ | 10 A cont / 20 A pk | pours, ≥ 6 mm at 2 oz |
-| GATE | x_HO1-3, x_LO1-3, x_GxH, x_GxL, x_VB1-3, x_BT1-3 | 2 A pulses | 0.4 mm, < 20 mm, no vias if possible, return (VS / COM) on the adjacent layer |
-| VDRV | +VDRV, W_VCC, U1_SW, +5V, +5V_PICO | ≤ 2 A | 0.8 mm |
-| 3V3 | +3V3_A, +3V3_MCU, +3V3_PICO | ≤ 0.3 A | 0.4 mm |
-| SENSE | x_ISENSE, x_CSA_OUT, I_x_S+/-, PACK_S+/-, U4–U7_IN+/-, x_VSENSE, x_BEMF_A/B/C, x_VN, PACK_V_ADC, 3V3_MON, NTC_ADC | signal | 0.2 mm, guarded, never over a plane split |
-| default | everything else | signal | 0.2 mm |
+## 3. Floorplan (top side; all coordinates in mm, board frame)
 
-## 3. Ground and current sensing (the part that decides whether the numbers are true)
+```
+ y=0 wall:  [chamfer/TPs][ J1 XT30 16.6..31 ][ L can 31..45 ][ W can 45..56 ][ Pico USB ]
+            SW1 (12.6,13)                       L block 35.8..53.5 x 13.6..30.6
+ W block 12.6..30.3 x 17.5..34.5  R435 rot90    R235 (39.8,33.5)  TP200-203    Pico 56.1..79.3 x 0..51
+ LEDs D5/D6/D4 at x 9.6..10.6      (32.9,31.5)                                   R block 79.6..97.3 x 9.3..26.3
+ J2 ARM (4.9,24.8) H1 (3.7,18.8)                                                  R335 (84.5,4.4)  R can (86.3,31.9)
+ neck: J3 (33.4..49.7 x 37.6..43.8), J20/J30/J40 SWD pads, TP4/5/6/40, FID2, H3 (52.8,47.3)
+```
 
-Every current measurement on this board is 1 mΩ × I: 10 mV at 10 A. One square of 1 oz
-copper is 0.5 mΩ, so the sense path must be **4-wire**.
+**FET blocks** (`placement.fet_block`): three half-bridge columns on 5.9 mm pitch, FETs
+rotated so the drain tab faces one edge and the leads the other, rows 9.6 mm apart, and the
+**motor holes between the rows** (`thumbsup:MotorHoles_1x03_P5.90mm`, 2.0 mm holes / 3.0 mm
+pads, 0.3 mm from both FET bodies, all three the phase net).  This is the only way three phase
+nodes get out of a 2 × 3 FET block without inner-layer phase copper.
 
-1. Each shunt (R2, R235, R335, R435, footprint `thumbsup:R_2512_Shunt_Kelvin`) has two
-   net-ties (`NT*`, 0.5 mm pads). **Place each NT pad on the inner edge of the shunt pad**
-   so the sense net starts at the pad, not in the pour. DRC then keeps `I_x_S+/-` and
-   `PACK_S+/-` off the current copper.
-2. Sense pairs run as short, matched 0.2 mm traces to the INA180 (U22/U32/U42, within 5 mm
-   of its shunt) and to the INA226 filter resistors (R30–R61, within a few mm of pins 9/10).
-   The INA226 100 nF bypass sits at pins 6/7.
-3. Per cell, a local **PGND island** on L1: low-side FET sources → shunt hot pad (I_x+);
-   shunt cold pad → C?23/C?24 MLCC negatives and the hybrid can(s) → main GND plane through
-   ≥ 8 stitching vias at the shunt cold pad. This is the only place the cell touches L2.
-4. FD6288 COM, its 10 µF + 100 nF (C?09/C?10), the AT32 EP and its decoupling, and the
-   INA180 GND all return to that cold-pad star, not to the FET pour.
-5. Pack entry: TVS D1 and C1–C4 between J1 and J4, nothing else on VBAT_PACK. R2 in series
-   after J4 with its full 3.1 × 4 mm pads and ≥ 150 mm² of 2 oz copper each side.
-6. Logic (Pico, INA226 ×4, IMUs, LDOs) sits away from the three cell star points; no slots in
-   L2 under DShot / I2C / SPI.
-7. Plan a per-board current calibration against the INA226 pack channel (0.1 % gain) — the
-   shunt tolerance plus copper TCR (3900 ppm/°C) will not give 1 % on its own.
+* L: rot 90, VBAT tabs at the top (y 13.6) against the cans, I_L+ leads at the bottom → R235.
+* W: rot 90, VBAT tabs at the top fed from under J1 (bottom pour + 11 vias + the top-layer
+  bridge x 30.3..35.8), I_W+ leads at the bottom → R435 (rot 90 beside the block).
+* R: rot 270 (mirrored): I_R+ leads at the top → R335 in the strip above the block, VBAT tabs
+  at the bottom against the R can; the block's top-right corner sits exactly on the chamfer.
 
-## 4. Power stage placement (per cell, lay out once and copy)
+**Shunts**: `thumbsup:R_2512_Shunt_Kelvin` with the two Kelvin net-ties
+(`thumbsup:NetTie-2_Kelvin_0.4mm`, copper-only 0.4 mm pads, no mask opening) **in the 1.3 mm
+gap between the shunt pads under the body**; `copper.kelvin_stubs` joins tie pad 1 into the
+shunt pad, the sense trace leaves tie pad 2 sideways.  The pack shunt R2 is on the bottom
+under J1 between its pegs and pins.
 
-* Switching loop MLCC (C?23/C?24) → high FET drain → phase → low FET → shunt → GND → MLCC
-  ≤ 10 nH: MLCCs within 3–5 mm of the half-bridges with the return on L2. 30 A / 50 ns adds
-  ≤ 6 V; Vds peak ≈ 19 V against 40 V BVDSS.
-* FET tabs (`PQFN-8-EP` pad 5 = **drain**; leads 1–3 source, 4 gate): ≥ 150 mm² of 2 oz
-  copper per tab, ≥ 12 × 0.3 mm vias to the L4 mirror pour; via-in-tab is fine, tent the
-  bottom. Weapon FETs: 0.59 W each at 15 A → ~27 °C rise; 30 A pulses ≤ 2 s.
-* Gate loops HO/LO → 10 Ω → gate < 20 mm with VS / COM return underneath; the 10 k gate-source
-  resistors at the FET; C?20–22 (100 nF) directly across VB/VS; D?0–2 + R?32–34 (2.2 Ω)
-  within 5 mm of the driver's VCC cap.
-* VS traces from the phase copper at the FET, not from the motor pad; low-side source → shunt
-  path with no vias (VS negative transient 2.4–4.2 V at 30 A vs the FD6288 −4 V limit).
-* BEMF dividers (R?05–R?13) and the 3 × 10 k neutral star at the AT32, taps routed away from
-  gate loops. INA180 + R?04/C?07 near PA3.
-* FD6288 pad 25 (EP) = COM: solid pad, 4–9 vias. AT32 EP is its **only** ground: solid pad,
-  4–9 vias, paste 60–70 % in windows.
-* 10 µF 50 V MLCCs are X5R 85 °C — keep them off the FET thermal copper. Hybrid cans ≥ 5 mm
-  from FET copper; glue fillet (C-5).
-* TH1 (NTC) within 3 mm of Q40–Q45.
+**Bottom side** is packed by `placement.Packer` into named regions; through-hole pads, the
+motor holes, the fixed ICs, and every via field / GND patch / gate via from `copper.py`
+(`reserved_rects`) are obstacles it steps around.  The build prints the fill of every region
+and `placement check: 0 problems` (outline, courtyards, holes, Pico keep-outs, tall parts
+under the drum) — keep it at 0.
 
-## 5. Everything else
+## 4. Copper (`tools/pcb/copper.py`)
 
-* **Pico W**: antenna end flush with a board edge (≤ 1.2 mm past the module), the 42 × 10 mm
-  RF keep-out off-board or copper-free on all layers, chassis wall there plastic; USB and
-  BOOTSEL facing an access cut (MCU-2). Nothing under the module except tented vias; module
-  ground castellations stitched to L2; D3 next to the VSYS castellation.
-* **AP63205** per DS Fig. 25: C10–C12 within 2 mm of VIN/GND, GND pad with ≥ 6 vias, L1 and
-  C14/C15 within 3 mm, FB (on +5V) as a sense trace from the C14/C15 pads, C13 across BST/SW.
-  0.6 W at 0.9 A / 9 V needs the copper the DS assumes.
-* **LDOs** U2/U3 184 °C/W — small GND pour at pin 2; +3V3_A on J3 is limited to ~100 mA.
-* **I2C** daisy-chain U4 → U5 → U6 → U7 → U8/U9 → J3 with adjacent ground; away from phase
-  nodes; ADC RC caps (C20/C21/C24) at the Pico ADC pins with AGND (pin 33).
-* **DShot** (R24–R26 at the Pico) over solid L2, ≥ 2 mm from 20–30 A copper.
-* **IMUs** U8/U9 near the mechanical centre, away from L1 (inductor); C72 at U9 pin 6, C73 at
-  pin 1; C70 at U8 pin 8, C71 at pin 5.
-* **Access with armour off**: SW1, J2, J3, J20/J30/J40, TP40 (WEAPON_EN bench enable), the
-  Pico BOOTSEL; D4/D5/D6 visible through a window.
-* **Bench notes** carried into the bring-up plan: USB alone powers only the Pico (all other
-  rails are behind D3) — first-article rail tests use a bench supply on J1; the weapon cell is
-  in reset unless ARM link in **and** WEAPON_EN high (3.3 V on TP40); the L/R cells enter
-  the AM32 bootloader when the DShot line is held high ≥ 2 s (for am32.ca passthrough).
+* **Phase pours** (priority 3): one per column, from the high FET's lead row to the low FET's
+  tab end, containing the motor hole.  Each high-side **gate** gets a via 1.045 mm outboard of
+  pad 4 and 1.0 mm into the pour, with the pour (and the neighbouring column's pour) notched
+  around it; a 0.25 mm stub joins pad 4 to the via and Freerouting takes it from there on
+  B.Cu to the driver.  Low-side gates do the same in the I_x+ pour.
+* **I_x+ pours** (priority 2): block-wide under the low-FET leads, extended over the shunt's
+  hot pad.  The R band above the notches is ≥ 1.6 mm; the shunt is at the left so only the
+  third column's current crosses a notch.
+* **VBAT**: top pour W block + bridge + both cans + L block top row; top pour R block bottom
+  row + R can; the In1 corridor between them with 24 vias at the left field (x 31.9..34.9,
+  under the L can) and 21 at the R can; bottom pour under J1 → R2 → W high row.  Bottom drain
+  MLCCs (C?23/C?24) get a B.Cu patch + via into the top pour above them.
+* **GND**: In1 plane + solid B.Cu pour (0.35 mm clearance); F.Cu GND patches with 4–8 vias at
+  every shunt / can GND pad; FET-adjacent sides of the R235 patch have no vias.
+* **Pack entry**: VBAT_PACK pour top + bottom between J1 pad 2 and R2 pad 1 (J1 is THT, no vias
+  needed); TVS D1 and C1/C2 sit in that pour on the bottom.
+
+## 5. Routing (`tools/pcb/route.py`)
+
+Freerouting 2.4.1 (bundled JRE, `tools/freerouting/`, git-ignored — download the linux-x64
+bundle from github.com/freerouting/freerouting/releases into that folder) runs headless on the
+Specctra export with fanout disabled (`--router.fanout.enabled=false`; its escape-via stage
+burns 20 passes on this board for nothing).  Zones are exported as planes; Freerouting routes
+other nets through them and KiCad refills around the tracks.  Freerouting declares an inner
+layer a power plane when it has no track and a conduction area ≥ 50 % of its (badly computed)
+board area — In1 is meant to be that; In2 carries no copper of ours so it stays a signal
+layer.  `route.py import <pcb> <ses>` / `route.py stats <pcb>` import a session and list the
+unrouted nets.  The bottom GND pour is left out of the export (`route.py export`) so the router
+joins every GND pad to a nearby GND via instead of assuming the pour connects it; every SMD GND
+pad also gets its own via before routing (`copper.gnd_pad_vias`), and every F.Cu pour gets
+pickup vias (`copper.pickup_via_spots`) because Freerouting never connects to a pour.
+
+**Status (2026-09-17, run L, 16 passes, 1 oz rules):** the committed `kicad/thumbsup.kicad_pcb`
+is that run imported: 49 connections unrouted by Freerouting, **102 unconnected in KiCad**
+(54 GND pads / pour islands, 48 signal ends across ~30 nets), 11 DRC errors.  The board is
+over-dense for a fully automatic finish: the three AM32 cells plus the Pico put ~310 parts on
+4 400 mm² with the bottom side packed at 100 %.  Convergence history: 2 oz rules plateaued at
+~100 Freerouting-unrouted; 1 oz rules and the pour fixes brought it to ~50.  Finishing this
+board needs either hand-routing of the last ~50 ends or fewer parts; the drive-architecture
+decision (AM32 sensorless vs brushed + encoders vs FOC) changes the part count by ±100, so
+that decision comes first.
+
+## 6. Checks still on a human
+
+* Confirm XT30 polarity on a physical connector before soldering J1 ("+" = pad 2, at x 21.3).
+* The chassis print must gain the three M2.5 bosses and the two wall slots (§1).
+* Motor leads: 16–18 AWG into 2.0 mm holes on 5.9 mm pitch; pre-heat, the pads are solid 2 oz.
+* JLC's CPL rotation preview for the QFN / SOT parts (`fab/thumbsup_cpl.csv`).
+* Bench: USB alone powers only the Pico; the weapon cell stays in reset until ARM link **and**
+  WEAPON_EN; the L/R cells enter the AM32 bootloader if DShot idles high ≥ 2 s.

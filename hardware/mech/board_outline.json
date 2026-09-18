@@ -1,0 +1,86 @@
+{
+ "units": "mm",
+ "frame": "board: origin = chassis (76.0, 174.5), x right, y toward the drum (KiCad convention)",
+ "chassis_floor_z": 2.0,
+ "standoff": 3.0,
+ "clearance_to_walls": 1.0,
+ "outline": [
+  [
+   0.0,
+   16.5
+  ],
+  [
+   0.0,
+   27.0
+  ],
+  [
+   9.5,
+   27.0
+  ],
+  [
+   9.5,
+   37.5
+  ],
+  [
+   33.0,
+   37.5
+  ],
+  [
+   33.0,
+   51.0
+  ],
+  [
+   79.5,
+   51.0
+  ],
+  [
+   79.5,
+   37.5
+  ],
+  [
+   94.5,
+   37.5
+  ],
+  [
+   94.5,
+   27.0
+  ],
+  [
+   104.5,
+   27.0
+  ],
+  [
+   104.5,
+   16.5
+  ],
+  [
+   88.0,
+   0.0
+  ],
+  [
+   16.5,
+   0.0
+  ]
+ ],
+ "holes_m25": [
+  [
+   3.7,
+   18.8
+  ],
+  [
+   101.5,
+   20.5
+  ],
+  [
+   52.8,
+   47.3
+  ]
+ ],
+ "notes": [
+  "lid-screw bosses at chassis (79,171) and (176,171) are cleared by the 16.5 mm corner chamfers",
+  "neck (board y 37.5..51, x 33..79.5) lies under the drum: parts there <= 8 mm tall",
+  "back wall (board y=0) is the vent grille; side walls (x=0 / x=104.5) are plastic wheel pods: Pico antenna end at the x=104.5 edge",
+  "floor through-hole at chassis (105,125) is outside the neck (neck starts at x=109)"
+ ],
+ "fit_violations": 0
+}

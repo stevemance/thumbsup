@@ -2,7 +2,7 @@
 
 **Robot:** ThumbsUp, 1 lb (454 g) plastic antweight, 3D-printed drum spinner
 **Board:** v1 custom PCB — Pico W + three on-board AM32 ESC cells + instrumentation + log flash
-**Status (rev v1.1, 2026-09-03):** requirements + verified BOM + generated KiCad schematic (`kicad/`, built from `tools/sch/circuit.py`; KiCad ERC 0 errors, netlist proven equal to the SKiDL source) + layout brief ([LAYOUT.md](LAYOUT.md)). **Ready for layout.** Before ordering: same-day stock check on HX6288 / ADXL375 / 74AHCT1G125GW, and confirm XT30 polarity on a physical part. Review history: [REVIEW.md](REVIEW.md).
+**Status (rev v1.2, 2026-09-04):** requirements + verified BOM + generated KiCad schematic (`kicad/`, built from `tools/sch/circuit.py`; KiCad ERC 0 errors, netlist proven equal to the SKiDL source) + **generated layout** (`kicad/thumbsup.kicad_pcb` from `tools/pcb/`, outline from the chassis 3MF, see [LAYOUT.md](LAYOUT.md)) + JLC outputs in `fab/`. Before ordering: same-day stock check on HX6288 / ADXL375 / 74AHCT1G125GW, and confirm XT30 polarity on a physical part. Review history: [REVIEW.md](REVIEW.md).
 **AM32 firmware target (locked):** `AT32DEV_F421` (`HARDWARE_GROUP_AT_B` + `AT_045`)
 
 Firmware GPIO in `firmware/include/config.h` is the *wired robot today*. The board remaps Pico pins; `config.h` must be updated to match [PINMAP.md](PINMAP.md) before first power-up.
@@ -31,7 +31,7 @@ One board that:
 ## 2. Architecture
 
 ```
-3S LiPo -- XT30 J1 -- TVS/filter -- POWER LINK J4 -- 1 mOhm shunt -- VBAT star
+3S LiPo -- XT30 J1 (through the wall slot = SPARC disconnect) -- TVS/filter -- 1 mOhm shunt -- VBAT pour
                       |
         +-------------+-------------+-------------+
         |             |             |             |
@@ -104,7 +104,7 @@ Default stuffing: all three cells populated. Drive ESCs: crawler settings (sine 
 | MOT-6 | SHALL | Drive stage rated **10 A cont / 20 A pk** (headroom for a geared BLDC; today’s 030 stall is 2 A). |
 | MOT-7 | SHALL | DShot pull-down footprint on each PB4, **DNP** (AM32 enables the AT32 pull-up and its 1-wire serial needs an idle-high line; the Pico drives DShot push-pull through 100 Ω). Weapon FD6288 **VCC P-FET** (R440 4.7 k pull-up, SPICE-verified off state) switched by (GPIO9 **AND** ARM link) through two AO3400A; Q49 (gate node) and Q50 (ARM_N) hold the weapon AT32 in reset while disabled so the driver inputs never exceed VCC+0.3 V. FD6288 has no nSLEEP. |
 | MOT-8 | SHALL | SWD header (3V3, SWDIO, SWCLK, NRST, GND) on each AT32 for the first bootloader flash; test points on ISENSE, VSENSE and PB6 telemetry. Weapon cell: ARM link in and 3.3 V on TP40 (WEAPON_EN) to release reset for flashing. |
-| MOT-9 | SHALL | Motor pads A/B/C per channel (`thumbsup:MotorPads_1x03_P5.00mm`: 2 mm holes + 4×3 mm lands, 30 A). Drive: low-KV **geared** BLDC (crawler). Weapon: F2822-1100KV. |
+| MOT-9 | SHALL | Motor lead holes A/B/C per channel (`thumbsup:MotorHoles_1x03_P5.90mm`: 2 mm plated holes in the phase copper between the FET rows, 30 A). Drive: low-KV **geared** BLDC (crawler). Weapon: F2822-1100KV. |
 | MOT-10 | SHOULD | Board NTC at the weapon FET cluster → Pico GP28/ADC2 (`AT32DEV_F421` has no NTC input). Per-cell NTCs are a v2 item. |
 
 **Low-speed BLDC:** AM32 crawler path (sine → trapezoidal ~200 RPM handoff). Use a **3S** BEMF divider (not a 6S ratio). Complementary PWM on. See https://wiki.am32.ca/general/Crawler-Hardware-and-AM32.html

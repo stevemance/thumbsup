@@ -2,7 +2,7 @@
 	(version 20250114)
 	(generator "eeschema")
 	(generator_version "9.0")
-	(uuid "442b975b-0ba5-480e-99fa-0ca5adb30167")
+	(uuid "de75de70-d2f4-4b63-b836-39bc033a02ed")
 	(paper "A3")
 	(title_block
 		(title "ThumbsUp v1")
@@ -21,7 +21,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "4d315a31-830e-47e1-b89c-fe516f6dec30")
+		(uuid "81cf35e0-bf11-4cef-b68a-957be9062565")
 	)
 	(text "Generated from hardware/tools/sch/circuit.py (SKiDL).  Do not edit the .kicad_sch files by hand; edit the Python and rebuild."
 		(exclude_from_sim no)
@@ -32,7 +32,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "dcbcd460-c8e2-42f9-b9c2-501ccb196e03")
+		(uuid "fef22563-cf79-4b99-b12a-67ad21d51260")
 	)
 	(text "Cross-sheet signals are global labels; rails are power symbols.  Sheet order follows the power flow."
 		(exclude_from_sim no)
@@ -43,7 +43,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "b098cdf4-a6f5-452c-ab71-a12c620e89f1")
+		(uuid "21cc5163-590c-4aa1-91b1-79744b622ce1")
 	)
 	(sheet
 		(at 30.48 50.8)
@@ -60,7 +60,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "96a998df-fcbd-4dff-9cac-f565dc7245e4")
+		(uuid "41f48ca5-316b-4c3c-9e50-242dc238e8f7")
 		(property "Sheetname" "Pack input, TVS, shunt, reverse polarity"
 			(at 30.48 50.0884 0)
 			(effects
@@ -81,7 +81,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -102,7 +102,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "574e1d22-0068-4c7c-8fc5-dfe5b666346c")
+		(uuid "d077794c-8471-46e2-a08d-8e087f4ab56c")
 		(property "Sheetname" "5 V buck, 3V3 LDOs, monitors"
 			(at 121.92 50.0884 0)
 			(effects
@@ -123,7 +123,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -144,7 +144,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "287db678-992b-49ce-ba38-b46d0c531413")
+		(uuid "19a486fb-8f4c-4ed7-a708-9b758408c8f6")
 		(property "Sheetname" "Pico W and control I/O"
 			(at 213.36 50.0884 0)
 			(effects
@@ -165,7 +165,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -186,7 +186,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "28b2069d-3def-415c-986b-5a6863eefc9c")
+		(uuid "9bfce8ec-9ed3-492a-9d39-2305c8babd9d")
 		(property "Sheetname" "INA226 x4, IMU, high-g"
 			(at 30.48 83.1084 0)
 			(effects
@@ -207,7 +207,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -228,7 +228,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "4739b528-ade1-45ff-aa22-194a18dd3ad2")
+		(uuid "7ea3b2b9-dd40-4319-ab4f-085044cf2fc0")
 		(property "Sheetname" "Log flash and status LEDs"
 			(at 121.92 83.1084 0)
 			(effects
@@ -249,7 +249,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -270,7 +270,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "579599ba-0584-417f-9df9-15e2486b44e1")
+		(uuid "d35ab548-3e4c-4450-b071-fe16e2a499e9")
 		(property "Sheetname" "ESC L control (AM32)"
 			(at 213.36 83.1084 0)
 			(effects
@@ -291,7 +291,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -312,7 +312,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "bfafb3fe-2c53-4f9f-8e75-b56538aecc0a")
+		(uuid "2f7e950d-2800-44c4-89a9-086e294507cc")
 		(property "Sheetname" "ESC L power stage"
 			(at 30.48 116.1284 0)
 			(effects
@@ -333,7 +333,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -354,7 +354,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "6ecf7724-cd52-4050-b9e9-e4e32c2273f5")
+		(uuid "516ce561-aede-4962-8302-becaeedcf52e")
 		(property "Sheetname" "ESC R control (AM32)"
 			(at 121.92 116.1284 0)
 			(effects
@@ -375,7 +375,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -396,7 +396,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "58eefe35-7367-431f-af30-15ad42873806")
+		(uuid "ed8cac84-e43b-416b-94d6-b7f9b6aa482a")
 		(property "Sheetname" "ESC R power stage"
 			(at 213.36 116.1284 0)
 			(effects
@@ -417,7 +417,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -438,7 +438,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "05f0c711-345d-4361-9b5e-957f2ebc0660")
+		(uuid "b1e8df59-54ec-4cda-aa66-a1552304970b")
 		(property "Sheetname" "ESC W control (AM32) + weapon enable"
 			(at 30.48 149.1484 0)
 			(effects
@@ -459,7 +459,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)
@@ -480,7 +480,7 @@
 		(fill
 			(color 0 0 0 0.0000)
 		)
-		(uuid "30aa62ba-8a93-406e-b04a-004be30d6756")
+		(uuid "b7f4b238-6788-484a-b34a-16726dfe34f5")
 		(property "Sheetname" "ESC W power stage"
 			(at 121.92 149.1484 0)
 			(effects
@@ -501,7 +501,7 @@
 		)
 		(instances
 			(project None
-				(path "/442b975b-0ba5-480e-99fa-0ca5adb30167"
+				(path "/de75de70-d2f4-4b63-b836-39bc033a02ed"
 					(page "2")
 				)
 			)

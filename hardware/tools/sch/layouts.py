@@ -51,7 +51,7 @@ def rc_to_gnd(s: Sheet, cap, node, dx: float = 10.16):
 
 # ---------------------------------------------------------------- sheets
 def draw_pack(d, s: Sheet):
-    s.text(20, 25, "Pack input: XT30 → TVS/filter → POWER LINK J4 → 1 mΩ shunt (Kelvin net-ties) → VBAT (bridges) ; VBAT → P-FET reverse-polarity → +VDRV (logic)", 2, True)
+    s.text(20, 25, "Pack input: XT30 → TVS/filter → 1 mΩ shunt (Kelvin net-ties) → VBAT (bridges) ; VBAT → P-FET reverse-polarity → +VDRV (logic)", 2, True)
     s.text(20, 31, "J1: '+' is pad 2 on the KiCad AMASS footprint.  Motor path is polarised by the connector only (PWR-3): a reversed pack destroys the board.  Q1: pack on DRAIN, load on SOURCE.", 1.5)
     j1 = d.by_ref("J1")
     s.place(j1, 33.02, 110.49)
@@ -62,15 +62,10 @@ def draw_pack(d, s: Sheet):
     s.flag((43.18, bus_y))
     s.wire((48.26, bus_y), (48.26, bus_y - 2.54))
     s.power_at((48.26, bus_y - 2.54), "VBAT_PACK", came_from=(0, 1))
-    # power link: both pins point down onto the bus line; pin 2 (left) is the pack side
-    j4 = d.by_ref("J4")
-    s.place_pin_at(j4, 2, (104.14, bus_y - 2.54), 270)
-    s.wire(s.pin(j4, 2), (104.14, bus_y))
-    s.wire(s.pin(j4, 1), (106.68, bus_y), (114.3, bus_y))
-    s.flag((109.22, bus_y))
-    s.text(92, bus_y - 16, "J4 POWER LINK = SPARC disconnect (PWR-2)", 1.27)
+    s.wire((104.14, bus_y), (114.3, bus_y))
+    s.text(88, bus_y - 16, "J1 is the SPARC disconnect (PWR-2): mates through a slot in the back wall", 1.27)
     # TVS + entry caps hang from the bus
-    for ref, x, rot in (("D1", 55.88, 270), ("C1", 66.04, 0), ("C2", 74.93, 0), ("C3", 83.82, 0), ("C4", 93.98, 0)):
+    for ref, x, rot in (("D1", 55.88, 270), ("C1", 66.04, 0), ("C2", 74.93, 0), ("C3", 83.82, 0)):
         c = d.by_ref(ref)
         top = 1  # K for the zener-style TVS, pin 1 for caps
         s.place_pin_at(c, top, (x, bus_y + 2.54), rot)
@@ -80,7 +75,6 @@ def draw_pack(d, s: Sheet):
     r2 = d.by_ref("R2")
     s.place_pin_at(r2, 1, (116.84, bus_y), 90)
     s.wire((114.3, bus_y), s.pin(r2, 1))
-    s.power_at((114.3, bus_y), "VBAT_LINK", came_from=(0, -1)) if False else None
     for nt_ref, xr, lbl in (("NT1", 114.3, "PACK_S+"), ("NT2", 127.0, "PACK_S-")):
         nt = d.by_ref(nt_ref)
         s.place_pin_at(nt, 1, (xr, bus_y + 2.54), 90)   # pin 1 down onto the bus node, pin 2 up
@@ -116,8 +110,8 @@ def draw_pack(d, s: Sheet):
     s.power_at((177.8, so[1]), "+VDRV", came_from=(1, 0))
     s.flag((162.56, so[1]))
     s.text(150, bus_y + 25.4, "+VDRV feeds the 5 V buck and the FD6288 gate drivers (9–12.6 V).", 1.27)
-    s.text(30, 165, "Mechanical: 4x M3 mounting holes, 3 fiducials (positions from the chassis in layout)", 1.5, True)
-    for i, ref in enumerate(("H1", "H2", "H3", "H4", "FID1", "FID2", "FID3")):
+    s.text(30, 165, "Mechanical: 3x M2.5 mounting holes (positions from tools/mech/chassis.py), 3 fiducials", 1.5, True)
+    for i, ref in enumerate(("H1", "H2", "H3", "FID1", "FID2", "FID3")):
         s.place(d.by_ref(ref), 38.1 + i * 15.24, 175.26)
     # ground reference flag for ERC
     s.wire((25.4, bus_y + 30.48), (25.4, bus_y + 33.02))
@@ -303,9 +297,8 @@ def draw_pico(d, s: Sheet):
         s.place_pin_at(r, 1, (38.1 + i * 15.24, 233.68))
         s.label(s.pin(r, 1))
         s.label(s.pin(r, 2))
-    s.text(110, 225, "Test points", 1.5, True)
-    for i in range(10, 16):
-        s.place(d.by_ref(f"TP{i}"), 118.11 + (i - 10) * 15.24, 236.22)
+    s.text(110, 225, "Test point", 1.5, True)
+    s.place(d.by_ref("TP10"), 118.11, 236.22)
 
     # NTC
     s.text(205, 187, "Board NTC at weapon FETs → GP28", 1.5, True)
@@ -505,9 +498,10 @@ def draw_esc(d, s: Sheet, k: str, base: int):
         s.label_at(node, f"{k}_BEMF_{ph}", 180)
 
     decap_strip(s, d, [f"C{base + n}" for n in (0, 1, 2, 3, 4, 8, 9, 10)], 218.44, 210.82, "Decoupling — at U pins (C%d…: AT32 VDD/VDDA, INA180, FD6288 VCC)" % base)
-    s.text(120, 183, "Test points (PB6 = AM32 KISS telemetry, 115200)", 1.5, True)
-    for i in range(3):
-        s.place(d.by_ref(f"TP{u}{i}"), 127.0 + i * 15.24, 193.04)
+    if k == "L":
+        s.text(120, 183, "Test points (PB6 = AM32 KISS telemetry, 115200)", 1.5, True)
+        for i in range(3):
+            s.place(d.by_ref(f"TP{u}{i}"), 127.0 + i * 15.24, 193.04)
 
 
 def draw_weapon_enable(d, s: Sheet):
@@ -621,6 +615,7 @@ def draw_bridge(d, s: Sheet, k: str, base: int):
         so = s.stub(s.pin(ql, "S"))
         s.wire(so, (so[0], bus_y))
     s.wire((55.88, bus_y), (241.3, bus_y))
+    s.label_at((200.66, bus_y), f"I_{k}+")                 # name the shunt's hot (force) node
     rsh = d.by_ref(f"R{base + 35}")
     s.place_pin_at(rsh, 1, (241.3, bus_y + 2.54))
     s.wire((241.3, bus_y), s.pin(rsh, 1))
@@ -634,11 +629,12 @@ def draw_bridge(d, s: Sheet, k: str, base: int):
     s.place_pin_at(ntm, 1, (256.54, gnd_pt[1] - 2.54), 270)  # pin 1 up onto the GND node, pin 2 down -> I_x_S-
     s.wire(gnd_pt, (256.54, gnd_pt[1]), s.pin(ntm, 1))
     s.label(s.pin(ntm, 2))
-    s.place(d.by_ref(f"TP{u}3"), 218.44, bus_y - 7.62)
-    s.wire(s.pin(d.by_ref(f"TP{u}3"), 1), (218.44, bus_y))
+    if k == "L":
+        s.place(d.by_ref(f"TP{u}3"), 218.44, bus_y - 7.62)
+        s.wire(s.pin(d.by_ref(f"TP{u}3"), 1), (218.44, bus_y))
     s.text(150, bus_y + 12.7, "Kelvin: NT net-ties on the shunt pads; INA180 (this cell) + INA226 (log) sense from them", 1.27)
     # bulk caps and motor connector
-    bulk_refs = [f"C{base + 23}", f"C{base + 24}", f"C{base + 25}"] + ([f"C{base + 26}"] if k == "W" else [])
+    bulk_refs = [f"C{base + 23}", f"C{base + 24}", f"C{base + 25}"]
     decap_strip(s, d, bulk_refs, 63.5, 185.42, "Bulk at the FET drains (VBAT): 2x 10 uF MLCC + hybrid polymer")
     j = d.by_ref(f"J{u + 1}")
     s.text(255, 175, f"Motor {k} pads", 1.5, True)

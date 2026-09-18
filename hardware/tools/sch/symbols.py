@@ -400,7 +400,7 @@ def fp_shunt_2512_kelvin() -> str:
         _rect(-3.2, -1.6, 3.2, 1.6, "F.Fab"),
         _line(-3.9, -2.2, 3.9, -2.2), _line(-3.9, 2.2, 3.9, 2.2),
         _rect(-4.1, -2.4, 4.1, 2.4, "F.CrtYd", 0.05),
-        '\t(fp_text user "KELVIN: sense traces leave the inner pad edges" (at 0 3.2 0) (layer "F.Fab") (effects (font (size 0.5 0.5) (thickness 0.08))))',
+        '\t(fp_text user "KELVIN: net-ties in the pad gap, sense traces leave sideways" (at 0 3.2 0) (layer "F.Fab") (effects (font (size 0.5 0.5) (thickness 0.08))))',
     ])
     return _fp("R_2512_Shunt_Kelvin", "2512 metal shunt, 3.1x4.0 pads 1.3 mm apart; route Kelvin sense from the inner pad edges", body)
 
@@ -421,8 +421,48 @@ def fp_motor_pads() -> str:
     return _fp("MotorPads_1x03_P5.00mm", "Motor phase pads: 2.0 mm holes / 4.5 mm pads at 5 mm pitch + 4x3 mm top lands, 30 A", body, "through_hole")
 
 
+def fp_motor_holes() -> str:
+    """Three 2.0 mm plated holes (3.0 mm pads) on the FET column pitch (5.9 mm) so each
+    hole sits in the phase copper between a cell's high- and low-side FETs; 16-18 AWG
+    motor leads, the pour around each hole carries the current.  No courtyard: the
+    pads deliberately sit 0.3 mm from the FET bodies (same net)."""
+    pads = [_tht_pad(str(i + 1), x, 0, 3.0, 2.0, "circle" if i else "roundrect") for i, x in enumerate((-5.9, 0.0, 5.9))]
+    body = "\n".join(pads + [
+        '\t(fp_text user "A" (at -5.9 2.4 0) (layer "F.SilkS") (effects (font (size 0.7 0.7) (thickness 0.12))))',
+        '\t(fp_text user "B" (at 0 2.4 0) (layer "F.SilkS") (effects (font (size 0.7 0.7) (thickness 0.12))))',
+        '\t(fp_text user "C" (at 5.9 2.4 0) (layer "F.SilkS") (effects (font (size 0.7 0.7) (thickness 0.12))))',
+    ])
+    return _fp("MotorHoles_1x03_P5.90mm", "Motor phase leads: 3x 2.0 mm plated holes, 3.0 mm pads, 5.9 mm pitch (between the FET rows)", body, "through_hole")
+
+
+def fp_net_tie_kelvin() -> str:
+    """Kelvin sense net-tie: two 0.4 mm copper-only pads (no mask opening) on 0.8 mm
+    pitch that sit in the 1.3 mm gap between a 2512 shunt's pads, under the body.
+    Pad 1 is stubbed into the shunt pad (force net), the sense trace leaves pad 2."""
+    body = "\n".join([
+        '\t(net_tie_pad_groups "1, 2")',
+        '\t(pad "1" smd circle (at -0.4 0) (size 0.4 0.4) (layers "F.Cu"))',
+        '\t(pad "2" smd circle (at 0.4 0) (size 0.4 0.4) (layers "F.Cu"))',
+        '\t(fp_line (start -0.6 0) (end 0.6 0) (stroke (width 0.2) (type default)) (layer "F.Cu"))',
+    ])
+    return _fp("NetTie-2_Kelvin_0.4mm", "Kelvin net-tie for the 2512 shunt gap: 0.4 mm copper-only pads, 0.8 mm pitch", body, "smd").replace(
+        "(attr smd)", "(attr smd exclude_from_pos_files exclude_from_bom)")
+
+
+def fp_swd_pads() -> str:
+    """1x5 SMD pad row on 1.27 mm pitch (1.0 x 1.8 mm) for a pogo-pin or
+    soldered-wire SWD connection: 3V3 SWDIO SWCLK NRST GND."""
+    pads = [_smd_pad(str(i + 1), x, 0, 1.0, 1.8) for i, x in enumerate((-2.54, -1.27, 0.0, 1.27, 2.54))]
+    body = "\n".join(pads + [
+        _rect(-3.5, -1.3, 3.5, 1.3, "F.CrtYd", 0.05),
+        _line(-3.2, -1.1, -3.2, 1.1),
+        '\t(fp_text user "SWD" (at 0 -1.9 0) (layer "F.SilkS") (effects (font (size 0.6 0.6) (thickness 0.1))))',
+    ])
+    return _fp("SWD_1x05_P1.27mm_Pads", "SWD programming pads 1x5, 1.27 mm pitch: 3V3 SWDIO SWCLK NRST GND", body)
+
+
 def write_footprints(pretty: Path) -> None:
     pretty.mkdir(parents=True, exist_ok=True)
-    for text in (fp_sk6812mini_c(), fp_shunt_2512_kelvin(), fp_motor_pads()):
+    for text in (fp_sk6812mini_c(), fp_shunt_2512_kelvin(), fp_motor_pads(), fp_motor_holes(), fp_swd_pads(), fp_net_tie_kelvin()):
         name = re.match(r'\(footprint "([^"]+)"', text).group(1)
         (pretty / f"{name}.kicad_mod").write_text(text)

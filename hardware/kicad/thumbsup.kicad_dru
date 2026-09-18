@@ -1,0 +1,12 @@
+(version 1)
+
+# Power copper (VBAT / phase / shunt nets) keeps 0.35 mm from everything, but only
+# where a zone is involved: the net-class clearance (0.2) still applies pad-to-pad so
+# the 0.5 mm pitch driver and INA226 pins that carry these nets are not flagged.
+(rule "power zone clearance"
+  (condition "(A.Type == 'Zone' || B.Type == 'Zone') && (A.NetClass == 'POWER_30A' || A.NetClass == 'POWER_20A' || B.NetClass == 'POWER_30A' || B.NetClass == 'POWER_20A')")
+  (constraint clearance (min 0.35mm)))
+
+# JLCPCB 4-layer, 2 oz outer copper: 0.15 mm track/space, 0.3 mm drill, 0.2 mm hole-to-copper.
+(rule "hole to copper"
+  (constraint hole_clearance (min 0.2mm)))

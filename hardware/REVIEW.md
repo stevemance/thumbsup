@@ -143,3 +143,31 @@ Post-fix build: KiCad ERC **0 errors** (2 four-way-junction warnings at genuine 
 "bidirectional pin tied to ground" warnings on address straps), SKiDL↔KiCad netlist
 equivalence **OK (324 parts, 179 named nets)**, new `build.py` pad-mapping assertion for every
 FET (symbol pin numbers vs the PDFN / SOT-23 pinout) passes.
+
+# 7. Layout (2026-09-04, rev v1.2)
+
+The board was laid out by generated tooling (`tools/mech`, `tools/pcb`; see LAYOUT.md).
+Circuit changes forced by the mechanics, all made in `tools/sch/circuit.py` and re-verified
+by ERC + the SKiDL/KiCad netlist equivalence check:
+
+| Change | Why |
+|---|---|
+| J4 (POWER LINK XT30) and C4 (entry can) removed; J1 alone, mating through a slot in the back wall, is the SPARC disconnect | the 104.5 × 37.5 mm bay has no room for a second XT30, and one connector at the wall is the simpler disconnect |
+| C426 removed; C425 is one KNSCHA 118EC421 (4 A ripple); all three cans sit on the single VBAT pour | area; the L and W cans share the top-left VBAT pour, the R can sits at the R block and is fed by the In2 bus |
+| `MotorPads_1x03_P5.00mm` → `MotorHoles_1x03_P5.90mm` (2 mm holes between the FET rows) | the only way three phase nodes leave a 2 × 3 FET block on the outer layers |
+| Net-ties on `NetTie-2_Kelvin_0.4mm` (copper-only pads in the shunt pad gap) | tie pads overlapping the shunt pads are DRC shorts; the gap is the Kelvin point the shunt vendor recommends |
+| H1–H4 M3 → H1–H3 M2.5 at chassis bosses we add to the print; SWD headers → 1 × 5 pad rows; test points cut from 22 to 12 (rails, DSHOT_L, L cell, WEAPON_EN) | area; the bottom side is fully packed even so |
+| Assembly both sides (ICs and passives on the bottom, ≤ 2.5 mm under 3 mm standoffs) | the top is FETs, shunts, cans, connectors and the Pico |
+| I_L+/I_R+/I_W+ labelled on the bridge sheets | the shunt's hot node was auto-named, which broke the POWER net-class match |
+
+Deviations from the v1.1 layout brief (LAYOUT.md §1–§5 of that revision): the L4 "VBAT /
+phase mirror pours" were dropped (the bottom is the parts side; the outer-layer 2 oz pours
+plus the In2 bus carry the currents; the drain MLCCs sit on the bottom under the tabs with a
+via each); gate drive uses one via per gate (unavoidable with the FETs on top and the drivers
+underneath); the R block's I_R+ band is 1.6 mm at the second column's gate notch (only the
+third column's current crosses it).
+
+Checks run on the generated board: `placement.check` 0 problems (outline, courtyards,
+through-holes, Pico RF/antenna keep-outs, tall parts under the drum); chassis fit check 0
+offending cells; KiCad DRC clean before routing; routing / DRC / unconnected statistics of
+the final run are in the build log and `kicad/drc.json`.

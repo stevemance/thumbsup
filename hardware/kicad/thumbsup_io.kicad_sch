@@ -2,7 +2,7 @@
 	(version 20250114)
 	(generator "eeschema")
 	(generator_version "9.0")
-	(uuid "1ab1cb4d-5461-4780-bba9-437a10d2e236")
+	(uuid "4e647f84-c9c3-4e0b-b286-dd09be02fee4")
 	(paper "A3")
 	(title_block
 		(title "Log flash and status LEDs")
@@ -1279,7 +1279,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "d86c9f1e-2616-4f4f-a667-4eed48995161")
+		(uuid "2a773644-10e4-42cb-9bac-6dd0622c1e96")
 		(property "Reference" "U10"
 			(at 66.04 80.01 0)
 			(effects
@@ -1326,32 +1326,32 @@
 			)
 		)
 		(pin "1"
-			(uuid "fe6b344d-3f37-4eab-a4f6-d1e3215cc1d7")
+			(uuid "9c04e730-7709-4d37-9516-d71f6e8bd4f9")
 		)
 		(pin "2"
-			(uuid "ccac6ef2-e15b-4fb8-99a6-4ae8f108bf25")
+			(uuid "fd367432-e4c7-48f4-a8f9-2765224fdc61")
 		)
 		(pin "3"
-			(uuid "bd73b9c5-68b4-4b6a-b981-cf9dc8d3fd42")
+			(uuid "981863fa-c233-4cc8-ac12-63a449458d13")
 		)
 		(pin "4"
-			(uuid "6bae8a05-6d6b-4fbb-9300-c3d07edded86")
+			(uuid "142d0210-22f0-4fd2-91f7-2a31dd3ba6c7")
 		)
 		(pin "5"
-			(uuid "7db7804f-f8d3-40fd-b3f3-0507ca1330fa")
+			(uuid "b817b6a6-9db6-4fa5-9217-95975a23d10b")
 		)
 		(pin "6"
-			(uuid "d6c8b0dc-454f-43e8-ac08-7cc6724e0988")
+			(uuid "99de5ca2-ef4e-4af8-b9e6-d7ee587441fd")
 		)
 		(pin "7"
-			(uuid "2f2f5d25-8402-49c4-a9bd-e72cbeb78d73")
+			(uuid "a0b81e4e-f1f5-4f4e-b101-f9c55dfcd643")
 		)
 		(pin "8"
-			(uuid "0baf0dab-b5f4-454f-a36d-674a86dc4c61")
+			(uuid "61859246-43a6-4ffd-9341-6453cd42c845")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "U10")
 					(unit 1)
 				)
@@ -1367,7 +1367,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "122e209e-b51f-44e2-a9c3-1c1c3f0dbede")
+		(uuid "a1ebabfe-5349-4e68-bacf-e530bebe622f")
 		(property "Reference" "#PWR05001"
 			(at 76.2 81.28 0)
 			(effects
@@ -1386,11 +1386,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "509575dc-8de4-4482-ba5d-8426ac74dab4")
+			(uuid "12a383b5-90c5-4c15-8ab0-c4039f1afec6")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05001")
 					(unit 1)
 				)
@@ -1406,7 +1406,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "aba2bfaf-3f9b-417a-91f5-4a205018e6b3")
+		(uuid "bfebb3d1-8ca2-49b8-af05-bc16bcc8a93d")
 		(property "Reference" "#PWR05002"
 			(at 76.2 111.76 0)
 			(effects
@@ -1425,11 +1425,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "2fb05e2c-ab19-4de8-95bd-a031f7ef8136")
+			(uuid "ed3a3d91-52f6-424b-b4a1-ed255f6a683c")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05002")
 					(unit 1)
 				)
@@ -1445,7 +1445,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "a01b096a-4c39-4784-854a-edc6e9f7e88c")
+		(uuid "c8434be6-19f1-46d9-b3ec-d254bff94aa5")
 		(property "Reference" "R80"
 			(at 47.62 129.54 0)
 			(effects
@@ -1492,14 +1492,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "3e9c41a2-f920-4177-93b1-371e71ecc075")
+			(uuid "1ff9f35c-ab02-4d21-97bf-a6287f241daa")
 		)
 		(pin "2"
-			(uuid "05c3113f-fb8b-4ab6-9979-2ec9c247fec4")
+			(uuid "c20a0133-d45c-460d-ae51-ff727271a0ac")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "R80")
 					(unit 1)
 				)
@@ -1515,7 +1515,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "c403e5de-2af3-47f3-8215-9a6c4417b943")
+		(uuid "7c880219-46d2-436c-a380-7059c5329383")
 		(property "Reference" "#PWR05003"
 			(at 45.72 124.46 0)
 			(effects
@@ -1534,11 +1534,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "edc6fc73-2125-4e8d-adab-245415717693")
+			(uuid "1a1e85f2-f768-4eca-8bcb-6a01b53f3f63")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05003")
 					(unit 1)
 				)
@@ -1554,7 +1554,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "e621b309-d95e-40ef-8ad7-163362b3be58")
+		(uuid "c6840394-457b-4de9-82ec-d6b167416c9a")
 		(property "Reference" "R81"
 			(at 60.33 129.54 0)
 			(effects
@@ -1592,14 +1592,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "7eb74946-282b-443a-9554-e4e3026639cb")
+			(uuid "9db3181d-4b2e-4fac-815c-91ef46682dd4")
 		)
 		(pin "2"
-			(uuid "d618c850-1bf5-49a2-b82f-0e8357b1e599")
+			(uuid "3bbf9c3a-2f29-4039-8fb1-b9432653e220")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "R81")
 					(unit 1)
 				)
@@ -1615,7 +1615,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "4b486942-512f-405a-b194-44f8bedd4438")
+		(uuid "5a197c12-a0ff-4398-adef-3df7ec06ed24")
 		(property "Reference" "#PWR05004"
 			(at 58.42 124.46 0)
 			(effects
@@ -1634,11 +1634,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "bcf4d1da-acec-4c7a-8faf-6e9dcac75719")
+			(uuid "3ad5e38e-fb9f-4ae8-b410-4fc9967cde3a")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05004")
 					(unit 1)
 				)
@@ -1654,7 +1654,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "2875e984-19b1-4e0f-9a5b-e3260c335e49")
+		(uuid "dfcf5fab-0388-4efd-963a-434e3e3403e6")
 		(property "Reference" "R82"
 			(at 73.03 129.54 0)
 			(effects
@@ -1692,14 +1692,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "c502bb68-83e4-4b9b-9469-ccf6a76d910f")
+			(uuid "1e81bb51-477a-4c97-89db-78d93f7c5ff1")
 		)
 		(pin "2"
-			(uuid "41e6ace2-4d96-4369-895a-b7bcaa79de45")
+			(uuid "9ea0e75f-c0f6-4269-83cd-9096b4d822d6")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "R82")
 					(unit 1)
 				)
@@ -1715,7 +1715,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "783f6070-78dd-4091-ac1c-0a8374e444f5")
+		(uuid "e3520cf5-bc71-4be7-ab56-999847c3815a")
 		(property "Reference" "#PWR05005"
 			(at 71.12 124.46 0)
 			(effects
@@ -1734,11 +1734,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "9cc90c5f-a849-4357-a7fa-6d0c184ab1b9")
+			(uuid "b65280ea-c66e-42c6-aa8f-936c430a3cd5")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05005")
 					(unit 1)
 				)
@@ -1754,7 +1754,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "8ffb9a38-6134-4c85-af7a-1d210931ff54")
+		(uuid "21608d70-8150-49af-8973-0288e5f5a0bf")
 		(property "Reference" "U11"
 			(at 162.56 82.55 0)
 			(effects
@@ -1801,23 +1801,23 @@
 			)
 		)
 		(pin "1"
-			(uuid "6bddf5fc-cf27-41ac-95f0-68afc49825fe")
+			(uuid "af7b5692-8675-4805-9131-3343d118fb51")
 		)
 		(pin "2"
-			(uuid "4cbee02a-5453-4925-8089-17a7b40fde87")
+			(uuid "d5ea70a0-2bbc-4f26-8e4f-abde11814cbd")
 		)
 		(pin "3"
-			(uuid "c946e7ff-a485-4088-b758-7701b4965cea")
+			(uuid "03d4d3dc-f0e8-4176-b99c-dd8b0bb034df")
 		)
 		(pin "4"
-			(uuid "52ff3114-1e26-4df1-be51-4109cadce9f3")
+			(uuid "91a6ccfa-7079-4359-aaa9-5b75f1ec099d")
 		)
 		(pin "5"
-			(uuid "d5b69e27-b6f2-43c3-b30a-020d8dc238f2")
+			(uuid "5bc77917-22c8-4529-8d21-4d78db75cdac")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "U11")
 					(unit 1)
 				)
@@ -1833,7 +1833,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "2f827396-e960-4d6e-8595-5c151cdaf68d")
+		(uuid "631df3e3-0382-4f1b-83b8-2cd2831770ee")
 		(property "Reference" "#PWR05006"
 			(at 177.8 83.82 0)
 			(effects
@@ -1852,11 +1852,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "aa29084b-a20d-44f4-95fa-3307126a093d")
+			(uuid "b22a6594-b958-49b0-9bcf-8543c0c3d027")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05006")
 					(unit 1)
 				)
@@ -1872,7 +1872,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "05501c77-157e-4da0-aeeb-df466bba26f9")
+		(uuid "0725b02b-79a3-4dc5-a04a-e36dae3555ff")
 		(property "Reference" "#PWR05007"
 			(at 172.72 83.82 0)
 			(effects
@@ -1891,11 +1891,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "613107ad-142a-421b-a88d-c9a674968ce7")
+			(uuid "5995a1c7-ac3e-4350-a988-3b7d6b726435")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05007")
 					(unit 1)
 				)
@@ -1911,7 +1911,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "a23b455b-c75f-49da-ba98-4914520cbc09")
+		(uuid "08bcad0c-5699-41aa-9339-dfc137fe3e8d")
 		(property "Reference" "#PWR05008"
 			(at 172.72 109.22 0)
 			(effects
@@ -1930,11 +1930,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "b8a76067-72ea-47a3-b79d-71ced99e03c8")
+			(uuid "0c0d986c-cb72-4239-81dd-8d0646c125de")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05008")
 					(unit 1)
 				)
@@ -1950,7 +1950,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "2c3e1a5a-b5c2-46cd-9792-5606873e6fe1")
+		(uuid "ecbf87eb-cfa3-43ee-b741-7a9acb5dcc3e")
 		(property "Reference" "R83"
 			(at 199.39 93.98 0)
 			(effects
@@ -1986,14 +1986,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "3744c1bd-2c0c-40ac-8bc1-834a2b32bbde")
+			(uuid "6ff4fa73-1c36-4d97-8438-79732fb37780")
 		)
 		(pin "2"
-			(uuid "45794c97-63d9-4b48-abfa-d5e01c352bfe")
+			(uuid "fd7f79c6-f47d-4bb0-b150-ceea4abb8071")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "R83")
 					(unit 1)
 				)
@@ -2009,7 +2009,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "b8559508-a8a1-4a26-b627-040fb98fd0a8")
+		(uuid "16ff8aad-9e4e-4fa4-9bdd-f7caa731fe81")
 		(property "Reference" "D5"
 			(at 215.9 85.09 0)
 			(effects
@@ -2056,20 +2056,20 @@
 			)
 		)
 		(pin "1"
-			(uuid "08622c45-0020-4b82-a6a4-3993c04a0cbe")
+			(uuid "58196db9-a912-46c2-b5b0-27211fcd56e2")
 		)
 		(pin "2"
-			(uuid "ff3668e9-5432-403a-8d70-4ceae6f2b955")
+			(uuid "338e9fe4-d913-4e35-ac5d-bac1601c2692")
 		)
 		(pin "3"
-			(uuid "c7ca8f88-c5b6-48a2-80df-d68bd9822968")
+			(uuid "57aa6a20-c5c2-4bfe-af51-e3b2383e0f42")
 		)
 		(pin "4"
-			(uuid "2a7645b3-6911-43d1-9d1e-9420973f882e")
+			(uuid "0353021c-e5ca-4010-873e-4ca7f9b079e1")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "D5")
 					(unit 1)
 				)
@@ -2085,7 +2085,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "767591fd-5a5a-465e-93b0-fb139697e749")
+		(uuid "0a8ecf2d-36f5-4bd7-aa39-17fc17eb0e2b")
 		(property "Reference" "D6"
 			(at 246.38 85.09 0)
 			(effects
@@ -2132,20 +2132,20 @@
 			)
 		)
 		(pin "1"
-			(uuid "d6cc978a-cffb-4a11-89e6-3533759c9d17")
+			(uuid "9a189613-1f31-4276-8b17-8aa9de0203a1")
 		)
 		(pin "2"
-			(uuid "8367a4db-e9da-4ab9-86ad-d77e9f138545")
+			(uuid "3429face-2198-4d1c-bbde-6434dedd7888")
 		)
 		(pin "3"
-			(uuid "7d5f029f-fb58-44a3-bc68-caf362952481")
+			(uuid "fe45864b-76a7-4e1b-aa66-2c2b91f5786a")
 		)
 		(pin "4"
-			(uuid "948da851-516d-4e0c-9d45-779454b8d2e2")
+			(uuid "cfad8586-d6b3-42f4-9261-7f1412473012")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "D6")
 					(unit 1)
 				)
@@ -2161,7 +2161,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "6e9e9b01-85e1-43b6-ae40-446f1c365a82")
+		(uuid "d0ed95a0-9c2e-4877-8d55-a7baa618ab21")
 		(property "Reference" "#PWR05009"
 			(at 223.52 86.36 0)
 			(effects
@@ -2180,11 +2180,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "21bc4a28-9125-44ec-8d47-7c06404b76c1")
+			(uuid "6e033598-5c77-4fad-ae06-1ea4d98c9d47")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05009")
 					(unit 1)
 				)
@@ -2200,7 +2200,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "87282c44-6dab-4ef0-ade5-a4e1f0632bdb")
+		(uuid "f256ccd1-8242-404e-9afd-864f2dc27fe5")
 		(property "Reference" "#PWR05010"
 			(at 223.52 106.68 0)
 			(effects
@@ -2219,11 +2219,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "14a99b46-080f-4f0a-ba8d-ae5d3b12fcbe")
+			(uuid "6e01d359-368d-4c78-beae-3ce08f046bfc")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05010")
 					(unit 1)
 				)
@@ -2239,7 +2239,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "8dda41e2-d1a8-432e-aa9c-c8c091d963bf")
+		(uuid "7e9fd868-0d0c-4486-a4d3-fab0bcf873a2")
 		(property "Reference" "#PWR05011"
 			(at 254 86.36 0)
 			(effects
@@ -2258,11 +2258,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "76a71924-ed90-4de0-bc54-9ca539498b0e")
+			(uuid "54e6d320-c856-4e48-a8cd-5e4cb4735763")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05011")
 					(unit 1)
 				)
@@ -2278,7 +2278,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "ff09eef3-2e4d-4984-9c65-7f1c5beb4b81")
+		(uuid "17b9b72e-adcb-46c1-9cf2-c10e2bd586f3")
 		(property "Reference" "#PWR05012"
 			(at 254 106.68 0)
 			(effects
@@ -2297,11 +2297,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "b10c5844-6621-4334-8947-0a096631439c")
+			(uuid "d7158f7b-8060-4f82-bf53-3529f268bbc3")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05012")
 					(unit 1)
 				)
@@ -2317,7 +2317,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "47c6ee8b-2eef-46df-bafc-b18a32280826")
+		(uuid "18059685-e627-4c6f-9d92-ae4257f37027")
 		(property "Reference" "C80"
 			(at 65.41 163.83 0)
 			(effects
@@ -2355,14 +2355,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "5de1a312-e82a-43cc-bec8-b257d6806293")
+			(uuid "41a8fb84-898b-47a4-aecd-d7268966b185")
 		)
 		(pin "2"
-			(uuid "b82dec1f-77ac-4bf4-b512-d9404ec128a8")
+			(uuid "a4731900-2a4f-4c57-95f4-8bb4b342f862")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "C80")
 					(unit 1)
 				)
@@ -2378,7 +2378,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "0abc2af3-768f-41f2-bafe-276a5613799a")
+		(uuid "1e94c8ad-c356-40bf-b461-7f16d674418c")
 		(property "Reference" "#PWR05013"
 			(at 63.5 158.75 0)
 			(effects
@@ -2397,11 +2397,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "183a8055-7aef-4d03-8c59-1bf43c38fb9c")
+			(uuid "5116b7c0-6443-4bfc-a7db-775190260abc")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05013")
 					(unit 1)
 				)
@@ -2417,7 +2417,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "5d325ec9-95a2-4fe7-b90d-28e761cf04ae")
+		(uuid "ce4e659b-a3fe-43da-8d96-8b46c85583fe")
 		(property "Reference" "#PWR05014"
 			(at 63.5 171.45 0)
 			(effects
@@ -2436,11 +2436,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "f3063b5c-f0ab-4394-be5e-6abc2ba40c41")
+			(uuid "793b843c-5ec6-4eca-a736-065a7d90b617")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05014")
 					(unit 1)
 				)
@@ -2456,7 +2456,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "d8a867fe-efbd-49fa-9de0-0f20d5cbbbed")
+		(uuid "fc2a35b2-6ae7-403c-a792-6ff2e7266e89")
 		(property "Reference" "C81"
 			(at 78.11 163.83 0)
 			(effects
@@ -2494,14 +2494,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "9f72fcc9-97ca-4823-ad8b-28dfaa4e5b93")
+			(uuid "47be2f4b-73a7-4a7e-8b24-dfb2042a9294")
 		)
 		(pin "2"
-			(uuid "aa56ba2b-0efa-4df1-b10a-4d9a5aefbc69")
+			(uuid "3acefc03-265c-4764-99a7-bdb30bf50000")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "C81")
 					(unit 1)
 				)
@@ -2517,7 +2517,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "bcb1a755-5678-4f39-ba28-7b54a8824f9f")
+		(uuid "3f9552a8-601a-421d-9749-66ac9972b11b")
 		(property "Reference" "#PWR05015"
 			(at 76.2 158.75 0)
 			(effects
@@ -2536,11 +2536,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "bc171ba0-51dd-4ff0-918b-1c7a4ecf3613")
+			(uuid "200bd032-f22d-4da4-9ae6-a4ffa5641797")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05015")
 					(unit 1)
 				)
@@ -2556,7 +2556,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "d2613143-6e73-4f8f-9a88-2785eebdf5fd")
+		(uuid "e9a9cadf-8968-4bd4-8c62-135732e7271f")
 		(property "Reference" "#PWR05016"
 			(at 76.2 171.45 0)
 			(effects
@@ -2575,11 +2575,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "d614967b-8c21-4fd3-93ee-a1bfb361e8c1")
+			(uuid "abf91411-e5a5-4083-8b75-95189ce43299")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05016")
 					(unit 1)
 				)
@@ -2595,7 +2595,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "6ac9eddd-58d1-4747-8d33-c483c54c105f")
+		(uuid "4bfc0764-19be-4381-9b74-98aa5079d303")
 		(property "Reference" "C82"
 			(at 90.81 163.83 0)
 			(effects
@@ -2633,14 +2633,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "00a4729c-532a-4e95-96bb-f9bbcfd25169")
+			(uuid "68949ab6-a1eb-4b02-b5d0-4eed21628ca4")
 		)
 		(pin "2"
-			(uuid "373cc7e4-38be-443d-80a4-f07f6298dbbc")
+			(uuid "8d496610-8131-4cdf-85b2-263cbbd168f9")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "C82")
 					(unit 1)
 				)
@@ -2656,7 +2656,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "f527abca-4ab5-475e-a783-7e6b0bafe626")
+		(uuid "32ce6307-bb68-4797-90dd-ba64a0d88ff0")
 		(property "Reference" "#PWR05017"
 			(at 88.9 158.75 0)
 			(effects
@@ -2675,11 +2675,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "cf509ff4-af74-45b0-a7b0-61fa3ac8bee0")
+			(uuid "9c76bbaa-cd5b-4647-8fbc-cc7d3e4c4428")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05017")
 					(unit 1)
 				)
@@ -2695,7 +2695,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "f9ca6b77-4f0b-4063-86a9-ea0db102051e")
+		(uuid "2c0954db-c06d-43de-a035-9e88ce6c0f69")
 		(property "Reference" "#PWR05018"
 			(at 88.9 171.45 0)
 			(effects
@@ -2714,11 +2714,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "65c495e8-8f6d-4aae-88b7-aa8727c1ebd6")
+			(uuid "78c0458c-a56f-416b-9395-266254a32893")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05018")
 					(unit 1)
 				)
@@ -2734,7 +2734,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "9846d519-9968-4904-b71a-d7d709b40466")
+		(uuid "93935a2d-8dd2-4363-97ca-9a6453f70fdd")
 		(property "Reference" "C83"
 			(at 103.5 163.83 0)
 			(effects
@@ -2772,14 +2772,14 @@
 			)
 		)
 		(pin "1"
-			(uuid "9dfcb72d-e125-4981-8303-f3213b26df2f")
+			(uuid "6714ac8b-5e05-4db1-acda-d8d95fb80ba4")
 		)
 		(pin "2"
-			(uuid "ae48b782-a300-4d7a-b269-a8df7bc98eef")
+			(uuid "4e3b1bef-8288-42ad-8896-1a5ea7f9e681")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "C83")
 					(unit 1)
 				)
@@ -2795,7 +2795,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "9d41c60b-d1d5-4d8e-9500-26a5d55cbfa4")
+		(uuid "3767aed3-5552-48f9-bce4-a86a8731994c")
 		(property "Reference" "#PWR05019"
 			(at 101.6 158.75 0)
 			(effects
@@ -2814,11 +2814,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "ea410631-6081-4738-ad09-3941fee7ff80")
+			(uuid "05b5b87b-9194-4c39-b6f9-3defbe06e677")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05019")
 					(unit 1)
 				)
@@ -2834,7 +2834,7 @@
 		(on_board yes)
 		(dnp no)
 		(fields_autoplaced no)
-		(uuid "2d701346-89ab-4ed0-8cbf-7e21ad2a948c")
+		(uuid "05e1fbeb-323e-4503-a152-cc094615d156")
 		(property "Reference" "#PWR05020"
 			(at 101.6 171.45 0)
 			(effects
@@ -2853,11 +2853,11 @@
 			)
 		)
 		(pin "1"
-			(uuid "0e6aa654-aab9-43d2-9349-41ef45148dde")
+			(uuid "f954274b-793f-41c5-a754-f610744626fe")
 		)
 		(instances
 			(project "Log flash and status LEDs"
-				(path "/1ab1cb4d-5461-4780-bba9-437a10d2e236"
+				(path "/4e647f84-c9c3-4e0b-b286-dd09be02fee4"
 					(reference "#PWR05020")
 					(unit 1)
 				)
@@ -2872,7 +2872,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "6406163d-8ab7-4240-8385-294f8a03a3cc")
+		(uuid "7114fa7a-cbea-4d8b-9119-ee5fe516a012")
 	)
 	(wire
 		(pts
@@ -2882,7 +2882,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5056d5fb-bcf3-477c-8c1f-77cdeda369ee")
+		(uuid "bf76bb48-b657-4847-8a6e-6e9aba83109a")
 	)
 	(wire
 		(pts
@@ -2892,7 +2892,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "ff407633-b149-4e0b-996d-23f7edf7148c")
+		(uuid "9fe45f78-62cf-4bb2-9938-5636541a107f")
 	)
 	(wire
 		(pts
@@ -2902,7 +2902,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5048bb40-8f39-44b3-a3a9-09e842341a59")
+		(uuid "b47df884-279c-47f9-93f4-49a4415ebe9d")
 	)
 	(wire
 		(pts
@@ -2912,7 +2912,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e3a137ab-4c2b-4ad2-81f1-5fa97568f0b4")
+		(uuid "760a558d-8a88-45b7-8e3e-2fe4b5eb1825")
 	)
 	(wire
 		(pts
@@ -2922,7 +2922,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "fa2afa1d-0b17-4b73-8c9e-4839a48b4c4e")
+		(uuid "b6a7ee5e-1b65-42fb-8be2-e42f42e47539")
 	)
 	(wire
 		(pts
@@ -2932,7 +2932,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "28c6530f-d105-4fcf-b27c-8e2813584592")
+		(uuid "f48cd034-0d3e-487d-9285-18ffc07a71fb")
 	)
 	(wire
 		(pts
@@ -2942,7 +2942,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "f3ade74e-4396-4c77-a08d-1bef90286d4c")
+		(uuid "40b534bb-f07e-4080-99b2-92dae9f0ddce")
 	)
 	(wire
 		(pts
@@ -2952,7 +2952,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "09ff47cc-7663-49e9-9e0f-b8ef485aca21")
+		(uuid "09d82bb8-222d-408b-b0be-dc9b97d6b100")
 	)
 	(wire
 		(pts
@@ -2962,7 +2962,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "773abfab-fc26-4992-9cc1-2a2e71b3d178")
+		(uuid "4f6fe1cc-5113-477c-924b-d2d5ec8a2c87")
 	)
 	(wire
 		(pts
@@ -2972,7 +2972,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5e7b8aad-58b4-4ccc-b411-a95def765eec")
+		(uuid "1330d79c-89cd-4351-9dbc-20535f2d0f9c")
 	)
 	(wire
 		(pts
@@ -2982,7 +2982,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9e88f295-0649-4122-80fd-06243d891f27")
+		(uuid "6796ecc2-ec94-449d-9a80-6dbc2d09d6a0")
 	)
 	(wire
 		(pts
@@ -2992,7 +2992,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "af32d3f0-ff8d-4ad4-b52e-f5e1f596006f")
+		(uuid "e972a16c-83c2-446c-a447-6a98fa62bd9e")
 	)
 	(wire
 		(pts
@@ -3002,7 +3002,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "10155d7b-78c2-4a83-b108-370d929838c5")
+		(uuid "88591ba7-cb72-4012-883e-20e2a7cb4ef9")
 	)
 	(wire
 		(pts
@@ -3012,7 +3012,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9601152f-4b46-4583-af96-fcd2be0f0c26")
+		(uuid "44dd8f8a-ee19-4d58-89bb-e9f8413b78ad")
 	)
 	(wire
 		(pts
@@ -3022,7 +3022,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "2f188623-e8e6-4290-a870-186401f9658c")
+		(uuid "2ee6b87f-948d-40db-8a0d-6ddc3c4b1616")
 	)
 	(wire
 		(pts
@@ -3032,7 +3032,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "35bb5586-ed4e-45a3-bf2f-af853c152860")
+		(uuid "b7f2faef-703f-455f-bdb9-16c531255f51")
 	)
 	(wire
 		(pts
@@ -3042,7 +3042,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9eadbd82-b38d-48e7-8951-1671ff5cd4c4")
+		(uuid "d74dc387-3a0b-4ece-9c6d-20d495ed6852")
 	)
 	(wire
 		(pts
@@ -3052,7 +3052,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5a0305c8-bad0-417b-a3a7-eb0c9419c509")
+		(uuid "6a60b8fd-09af-4195-a66f-cb0c1638da41")
 	)
 	(wire
 		(pts
@@ -3062,7 +3062,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "251ae771-57a0-4b7f-9d86-070a7eb6fa59")
+		(uuid "0fda6f99-3147-4cc4-b0b6-8a19c24a4eef")
 	)
 	(wire
 		(pts
@@ -3072,7 +3072,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "d7f16301-9f77-4331-9de9-f7a141c5228e")
+		(uuid "9d838a8b-9013-4833-87c9-4d311184ad7e")
 	)
 	(wire
 		(pts
@@ -3082,7 +3082,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9e95b3d9-4c01-4c48-97f1-d89cc7bc92c7")
+		(uuid "6cd42ae1-49b9-4311-9d30-8b6ed69cfd4f")
 	)
 	(wire
 		(pts
@@ -3092,7 +3092,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "840bf117-6b48-4842-8376-d46126e4464b")
+		(uuid "c2cbd093-9c8a-4ed0-a53f-a51e1ea26e37")
 	)
 	(wire
 		(pts
@@ -3102,7 +3102,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e30b9c12-37bf-42d0-8421-b65c53ba36ee")
+		(uuid "660ade52-aa8b-4135-82fc-89d633b47e26")
 	)
 	(wire
 		(pts
@@ -3112,7 +3112,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "49cc9fac-f898-451f-8c01-9450a9324af5")
+		(uuid "8a324939-a1f7-4ca7-95ef-5b7256c75295")
 	)
 	(wire
 		(pts
@@ -3122,7 +3122,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e6ba6729-9b64-4832-8d07-46fbeeef3ff2")
+		(uuid "8a461a68-fb60-4e3d-bbfd-749d2fe41641")
 	)
 	(wire
 		(pts
@@ -3132,7 +3132,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "eda9fa0e-ecde-4982-b854-80573745f98d")
+		(uuid "d906b4a1-3da0-44a9-8d3f-15f3d6e4cb95")
 	)
 	(wire
 		(pts
@@ -3142,7 +3142,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "a95dc5d8-1dcc-4a21-9936-3a4b1a2452d4")
+		(uuid "3e66c720-67e8-4c3f-a611-db0dd8097c18")
 	)
 	(wire
 		(pts
@@ -3152,7 +3152,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "bf361985-55f0-428b-98e0-3f9371ffe3e4")
+		(uuid "00a78587-4612-456e-adf4-5ad5748ad61d")
 	)
 	(wire
 		(pts
@@ -3162,7 +3162,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "911e3b70-80bc-4253-a791-2b36794641fd")
+		(uuid "0a359e63-e485-449d-9a86-64b3ab1b7c0b")
 	)
 	(wire
 		(pts
@@ -3172,7 +3172,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "d8feaacd-fdfe-402d-96c0-7f4da881d494")
+		(uuid "4bf6c149-a46f-4281-a9ff-32a9d510b56e")
 	)
 	(wire
 		(pts
@@ -3182,7 +3182,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "0f9da4c1-15ee-49d3-995f-30bb1459df09")
+		(uuid "0a6ec800-2134-48e0-95c9-5443d4a8b551")
 	)
 	(wire
 		(pts
@@ -3192,7 +3192,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e9beaab4-121b-4827-ba69-16dc91d8fc8c")
+		(uuid "1a9f0853-2998-4182-9314-c9cdfd8a5862")
 	)
 	(wire
 		(pts
@@ -3202,7 +3202,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "50697f92-eab6-4180-bc70-c8e7d9dbf07c")
+		(uuid "2088474c-b432-466a-af14-92daa6d7ebdf")
 	)
 	(wire
 		(pts
@@ -3212,7 +3212,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "3fcdf89a-cabc-4dc3-bbfa-e28fc8936fe1")
+		(uuid "368a9a0c-559e-4bdd-808b-f0c0c750c56d")
 	)
 	(wire
 		(pts
@@ -3222,7 +3222,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e4d5fb5f-1c7f-4c36-9636-367797338443")
+		(uuid "9ccf5379-28cd-4610-ad60-a3d02328baa9")
 	)
 	(wire
 		(pts
@@ -3232,7 +3232,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "f9d7c305-8923-488b-873b-f2e728d88bfd")
+		(uuid "db649b9f-fefe-4ee9-9145-c68c58b8646b")
 	)
 	(wire
 		(pts
@@ -3242,7 +3242,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "f660c175-0454-407b-9395-25060c14b4ee")
+		(uuid "f469f37b-2d74-4895-9c54-6c4fb9454d2b")
 	)
 	(label "FLASH_WP"
 		(at 58.42 137.16 270)
@@ -3252,7 +3252,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "db672b0b-b897-458b-b497-dec7c9883f98")
+		(uuid "527c23a7-5342-4c49-98b1-f814352f9293")
 	)
 	(label "FLASH_HOLD"
 		(at 71.12 137.16 270)
@@ -3262,7 +3262,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "7918960d-d014-4446-9ee7-8684ce4be597")
+		(uuid "89024ff4-e350-464f-aa3b-faf7577d81aa")
 	)
 	(label "FLASH_WP"
 		(at 60.96 99.06 180)
@@ -3272,7 +3272,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "3048ef44-7dda-462e-a39e-492ae3828286")
+		(uuid "35855f61-c6c4-4ac2-9858-90e3a0320210")
 	)
 	(label "FLASH_HOLD"
 		(at 63.5 101.6 180)
@@ -3282,11 +3282,11 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "07bb80c8-c847-449b-a8cd-017adadd27d8")
+		(uuid "b73fdb0f-5cb4-4fdc-90d1-7ed7e6d381dd")
 	)
 	(no_connect
 		(at 261.62 96.52)
-		(uuid "1ee9e615-8bef-4de3-ae5b-29b10f1a6afa")
+		(uuid "aa1c139f-1801-4915-95fa-20e7e9e1b6d1")
 	)
 	(text "Match-log flash (SPI0) and status LEDs (SK6812 ×2 via 74AHCT1G125 level shifter)"
 		(exclude_from_sim no)
@@ -3298,7 +3298,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "eb0b982a-2fc5-41a0-b1e8-66ca76b5c36d")
+		(uuid "e8c38d4b-c9f1-4bb0-a16d-ff43a3492f85")
 	)
 	(text "CS/WP/HOLD pulled to +3V3_MCU so the flash is deselected while the Pico boots.  SK6812 VIH = 0.7·VDD, so Pico 3.3 V needs the 5 V buffer."
 		(exclude_from_sim no)
@@ -3309,7 +3309,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "23964e31-5979-4678-9961-7dc659fa0490")
+		(uuid "74728530-60ab-4ffc-8022-63b2693f27f9")
 	)
 	(text "Pull-ups to +3V3_MCU"
 		(exclude_from_sim no)
@@ -3321,7 +3321,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "90f8c168-b9aa-4174-af49-ba594198ba23")
+		(uuid "bcd861ba-615b-4984-b5a0-120bdafbd65d")
 	)
 	(text "D5 = system status, D6 = weapon status"
 		(exclude_from_sim no)
@@ -3332,7 +3332,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "5d5e0b2f-07ba-4218-adc7-534430a4ac4c")
+		(uuid "b35d078e-665a-478b-a835-028447f2046b")
 	)
 	(text "Decoupling — place at the IC pins"
 		(exclude_from_sim no)
@@ -3344,7 +3344,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "96840344-1ce9-4fec-8b71-8fc06f0e30a1")
+		(uuid "1702ea64-d318-4bda-a50d-e94b7bf9a432")
 	)
 	(sheet_instances
 		(path "/"
@@ -3361,7 +3361,7 @@
 			)
 			(justify right)
 		)
-		(uuid "84e734a0-697f-4260-93c1-f1d88f6747de")
+		(uuid "f4d4db91-0cfe-41d9-bb73-af3be7dcbda9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 45.72 137.16 0)
 			(effects
@@ -3381,7 +3381,7 @@
 			)
 			(justify right)
 		)
-		(uuid "cfe37b16-2845-45f4-8eb4-a29fa731964d")
+		(uuid "c41f2f9f-87bd-4b0b-92d4-62be2e27fbf5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 63.5 88.9 0)
 			(effects
@@ -3401,7 +3401,7 @@
 			)
 			(justify right)
 		)
-		(uuid "b95d9a58-963d-41cc-9af4-1b1de6c6e313")
+		(uuid "ca6d8c5e-0fd6-49f2-be3c-69b401b425fa")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 63.5 96.52 0)
 			(effects
@@ -3421,7 +3421,7 @@
 			)
 			(justify right)
 		)
-		(uuid "e8a9a187-bcd2-4d84-a583-077543578cd6")
+		(uuid "15143a7b-a435-4da5-836a-1f50e4add267")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 60.96 93.98 0)
 			(effects
@@ -3441,7 +3441,7 @@
 			)
 			(justify right)
 		)
-		(uuid "70d4ab66-e4b2-460f-9780-b662b8b5c546")
+		(uuid "b75ca49c-11a8-4b4d-9126-69fde02162cb")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 60.96 91.44 0)
 			(effects
@@ -3461,7 +3461,7 @@
 			)
 			(justify right)
 		)
-		(uuid "c974427d-aa4d-48c1-8905-9840dcfe0f20")
+		(uuid "aa64a38d-8a87-44bf-8cf2-5fc593c00270")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 160.02 96.52 0)
 			(effects

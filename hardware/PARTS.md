@@ -1,4 +1,4 @@
-# ThumbsUp v1 parts (rev v1.1, 2026-09-03)
+# ThumbsUp v1 parts (rev v1.2, 2026-09-04)
 
 Every LCSC number below was read from its lcsc.com / jlcpcb.com product page on
 2026-09-03; "Basic" / "Extended" is JLCPCB's class on that page.  The BOM field `LCSC`
@@ -11,8 +11,10 @@ FD6288Q (C328453) is out of stock, so the driver is ordered as **HX6288 C5442313
 (pin-identical per its datasheet, EP = COM). Confirm XT30 polarity against a physical
 connector (the Amass drawing has no "+" mark; the KiCad footprint puts "+" on pad 2).
 
-Assembly: JLC Standard PCBA, top side. Hand-soldered after SMT: Pico W (castellated),
-J1/J4 XT30, J2/J3 headers, J20/J30/J40 SWD, motor pads. Hybrid polymer cans are SMT.
+Assembly: JLC Standard PCBA, both sides (FETs, shunts, cans, TPs, LEDs on top; ICs and
+passives on the bottom). Hand-soldered after SMT: Pico W (castellated), J1 XT30, J2/J3
+headers, the nine motor leads. Hybrid polymer cans are SMT. SWD is a 1×5 pad row
+(`thumbsup:SWD_1x05_P1.27mm_Pads`) for pogo pins or wires.
 
 ## ICs and semiconductors
 
@@ -40,10 +42,11 @@ J1/J4 XT30, J2/J3 headers, J20/J30/J40 SWD, motor pads. Hybrid polymer cans are 
 | 1 | L1 | cjiang FHD4020S-4R7MT 4.7 µH | C602031 | Ext | Isat 4.9 A, 4×4×2 mm (footprint `L_Changjiang_FNR4020S`, check pads) |
 | 1 | TH1 | Murata NCP18XH103F03RB 10 k NTC 0603 | C13564 | Ext | B = 3380 K, at the weapon FETs |
 | 1 | SW1 | XKB TS-1187A-B-A-B tactile 5.1×5.1 | C318884 | **Basic** | footprint `SW_Push_1P1T_XKB_TS-1187A` |
-| 2 | J1 J4 | Amass XT30PW-M30.G.Y | C431092 | Ext | pack input and POWER LINK (SPARC disconnect); "+" = pad 2 |
+| 1 | J1 | Amass XT30PW-M30.G.Y | C431092 | Ext | pack input through a back-wall slot; it is also the SPARC disconnect (J4 dropped in v1.2); "+" = pad 2 |
 | 4 | R2 R235 R335 R435 | JIERR RE2512F3R001 1 mΩ 3 W 2512 | C46961745 | Ext | footprint `thumbsup:R_2512_Shunt_Kelvin`; Kelvin via NT net-ties |
-| 8 | NT1 NT2 NT20 NT21 NT30 NT31 NT40 NT41 | net-tie 0.5 mm pads | — | — | on the shunt pads; no BOM line |
-| 5 | C4 C225 C325 C425 C426 | Panasonic **EEHZK1E471P** 470 µF 25 V hybrid polymer, SMD 10×10.2 | C242138 | Ext | 20 mΩ; footprint `CP_Elec_10x10.5`; alt KNSCHA 118EC421 C46528073 (14 mΩ / 4 A, 10×12.8, not in JLC library) |
+| 8 | NT1 NT2 NT20 NT21 NT30 NT31 NT40 NT41 | `thumbsup:NetTie-2_Kelvin_0.4mm` | — | — | copper-only pads in the shunt pad gap; no BOM line |
+| 2 | C225 C325 | Panasonic **EEHZK1E471P** 470 µF 25 V hybrid polymer, SMD 10×10.2 | C242138 | Ext | 20 mΩ; footprint `CP_Elec_10x10.5` |
+| 1 | C425 | KNSCHA 118EC421 470 µF 25 V hybrid polymer, SMD 10×12.5 | C46528073 | Ext | 14 mΩ / 4 A ripple for the weapon; footprint `CP_Elec_10x12.5`; C4 (entry) and C426 dropped in v1.2 — all three cans sit on the one VBAT pour |
 
 ## Passives (0402 1 % / 0402 X7R unless noted; all Basic unless marked)
 
@@ -70,13 +73,13 @@ J1/J4 XT30, J2/J3 headers, J20/J30/J40 SWD, motor pads. Hybrid polymer cans are 
 | 3 | 4.7 µF 16 V 0603 | C19666 | AT32 VDD bulk |
 | 5 | 10 µF 25 V 0805 (X5R) | C15850 | LDO outputs ×2, driver VCC ×3 |
 | 2 | 22 µF 25 V 0805 | C45783 | buck out |
-| 11 | 10 µF 50 V 1206 (X5R, 85 °C) | C13585 | pack entry ×2, +VDRV, buck in ×2, FET drains ×6 — keep off FET copper; X7R alt C89632 (Ext) |
+| 11 | 10 µF 50 V 1206 (X5R, 85 °C) | C13585 | pack entry ×2, +VDRV, buck in ×2, FET drains ×6 (bottom side under the high-FET tabs, via into the VBAT pour); X7R alt C89632 (Ext) |
 | 1 | 1×2 header | — | J2 ARM link |
 | 1 | 2×6 header | — | J3 expansion |
 | 3 | 1×5 header (or pogo pads) | — | SWD |
-| 3 | motor pad footprint | — | `thumbsup:MotorPads_1x03_P5.00mm` |
-| 22 | test point 1.5 mm | — | TP1–TP6 rails, TP10–TP15 signals, TP2x0–3 / TP3x / TP4x per cell, TP40 WEAPON_EN |
-| 4 + 3 | M3 holes, fiducials | — | H1–H4, FID1–FID3 |
+| 3 | motor lead holes | — | `thumbsup:MotorHoles_1x03_P5.90mm`: 3 × 2.0 mm plated holes between the FET rows |
+| 12 | test point 1.5 mm | — | TP1–TP6 rails, TP10 DSHOT_L, TP200–203 L cell (ISENSE, VSENSE, TLM, I_L+), TP40 WEAPON_EN |
+| 3 + 3 | M2.5 holes, fiducials | — | H1–H3 (`MountingHole_2.7mm_M2.5`), FID1–FID3 |
 
 ## Scaling that the stock AM32 hex expects
 

@@ -64,10 +64,11 @@ FP = {
     "H2x06": "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Vertical",
     "SW": "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
     "TP": "TestPoint:TestPoint_Pad_D1.5mm",
-    "NT": "NetTie:NetTie-2_SMD_Pad0.5mm",
+    "NT": "thumbsup:NetTie-2_Kelvin_0.4mm",
     "SHUNT": "thumbsup:R_2512_Shunt_Kelvin",
-    "MOTOR": "thumbsup:MotorPads_1x03_P5.00mm",
-    "HOLE": "MountingHole:MountingHole_3.2mm_M3",
+    "MOTOR": "thumbsup:MotorHoles_1x03_P5.90mm",
+    "SWD": "thumbsup:SWD_1x05_P1.27mm_Pads",
+    "HOLE": "MountingHole:MountingHole_2.7mm_M2.5",
     "FID": "Fiducial:Fiducial_1mm_Mask2mm",
 }
 
@@ -168,10 +169,9 @@ def build(out_dir) -> Design:
     j1 = _part(d, S, "J1", "Connector", "Conn_01x02_Pin", "XT30PW-M", FP["XT30"], "C431092", "pack; KiCad footprint: pad 2 = +, pad 1 = -")
     tvs = _part(d, S, "D1", "Device", "D_Zener", "SMBJ15A", FP["SMB"], "C699013", "TVS 15 V standoff / 24 V clamp")
     rsh = _part(d, S, "R2", "Device", "R", "1mΩ 3W", FP["SHUNT"], "C46961745", "pack shunt, Kelvin to U4")
-    nt_pp = _part(d, S, "NT1", "Device", "NetTie_2", "Kelvin", FP["NT"], note="on R2 pad 1")
-    nt_pm = _part(d, S, "NT2", "Device", "NetTie_2", "Kelvin", FP["NT"], note="on R2 pad 2")
-    j_link = _part(d, S, "J4", "Connector", "Conn_01x02_Pin", "POWER LINK", FP["XT30"], "C431092", "SPARC disconnect: XT30 loop plug; DNP if J1 is declared the link")
-    holes = [_part(d, S, f"H{i}", "Mechanical", "MountingHole", "M3", FP["HOLE"]) for i in range(1, 5)]
+    nt_pp = _part(d, S, "NT1", "Device", "NetTie_2", "Kelvin", FP["NT"], note="in the R2 pad gap")
+    nt_pm = _part(d, S, "NT2", "Device", "NetTie_2", "Kelvin", FP["NT"], note="in the R2 pad gap")
+    holes = [_part(d, S, f"H{i}", "Mechanical", "MountingHole", "M2.5", FP["HOLE"]) for i in range(1, 4)]
     fids = [_part(d, S, f"FID{i}", "Mechanical", "Fiducial", "Fiducial", FP["FID"]) for i in range(1, 4)]
     for h in holes + fids:
         h.fields["JLC"] = "no BOM"
@@ -181,19 +181,20 @@ def build(out_dir) -> Design:
     c_in1 = C(d, S, "C1", "10u 50V", "C10u_1206_50V", "C1206")
     c_in2 = C(d, S, "C2", "10u 50V", "C10u_1206_50V", "C1206")
     c_in3 = C(d, S, "C3", "100n 50V", "C100n_50V", "C0603")
-    c_bulk = _part(d, S, "C4", "Device", "C_Polarized", "470u 25V hybrid", FP["CP10"], LCSC["CP470"], "EEHZK1E471P, entry bulk, glue")
     c_drv = C(d, S, "C5", "10u 50V", "C10u_1206_50V", "C1206")
 
     # J1: '+' is pad 2 on the KiCad AMASS footprint.  The power link J4 sits between the
     # entry filter and the shunt so that pulling it de-energises everything downstream.
-    vbat_pack += j1[2], tvs["K"], c_in1[1], c_in2[1], c_in3[1], c_bulk[1], j_link[2]
-    vbat_link = net("VBAT_LINK", True)
-    vbat_link += j_link[1], rsh[1], nt_pp[1]
+    # J1 is the SPARC disconnect (PWR-2): it mates through a slot in the back wall and is the
+    # only plug on the pack.  No second link fits the bay.
+    # No entry electrolytic: the bay has no room for a fourth can; the three cell cans sit on
+    # the same VBAT pour within 30 mm and the entry has 2x 10 uF MLCC + 100 nF next to the TVS.
+    vbat_pack += j1[2], tvs["K"], c_in1[1], c_in2[1], c_in3[1], rsh[1], nt_pp[1]
     pack_sp = net("PACK_S+")
     pack_sm = net("PACK_S-")
     pack_sp += nt_pp[2]
     pack_sm += nt_pm[2]
-    gnd += j1[1], tvs["A"], c_in1[2], c_in2[2], c_in3[2], c_bulk[2], rgs[2], c_drv[2]
+    gnd += j1[1], tvs["A"], c_in1[2], c_in2[2], c_in3[2], rgs[2], c_drv[2]
     vbat += rsh[2], nt_pm[1], q1["D"]
     vdrv += q1["S"], dz["K"], c_drv[1]
     q1_g = net("Q1_G")
@@ -301,9 +302,8 @@ def build(out_dir) -> Design:
     run += pico["RUN"], sw_rst[1], j_exp[11], c_run[1]
     v3a += r_sda[1], r_scl[1], th[1], j_exp[3]
     gnd += c_arm[2], j_arm[2], sw_rst[2], r_ntc[2], c_ntc[2], j_exp[2], j_exp[4], j_exp[12]
-    for i, (name, n) in enumerate((("DSHOT_L", dshot["L"]), ("DSHOT_R", dshot["R"]), ("DSHOT_W", dshot["W"]), ("I2C1_SDA", sda), ("I2C1_SCL", scl), ("ARM_N", arm_n))):
-        tpx = _part(d, S, f"TP{i + 10}", "Connector", "TestPoint", name, FP["TP"])
-        n += tpx[1]
+    tp10 = _part(d, S, "TP10", "Connector", "TestPoint", "DSHOT_L", FP["TP"], note="I2C/ARM/DSHOT_R/W are on J3, J2 and the AT32 pads")
+    dshot["L"] += tp10[1]
     v5 += j_exp[1]
     sda += j_exp[5]
     scl += j_exp[6]
@@ -441,7 +441,7 @@ def esc_cell(d, k, base, gnd, vbat, vcc, v3m, dshot, i_p, i_sp, i_sm, motor, net
     mcu = _part(d, S, f"U{base // 10}", "thumbsup", "AT32F421K8U7", "AT32F421K8U7", "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.3x3.3mm", "C2965611", "AM32 AT32DEV_F421, bootloader F421_PB4")
     drv = _part(d, S, f"U{base // 10 + 1}", "thumbsup", "FD6288Q", "HX6288 / FD6288Q", "Package_DFN_QFN:QFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.7mm", "C54423134", "HX6288 (pin-identical, in stock); FD6288Q C328453 alternate")
     csa = _part(d, S, f"U{base // 10 + 2}", "Amplifier_Current", "INA180A1", "INA180A1", FP["SOT23-5"], "C122228", "20 V/V x 1 mOhm = 20 mV/A (AM32 default)")
-    tp = {n: _part(d, S, f"TP{base // 10}{i}", "Connector", "TestPoint", n, FP["TP"]) for i, n in enumerate(("ISENSE", "VSENSE", "TLM"))}
+    tp = {n: _part(d, S, f"TP{base // 10}{i}", "Connector", "TestPoint", n, FP["TP"]) for i, n in enumerate(("ISENSE", "VSENSE", "TLM"))} if k == "L" else {}
 
     c_vdd_b = C(d, S, f"C{base}", "4.7u", "C4u7_0603", "C0603")
     c_vdd1 = C(d, S, f"C{base + 1}", "100n", "C100n")
@@ -450,7 +450,7 @@ def esc_cell(d, k, base, gnd, vbat, vcc, v3m, dshot, i_p, i_sp, i_sm, motor, net
     c_vdda2 = C(d, S, f"C{base + 4}", "100n", "C100n")
     c_nrst = C(d, S, f"C{base + 5}", "100n", "C100n")
     r_boot0 = R(d, S, f"R{base}", "10k", "R10k", note="BOOT0 low: run from flash")
-    j_swd = _part(d, S, f"J{base // 10}", "Connector", "Conn_01x05_Pin", "SWD", FP["H1x05"], note="3V3 SWDIO SWCLK NRST GND")
+    j_swd = _part(d, S, f"J{base // 10}", "Connector", "Conn_01x05_Pin", "SWD", FP["SWD"], note="1.27 mm pads: 3V3 SWDIO SWCLK NRST GND")
     r_pd = R(d, S, f"R{base + 1}", "10k DNP", "R10k", note="DNP: AT32 pull-up idles high for AM32 serial; fit only if the Pico never uses 1-wire")
     r_pd.fields["DNP"] = "yes"
     r_vhi = R(d, S, f"R{base + 2}", "100k", "R100k", note="AM32 divider 110 (11:1)")
@@ -477,15 +477,22 @@ def esc_cell(d, k, base, gnd, vbat, vcc, v3m, dshot, i_p, i_sp, i_sm, motor, net
     dshot += mcu["PB4_DSHOT"], r_pd[1]
     vbat += r_vhi[1]
     vsense = net(f"{k}_VSENSE")
-    vsense += r_vhi[2], r_vlo[1], c_v[1], mcu["PA6_V"], tp["VSENSE"][1]
+    vsense += r_vhi[2], r_vlo[1], c_v[1], mcu["PA6_V"]
+    if tp:
+        vsense += tp["VSENSE"][1]
     csa_out = net(f"{k}_CSA_OUT")
     csa_out += csa[1], r_irc[1]
     isense = net(f"{k}_ISENSE")
-    isense += r_irc[2], c_irc[1], mcu["PA3_I"], tp["ISENSE"][1]
+    isense += r_irc[2], c_irc[1], mcu["PA3_I"]
+    if tp:
+        isense += tp["ISENSE"][1]
     i_sp += csa["+"]
     i_sm += csa["-"]
-    tlm = net(f"{k}_TLM")
-    tlm += mcu["PB6_TLM_TX"], tp["TLM"][1]
+    if tp:
+        tlm = net(f"{k}_TLM")
+        tlm += mcu["PB6_TLM_TX"], tp["TLM"][1]
+    else:
+        mcu["PB6_TLM_TX"] += NC
     vcc += drv["VCC"], c_vcc1[1], c_vcc2[1]
     for hin, lin, mh, ml in (("HIN1", "LIN1", "PA10_AH", "PB1_AL"), ("HIN2", "LIN2", "PA9_BH", "PB0_BL"), ("HIN3", "LIN3", "PA8_CH", "PA7_CL")):
         n = net(f"{k}_{hin}")
@@ -545,20 +552,23 @@ def esc_cell(d, k, base, gnd, vbat, vcc, v3m, dshot, i_p, i_sp, i_sm, motor, net
 
     c_d1 = C(d, B, f"C{base + 23}", "10u 50V", "C10u_1206_50V", "C1206")
     c_d2 = C(d, B, f"C{base + 24}", "10u 50V", "C10u_1206_50V", "C1206")
-    bulks = [_part(d, B, f"C{base + 25}", "Device", "C_Polarized", "470u 25V hybrid", FP["CP10"], LCSC["CP470"], "EEHZK1E471P 20 mOhm, glue")]
     if k == "W":
-        bulks.append(_part(d, B, f"C{base + 26}", "Device", "C_Polarized", "470u 25V hybrid", FP["CP10"], LCSC["CP470"], "EEHZK1E471P, weapon 2x"))
+        bulks = [_part(d, B, f"C{base + 25}", "Device", "C_Polarized", "470u 25V polymer 4A", "Capacitor_SMD:CP_Elec_10x12.5", "C46528073", "KNSCHA 118EC421 14 mOhm / 4 A; alt EEHZK1E471P C242138")]
+    else:
+        bulks = [_part(d, B, f"C{base + 25}", "Device", "C_Polarized", "470u 25V hybrid", FP["CP10"], LCSC["CP470"], "EEHZK1E471P 20 mOhm, glue")]
     rsh = _part(d, B, f"R{base + 35}", "Device", "R", "1mΩ 3W", FP["SHUNT"], "C46961745", "Kelvin: INA180 + INA226 on the net-ties")
-    nt_p = _part(d, B, f"NT{base // 10}", "Device", "NetTie_2", "Kelvin", FP["NT"], note="on shunt pad 1")
-    nt_m = _part(d, B, f"NT{base // 10 + 1}", "Device", "NetTie_2", "Kelvin", FP["NT"], note="on shunt pad 2")
-    j_m = _part(d, B, f"J{base // 10 + 1}", "Connector", "Conn_01x03_Pin", f"MOTOR {k}", FP["MOTOR"], note="2 mm holes + 4x3 lands, 30 A")
-    tp_i = _part(d, B, f"TP{base // 10}3", "Connector", "TestPoint", f"I_{k}+", FP["TP"])
+    nt_p = _part(d, B, f"NT{base // 10}", "Device", "NetTie_2", "Kelvin", FP["NT"], note="in the shunt pad gap")
+    nt_m = _part(d, B, f"NT{base // 10 + 1}", "Device", "NetTie_2", "Kelvin", FP["NT"], note="in the shunt pad gap")
+    j_m = _part(d, B, f"J{base // 10 + 1}", "Connector", "Conn_01x03_Pin", f"MOTOR {k}", FP["MOTOR"], note="3x 2 mm plated holes in the phase pours, 30 A")
+    tp_i = _part(d, B, f"TP{base // 10}3", "Connector", "TestPoint", f"I_{k}+", FP["TP"]) if k == "L" else None
     vbat += c_d1[1], c_d2[1]
     gnd += c_d1[2], c_d2[2], rsh[2], nt_m[1]
     for cb in bulks:
         vbat += cb[1]
         gnd += cb[2]
-    i_p += rsh[1], nt_p[1], tp_i[1]
+    i_p += rsh[1], nt_p[1]
+    if tp_i is not None:
+        i_p += tp_i[1]
     i_sp += nt_p[2]
     i_sm += nt_m[2]
     motor["A"] += j_m[1]
