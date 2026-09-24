@@ -545,3 +545,7 @@ MT6701, SMBJ20A, STM32G474 DS). §8.1 went from ~4 000 to ~2 200 words; DESIGN.m
 | §8.1 drives | coast a chip over SPI before handling its fault; Release always ends with CLR_FLT; one "failed resume" rule (encoder suspect → no-encoder retries, never latched) |
 | §8 / §3.5 | Timer-inputs row trimmed (torque-relax probe and Z candidate rules cut); DRV8316 row regrouped (all words unchanged); INA239 ID checks DIEID 239h only; DRV8323 t_RST 8–40 µs; compute-board latch persistence across power cycles made optional; link session ID cut |
 | §7 / §9 | §7.4 states the PA3–PA5 TT_a limits honestly (inside 4.0 V abs max, briefly above VDD + 0.3 V); §7.21 states the phase-to-ground residual exceeds the DRV8316 4 V/µs abs max; §9 impossible "dip below 5 V" UVLO test removed; speculative firmware tests moved to trim_d §3 for a future firmware test plan |
+
+## RM0440 check (after the trim)
+
+The STM32 facts the firmware contract relies on were checked against RM0440 Rev 7 (now in datasheets/): backup registers survive every system reset and BOR, lost only on VDD+VBAT power-off or BDRST (§7.1.3); RTCSEL can only change through a backup-domain reset; RCC_CSR has no separate POR flag (BORRSTF, PINRSTF, IWDGRSTF, …); SYSCFG_CFGR2.CLL routes the core LOCKUP to the TIM1/8/20 break and needs BKE = 1 (BKE gates every break source); OSSI = 0 releases the outputs to GPIO (Hi-Z), OSSI = 1 holds the OISx idle level; TIMx_AF1.BKINE gates only the BKIN pin, and it, OISx and BKE are frozen by LOCK level ≥ 1 (so LOCK stays 0). No text change needed.

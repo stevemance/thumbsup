@@ -37,5 +37,6 @@
 | JST_XH.pdf | balance connector J4 | jst-mfg.com |
 | BOOMELE_1.27-2x10P.pdf | header to the compute board J1 | LCSC mirror of BOOMELE |
 | MT6701CT-STD.pdf | magnetic encoder for the drive-motor sensor boards (off-board) | LCSC mirror of MagnTek |
+| RM0440_STM32G4.pdf | STM32G4 reference manual (RM0440 Rev 7): timer break/OSSI/BKINE/LOCK, SYSCFG CLL, RCC reset flags, backup domain | GitHub mirror (WeActStudio STM32G474CoreBoard) of st.com |
 
 JLC Basic resistors/capacitors are generic parts and are not included.
