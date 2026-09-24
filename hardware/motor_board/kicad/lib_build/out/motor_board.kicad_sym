@@ -45,7 +45,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C81598.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -248,7 +248,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C25466.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -842,7 +842,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C8598.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1027,7 +1027,7 @@
 				(justify left)
 			)
 		)
-		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/BAT54_SER.pdf"
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/BAT54S.pdf"
 			(at -3.048 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1647,7 +1647,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C59981.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4682,7 +4682,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C278516.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4871,7 +4871,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C167971.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5059,7 +5059,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C2874970.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5440,7 +5440,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C2844506.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5881,7 +5881,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C2286.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6364,7 +6364,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C21567.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6375,7 +6375,7 @@
 				)
 			)
 		)
-		(property "Description" "Zener 12 V 500 mW, SOD-123"
+		(property "Description" "Zener 12 V 350 mW, SOD-123 (JSCJ MMSZ5242B)"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6546,7 +6546,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C46961745.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6695,7 +6695,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C263757.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6954,7 +6954,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C151922.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8583,7 +8583,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C8678.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10838,7 +10838,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.lcsc.com/product-detail/C3029345.html"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)

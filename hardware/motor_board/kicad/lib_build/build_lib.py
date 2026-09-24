@@ -52,7 +52,9 @@ def fmt(v):
 def set_props(sym, name, spec, lcsc):
     """Replace/insert the standard properties of a symbol node."""
     values = {
-        "Reference": spec["ref"], "Value": name, "Footprint": spec["fp"], "Datasheet": spec.get("datasheet", ""),
+        "Reference": spec["ref"], "Value": name, "Footprint": spec["fp"],
+        # no manufacturer URL recorded → the LCSC product page (carries the datasheet PDF)
+        "Datasheet": spec.get("datasheet") or (f"https://www.lcsc.com/product-detail/{lcsc}.html" if lcsc else ""),
         "Description": spec["desc"], "LCSC": lcsc, "MPN": name, "ki_fp_filters": spec["fp"].split(":")[1],
     }
     existing = {p[1]: p for p in K.children(sym, "property")}
@@ -204,28 +206,29 @@ def fp_rgf0040e(name):
     pads = []
     pw, ph = 0.6, 0.25
     for i in range(12):  # 1-12 left, top to bottom
-        pads.append(pad(1 + i, -2.1, -2.75 + 0.5 * i, pw, ph))
+        pads.append(pad(1 + i, -2.4, -2.75 + 0.5 * i, pw, ph))
     for i in range(8):   # 13-20 bottom, left to right
-        pads.append(pad(13 + i, -1.75 + 0.5 * i, 3.1, ph, pw))
+        pads.append(pad(13 + i, -1.75 + 0.5 * i, 3.4, ph, pw))
     for i in range(12):  # 21-32 right, bottom to top
-        pads.append(pad(21 + i, 2.1, 2.75 - 0.5 * i, pw, ph))
+        pads.append(pad(21 + i, 2.4, 2.75 - 0.5 * i, pw, ph))
     for i in range(8):   # 33-40 top, right to left
-        pads.append(pad(33 + i, 1.75 - 0.5 * i, -3.1, ph, pw))
+        pads.append(pad(33 + i, 1.75 - 0.5 * i, -3.4, ph, pw))
     # EP 3.7 x 5.7, copper + mask only; paste as TI's 12 windows 1.05 x 1.15 (69 %)
     pads.append(pad(41, 0, 0, 3.7, 5.7, shape="rect", layers='"F.Cu" "F.Mask"'))
     for cx in (-1.25, 0, 1.25):
         for cy in (-2.025, -0.675, 0.675, 2.025):
             pads.append(pad("", cx, cy, 1.05, 1.15, rr=0.1, layers='"F.Paste"'))
     body = rect(-2.5, -3.5, 2.5, 3.5, "F.Fab", 0.1) + line(-2.5, -2.5, -1.5, -3.5, "F.Fab", 0.1)
-    # silkscreen: corner ticks clear of pads, pin-1 mark
+    # silkscreen: corner ticks on the package outline (clear of the pads, which overhang it by
+    # 0.2 mm, by >= 0.2 mm), pin-1 dot outside the pin-1 corner
     s = 0.12
     for sx in (-1, 1):
         for sy in (-1, 1):
-            body += line(sx * 2.61, sy * 3.61, sx * 2.61, sy * 3.35, "F.SilkS", s)
-            body += line(sx * 2.61, sy * 3.61, sx * 2.1, sy * 3.61, "F.SilkS", s)
-    body += line(-2.9, -2.75, -2.9, -3.3, "F.SilkS", s)
+            body += line(sx * 2.61, sy * 3.61, sx * 2.61, sy * 3.25, "F.SilkS", s)
+            body += line(sx * 2.61, sy * 3.61, sx * 2.25, sy * 3.61, "F.SilkS", s)
+    body += line(-3.1, -3.3, -3.1, -3.3, "F.SilkS", 0.3)
     return footprint(name, "TI RGF0040E VQFN-40 5x7 mm, 0.5 mm pitch, EP 3.7x5.7 (SLVSH07 p.92-94)",
-                     body, "".join(pads), (-2.75, -3.75, 2.75, 3.75), -4.5, 4.5)
+                     body, "".join(pads), (-2.95, -3.95, 2.95, 3.95), -4.7, 4.7)
 
 
 def fp_two_pad(name, spec):

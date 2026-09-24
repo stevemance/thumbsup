@@ -133,7 +133,32 @@ def main():
                 errors.append(f"ERC: net {net} has output pins from {', '.join(src)} (output-output conflict)")
         if types["power_in"] and not drivers and net != "NC":
             notes.append(f"ERC: net {net} has power_in pins but no power_out → needs a PWR_FLAG (or a power symbol)")
-    # 5. custom footprints vs EasyEDA
+    # 5. copper geometry of the custom footprints: no two copper pads of different numbers may
+    #    overlap or come closer than 0.15 mm (JLC's minimum copper gap class is 0.1 mm)
+    for fp_file in sorted((OUT / "motor_board.pretty").glob("*.kicad_mod")):
+        cu = [p for p in K.fp_pads(K.load_footprint(fp_file)) if p["number"] and any("Cu" in l for l in p["layers"])]
+        boxes = []
+        for p in cu:
+            (x, y, *rot), (w, h) = p["at"], p["size"]
+            if rot and int(float(rot[0])) % 180 == 90:
+                w, h = h, w
+            boxes.append((p["number"], x - w / 2, y - h / 2, x + w / 2, y + h / 2))
+        worst = None
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1:]:
+                if a[0] == b[0]:
+                    continue
+                gx = max(b[1] - a[3], a[1] - b[3])
+                gy = max(b[2] - a[4], a[2] - b[4])
+                gap = max(gx, gy)  # < 0 → overlap
+                if worst is None or gap < worst[0]:
+                    worst = (gap, a[0], b[0])
+        if worst and worst[0] < 0.15:
+            errors.append(f"{fp_file.stem}: pads {worst[1]} and {worst[2]} are {worst[0]:.3f} mm apart "
+                          f"({'overlap' if worst[0] < 0 else 'too close'})")
+        elif worst:
+            notes.append(f"{fp_file.stem}: minimum copper gap {worst[0]:.3f} mm (pads {worst[1]}/{worst[2]})")
+    # 6. custom footprints vs EasyEDA
     pairs = {"SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": "CONN-SMD_6P-P1.00_XUNPU_WAFER-SH1.0-6PWB",
              "R_2512_HoLR_1-4mR": "RES-SMD_L6.4-W3.2-A",
              "BOOMELE_1.27-2x10P_SMD": "HDR-SMD_20P-P1.27-V-M-R2-C10-S1.27-LS5.5-1",

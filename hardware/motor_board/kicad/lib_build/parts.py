@@ -145,13 +145,13 @@ STOCK = {
         datasheet="https://assets.nexperia.com/documents/data-sheet/BAV99_SER.pdf", fp="Package_TO_SOT_SMD:SOT-23"),
     "BAT54S": dict(src=("Diode", "BAT54S"), ref="D", rename={"1": "A1", "2": "K2", "3": "K1A2"},
         desc="Dual Schottky diode in series, 30 V 200 mA, SOT-23 (Nexperia BAT54S)",
-        datasheet="https://assets.nexperia.com/documents/data-sheet/BAT54_SER.pdf", fp="Package_TO_SOT_SMD:SOT-23"),
+        datasheet="https://assets.nexperia.com/documents/data-sheet/BAT54S.pdf", fp="Package_TO_SOT_SMD:SOT-23"),
     "SMBJ20A": dict(src=("Device", "D_Zener"), ref="D",
         desc="Unidirectional TVS 20 V standoff, 600 W, SMB (BORN SMBJ20A)", datasheet="", fp="Diode_SMD:D_SMB"),
     "SS34": dict(src=("Diode", "SS34"), ref="D", desc="Schottky 40 V 3 A, SMA", datasheet="", fp="Diode_SMD:D_SMA"),
     "1N4148W": dict(src=("Diode", "1N4148W"), ref="D", desc="Switching diode 75 V 150 mA, SOD-123",
         datasheet="", fp="Diode_SMD:D_SOD-123"),
-    "MMSZ5242B": dict(src=("Device", "D_Zener"), ref="D", desc="Zener 12 V 500 mW, SOD-123",
+    "MMSZ5242B": dict(src=("Device", "D_Zener"), ref="D", desc="Zener 12 V 350 mW, SOD-123 (JSCJ MMSZ5242B)",
         datasheet="", fp="Diode_SMD:D_SOD-123"),
     "B5819W": dict(src=("Device", "D_Schottky"), ref="D", desc="Schottky 40 V 1 A, SOD-123",
         datasheet="", fp="Diode_SMD:D_SOD-123"),
@@ -197,8 +197,9 @@ BOM_TO_SYMBOL = {
 # Geometry in mm, KiCad convention (y down), top view.  Every value cites its drawing.
 FOOTPRINTS = {
     # TI RGF0040E (SLVSH07 p.92 outline, p.93 example board layout): pins 1-12 left (top→bottom),
-    # 13-20 bottom (left→right), 21-32 right (bottom→top), 33-40 top (right→left); pads 0.6 x 0.25,
-    # outer spans 4.8 (x) and 6.8 (y) → pad centres x = ±2.1, y = ±3.1; EP 3.7 x 5.7.
+    # 13-20 bottom (left→right), 21-32 right (bottom→top), 33-40 top (right→left); pads 0.6 x 0.25;
+    # (4.8) and (6.8) are pad-CENTRE spans (the extension lines are the pads' centrelines) → pad
+    # centres x = ±2.4, y = ±3.4 (same as JLC's EasyEDA footprint); EP 3.7 x 5.7, paste 12 x 1.05 x 1.15.
     "TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm": dict(kind="qfn_rgf0040e"),
     # Milliohm HoLR2512 1-4 mOhm recommended land (datasheet p.3): A = 4.0 (pad height),
     # L = 1.3 (gap), B = 3.1 (pad length) → pads 3.1 x 4.0 at x = ±2.2.  Body 6.4 x 3.2.
