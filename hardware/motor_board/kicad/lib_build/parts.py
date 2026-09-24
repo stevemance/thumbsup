@@ -164,7 +164,7 @@ STOCK = {
     "HoLR2512-3W-2mR": dict(lcsc="C2844506", src=("Device", "R"), ref="R", desc="2 mOhm 1% 3 W 2512 alloy shunt (Milliohm HoLR2512)",
         datasheet="", fp="motor_board:R_2512_HoLR_1-4mR"),
     "RE2512F3R001": dict(lcsc="C46961745", src=("Device", "R"), ref="R", desc="1 mOhm 1% 3 W 2512 shunt (JIERR RE2512F3R001)",
-        datasheet="", fp="Resistor_SMD:R_2512_6332Metric"),
+        datasheet="", fp="motor_board:R_2512_JIERR_RE_small_electrode"),
     "25121WF100LT4E": dict(lcsc="C25466", src=("Device", "R"), ref="R", desc="0.1 Ohm 1% 1 W 2512 (UNI-ROYAL 25121WF100LT4E)",
         datasheet="", fp="Resistor_SMD:R_2512_6332Metric"),
     "BOOMELE_1.27-2x10P": dict(lcsc="C59981", src=("Connector_Generic", "Conn_02x10_Odd_Even"), ref="J",
@@ -203,7 +203,8 @@ FOOTPRINTS = {
     "TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm": dict(kind="qfn_rgf0040e"),
     # Milliohm HoLR2512 1-4 mOhm recommended land (datasheet p.3): A = 4.0 (pad height),
     # L = 1.3 (gap), B = 3.1 (pad length) → pads 3.1 x 4.0 at x = ±2.2.  Body 6.4 x 3.2.
-    "R_2512_HoLR_1-4mR": dict(kind="two_pad", pad=(3.1, 4.0), x=2.2, body=(6.4, 3.2)),
+    "R_2512_HoLR_1-4mR": dict(kind="two_pad", pad=(3.1, 4.0), x=2.2, body=(6.4, 3.2),
+        descr="Milliohm HoLR2512 1-4 mOhm, recommended land 3.1x4.0 mm, gap 1.3 mm (HoLR2512 datasheet p.3)"),
     # BOOMELE 1.27-2*10P drawing "P.C.B Layout": pads 0.74 x 2.5 (6.5 outer, 1.5 row gap),
     # pitch 1.27, 2 x 10 → pad centres x = ±2.0, y = ±5.715 (KiCad PinHeader_2x10_P1.27mm SMD
     # orientation: odd pins in the x < 0 column, pin 1 at the top).  Body 12.7 x 3.4.
@@ -211,6 +212,11 @@ FOOTPRINTS = {
     # XUNPU WAFER-SH1.0-6PWB drawing "P.C.B LAYOUT" (measured at 300 dpi): signal pads 0.5 x 1.7 at
     # pitch 1.0 (x = -2.5 … 2.5), y = -1.7; tab pads 1.2 x 2.5, inner edge 0.5 outside pad 6's
     # centre → x = ±3.6, y = +1.7 (overall 5.5); identical to JLC's EasyEDA footprint.
+    # JIERR RE2512 small-electrode (no "L" suffix; LCSC C46961745 is this version, 1.0 mm terminals)
+    # suggested PCB dimensions (datasheet p.5): a = 4.0 (pad height), b = 2.1 (pad length),
+    # L = 4.1 (gap) → pads 2.1 x 4.0 at x = ±3.1.  Body 6.35 x 3.2.
+    "R_2512_JIERR_RE_small_electrode": dict(kind="two_pad", pad=(2.1, 4.0), x=3.1, body=(6.35, 3.2),
+        descr="JIERR RE2512 small-electrode 2512 shunt, suggested land 2.1x4.0 mm, gap 4.1 mm (datasheet p.5)"),
     "SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": dict(kind="sh_ra", n=6, pitch=1.0, sig=(0.5, 1.7), sig_y=-1.7,
                                                mp=(1.2, 2.5), mp_x=3.6, mp_y=1.7, body=(8.35, 4.3)),
 }
@@ -222,9 +228,11 @@ EASYEDA_REF = {
     "R_2512_HoLR_1-4mR": "RES-SMD_L6.4-W3.2-A",
     "BOOMELE_1.27-2x10P_SMD": "HDR-SMD_20P-P1.27-V-M-R2-C10-S1.27-LS5.5-1",
     "SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": "CONN-SMD_6P-P1.00_XUNPU_WAFER-SH1.0-6PWB",
+    "R_2512_JIERR_RE_small_electrode": "RES-SMD_L6.3-W3.2_R2512",
 }
 EASYEDA_PAD_RENAME = {"SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": {"7": "MP", "8": "MP"}}
 EASYEDA_DEVIATIONS = {
     "R_2512_HoLR_1-4mR": "HoLR datasheet land for 1-4 mOhm (3.1 x 4.0, gap 1.3); JLC's is a generic 2512 land",
+    "R_2512_JIERR_RE_small_electrode": "JIERR p.5 small-electrode land (2.1 x 4.0, gap 4.1); JLC's pads are 2.0 x 3.46, gap 3.34",
     "BOOMELE_1.27-2x10P_SMD": "BOOMELE drawing land (0.74 x 2.5, 6.5 outer, 1.5 gap); JLC's pads are 0.8 wide, 0.86 gap",
 }

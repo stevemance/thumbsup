@@ -34,7 +34,7 @@ mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 
 | D7, D8 | Nexperia BAV99,215 SOT-23 | C2500 | Basic.  Motor-NTC clamps (nA leakage; 1 = A1, 2 = K2, 3 = common) |
 | D9 | Nexperia BAT54S,215 SOT-23 | C47546 | Extended, ~286k.  Dynamic-ARM charge pump (Schottky needed for the ~2.9 V output) |
 | RS1–RS3 | Milliohm HoLR2512-3W-2mR-1% | C2844506 | Custom land for 1–4 mΩ parts (2.0 mm terminals) |
-| RS4 | JIERR RE2512F3R001 1 mΩ 3 W | C46961745 | Pack shunt, generic 2512 land |
+| RS4 | JIERR RE2512F3R001 1 mΩ 3 W | C46961745 | Pack shunt, small-electrode version (no "L" suffix).  Custom land per JIERR p.5 (2.1 × 4.0 pads, 4.1 gap): `R_2512_JIERR_RE_small_electrode` |
 | J1 | BOOMELE 1.27-2*10P SMD male | C59981 | Custom footprint to the vendor land; **bottom side** (JLC second side or hand-solder).  Compute board: mirrored female socket |
 | J2, J3 | XUNPU WAFER-SH1.0-6PWB (JST SM06B-SRSS-TB compatible) | C3029345 | 30k.  Alternate LXWCONN SH1.0mm-6P-WT C53055322.  Custom footprint (tab pads 1.2 × 2.5 mm per the XUNPU drawing).  **Confirm the pin-1 end** against a mating SHR-06V-S cable |
 | J4 | JST S5B-XH-A side-entry THT | C263757 | Through-hole: JLC Standard PCBA or hand-solder.  Vertical B5B-XH-A = C157991 |

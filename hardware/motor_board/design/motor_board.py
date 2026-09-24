@@ -122,7 +122,7 @@ two("D4", "MMSZ5242B 12V", "Diode_SMD:D_SOD-123", "PSW_G", "PSW_S", LCSC["ZENER1
     "Q7/Q8 gate-source clamp: keeps Vgs < 15 V (U13 GATE-SRC abs max) and < 20 V (FET) through sag/recovery transients and at full charge-pump voltage (VCAP-VS up to 13.9 V)", names=("K", "A"))
 two("R15", "6.8k 0805", "Resistor_SMD:R_0805_2012Metric", "VBAT", "GND", LCSC["R6k8_0805"],
     "bus bleeder (41 mW): after the switch opens, VBAT falls to the switch UVLO within ~0.1-0.4 s, so a later re-close starts soft")
-two("RS4", "1mR 1% 2512", "Resistor_SMD:R_2512_6332Metric", "VBAT_SW", "VBAT", LCSC["SHUNT_1m"], "pack current shunt, after the switch FETs (INA239 inputs must stay >= -0.3 V; Kelvin to U7 through R2/R3)")
+two("RS4", "1mR 1% 2512", "motor_board:R_2512_JIERR_RE_small_electrode", "VBAT_SW", "VBAT", LCSC["SHUNT_1m"], "pack current shunt, after the switch FETs (INA239 inputs must stay >= -0.3 V; Kelvin to U7 through R2/R3)")
 two("R2", "10R", R0402, "VBAT_SW", "INA_INP", LCSC["R10R"], "INA239 IN+ series (TI 8.1.4: dV/dt robustness on a short)")
 two("R3", "10R", R0402, "VBAT", "INA_INN", LCSC["R10R"], "INA239 IN- series")
 two("C2", "100nF 50V", C0603, "INA_INP", "INA_INN", LCSC["100n_50V_0603"], "INA239 differential input filter (80 kHz with 2 x 10 ohm)")

@@ -484,7 +484,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 12. **Custom footprints to draw** (`thumbsup.pretty`): TI_RGF0040E… (U3/U4, TI RGF0040E
     drawing), R_2512_HoLR_1-4mR (RS1–RS3, Milliohm HoLR datasheet land), BOOMELE_1.27-2x10P_SMD
     (J1, BOOMELE drawing), SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB (J2/J3, XUNPU drawing: tab pads
-    1.2 × 2.5 mm).  RS4 uses the generic 2512 land (JIERR's own land is similar; check).
+    1.2 × 2.5 mm).  RS4 uses JIERR's small-electrode land (2.1 × 4.0 pads, 4.1 mm gap, datasheet p.5): R_2512_JIERR_RE_small_electrode.
 13. **Area and placement (settled at layout).**  Estimate: top-side courtyards ≈ 1900 mm², bottom
     ≈ 700–900 mm², plus mating clearance for J2–J4 → ~3600–4400 mm² at realistic density, vs a
     ~3100 mm² v1.1 bay.  Assembly is two-sided anyway (J1).  **Top:** Q1–Q8, RS1–RS4, C1,
