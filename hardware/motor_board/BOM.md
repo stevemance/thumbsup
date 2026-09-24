@@ -1,49 +1,66 @@
-# Motor board BOM notes (rev A, 2026-09-23)
+# Motor board BOM notes (rev L, 2026-09-24)
 
 The machine-readable BOM is [`design/bom.csv`](design/bom.csv) (JLCPCB columns: Comment,
-Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`.  113 placed parts,
-41 lines.  Solder pads, test pads, net-ties and solder jumpers are copper only.
+Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`: **199 assembled
+parts, 67 lines**, plus 6 DNP footprints (C110–C112, C114–C116, left out of the CSV; mark them
+DNP / exclude-from-position in KiCad).  Wire holes (plated through-holes), test pads, net-ties, solder jumpers and
+mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 2026-09-23/24
+([`review/r6_parts_lookup.md`](review/r6_parts_lookup.md), [`review/round2_e_bom.md`](review/round2_e_bom.md),
+[`review/round3_b_drive_sensors_bom.md`](review/round3_b_drive_sensors_bom.md)); re-check on order day.
 
 ## Parts to watch
 
 | Line | Part | LCSC | Note |
 |---|---|---|---|
-| U1 | STM32G474RET6 LQFP-64 | C521608 | Extended.  RBT6/RCT6 (less flash) are pin-identical if stock is short |
-| U2 | DRV8323RSRGZR VQFN-48 7×7 | C545497 | Extended.  Must be the **R** (buck) **S** (SPI) variant: 48-pin, not the 40-pin DRV8323S |
-| U3, U4 | DRV8316RRGFR VQFN-40 5×7 | C5218861 | Extended.  **R** = SPI variant (the T variant has no BUCK_DIS and different pins 24/33–36) |
-| Q1–Q7 | HUAYI HYG015N04LS1C2 PDFN 5×6 | C2874970 | 40 V 1.4 mΩ.  Q1–Q6 weapon bridge, Q7 reverse-polarity FET.  Footprint: generic PQFN-8-EP 6×5, leads 1–3 S, 4 G, tab D (as used on the v1 board) |
-| U7 | TI INA229AIDGSR VSSOP-10 | C2846803 | 986 in stock 2026-09-23.  Pack V/I/P/energy/charge on SPI |
-| RS4 | JIERR RE2512F3R001 1 mΩ 3 W 2512 | C46961745 | Pack shunt |
-| D4 | MMSZ5242B 12 V SOD-123 | C21567 | Q7 gate clamp |
-| U8 | TI BQ76907RGRR VQFN-20 3.5×3.5 | C22458649 | Cell monitor/balancer (2–7S).  Listed in JLC's library; stock not visible when checked, so confirm before ordering.  The BQ76905 (2–5S) is the same idea but was not found at LCSC.  Footprint: KiCad VQFN-20 3.5×3.5 EP 2×2 — check the EP size against TI's RGR drawing |
-| J4 | JST S5B-XH-A(LF)(SN) side-entry THT (balance lead) | C263757 | Vertical alternative B5B-XH-A(LF)(SN) = C157991 (69,790 in stock).  Through-hole: JLC's THT assembly or hand-solder |
-| RS1–RS3 | Milliohm HoLR2512-3W-2mR-1% | C2844506 | Low-inductance wide-terminal 2 mΩ parts are better for the SPx transient if available (DESIGN §5) |
-| C1 | Panasonic EEHZK1E471P 470 µF 25 V hybrid polymer 10×10.2 | C242138 | **Only ~5 in stock at LCSC when checked.**  Needs low ESR *and* high ripple current (~8 A rms bursts, shared with the MLCCs): a plain electrolytic such as ROQANG RVT1E471M1010 (C72518) is in stock but its ripple rating is far too low.  Alternatives: KNSCHA 118EC421 (C46528073, 14 mΩ / 4 A hybrid, was not in the JLC assembly library when last checked) or pre-order EEHZK1E471P from LCSC to your JLC parts stock.  Re-run `spice/sim_hotplug.py` with the chosen part's ESR |
-| D1 | SMBJ20A | C151922 (BORN) | Several makers; any SMBJ20A (standoff 20 V, clamp ≤ 32.4 V) |
-| L1 | Shun Xiang Nuo SMNR4020-22UH, 4×4×2 mm | C135264 | 22 µH, 0.35 Ω, 1.05 A: covers the 0.73 A peak at the full 0.6 A load (a hard 5 V short will saturate it; the buck's current limit and thermal shutdown handle that).  Sunlord SWPA4030S220MT is no longer listed at LCSC.  Draw the footprint from `datasheets/SMNR4020-22UH.pdf` |
-| J1 | BOOMELE 1.27-2*10P, 1.27 mm 2×10 SMD male, 1.5 mm body / 3 mm pins | C59981 | 6,280 in stock.  The compute board needs the matching 2×10 SMD female; pick it with that board (stack height sets the board spacing) |
-| J2, J3 | JST SM06B-SRSS-TB(LF)(SN) | C160405 | Mating cable: JST SHR-06V-S housing + crimped SSH leads, or pre-crimped JST-SH cables |
-| U6 | 74LVC1G08SE-7 SOT-353 | C460522 | Pinout 1 A, 2 B, 3 GND, 4 Y, 5 VCC (standard SC-70-5) |
-| TH1 | Murata NCP18XH103F03RB 0603 | C13564 | B 3380 K |
+| U1 | STM32G474RET6 LQFP-64 | C521608 | Extended, **~200 at JLC: reserve it**.  RBT6/RCT6 (less flash, C1235414 / C529413) are pin-identical.  LCSC is not ST-authorised: check marking/ID/revision at bring-up |
+| U2 | DRV8323RHRGZR VQFN-48 7×7 | C543035 | Extended, **~203 in stock: reserve it**; alt listing C2150467.  Must be **R** (buck) **H** (hardware/strap) 48-pin |
+| U3, U4 | DRV8316CRRGFR VQFN-40 5×7 | C5447274 | Extended, ~2,900.  **C** variant (datasheet SLVSH07), SPI; the "R" in the MPN is tape & reel.  Custom footprint (RGF0040E) |
+| U7 | INA239AIDGSR VSSOP-10 | C2876522 | Extended, **~101 in stock**.  INA229AIDGSR (C2846803) is pin/footprint compatible; firmware must handle its 24-bit registers |
+| U8 | BQ76907RGRR VQFN-20 3.5×3.5 | C22458649 | Extended, ~2,400.  CRC-off variant (not BQ7690701) |
+| U13 | LM74502DDFR SOT-23-8 (DDF) | C3236215 | Extended, ~8,300.  Must be the plain LM74502 (60 µA gate drive), **not LM74502H** (11 mA: no soft-start).  KiCad `Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm` |
+| U6 | SN74LVC08APWR TSSOP-14 | C465737 | Extended, 35k.  Nexperia 74LVC08APW C6053 same pinout.  Its ARM inputs come from the U14 Schmitt buffer |
+| U14 | Diodes 74LVC1G17SE-7 SOT-353 | C212314 | Extended, ~5,400.  Schmitt buffer on W_ARM (1 NC, 2 A, 3 GND, 4 Y, 5 VCC) |
+| U9, U10 | SN74LVC3G17DCUR VSSOP-8 | C68245 | Extended, 3,335.  DCT package C18213 (7,218) has the same pinout on `SSOP-8_2.95x2.8mm_P0.65mm` |
+| U11, U12 | TPS22945DCKR SC-70-5 | C47507 | Extended, 10k.  100–200 mA limit, auto-restart (TPS22944 has no auto-restart and little stock) |
+| Q1–Q8 | HUAYI HYG015N04LS1C2 PDFN 5×6 | C2874970 | 40 V 1.4 typ / 1.7 max mΩ @ 10 V.  Q1–Q6 weapon bridge; Q7/Q8 power switch (Q7 takes the 54–57 mJ soft-start pulse).  Generic PQFN-8-EP 6×5, leads 1–3 S, 4 G, tab D |
+| C1 | Panasonic EEHZK1V331P 330 µF 35 V hybrid polymer 10×10.2 | C278516 | ~6,500.  ESR 20 mΩ, 2.8 A rms ripple.  Stake with adhesive (the vibration-proof EEHZK1V331V has only ~26 at JLC) |
+| L1 | Changjiang (cjiang) FNR5040S220MT 22 µH 5×5 | C167971 | 24k.  DCR 0.17 Ω max, Isat 1.6 A guaranteed / 1.8 typ (TI recommends 1.6 A).  FNR5045S220MT (Changjiang, 2.0 A, same land) if more margin is wanted.  KiCad `L_Changjiang_FNR5040S` |
+| D2 | SS34 SMA | C8678 | Basic.  40 V 3 A buck catch diode |
+| D4 | MMSZ5242B 12 V SOD-123 | C21567 | Extended.  Q7/Q8 gate-source clamp |
+| C14 | 100 nF 100 V X7R 0805 | C28233 | Basic.  U13 VS: BAT_IN rings to 40–60 V when the switch opens under load |
+| R302, R402 | 0.1 Ω 1 % 1 W 2512 (UNI-ROYAL 25121WF100LT4E) | C25466 | Extended, 76k.  DRV8316 VM feed filter |
+| D5 | B5819W SOD-123 | C8598 | Basic.  VC0 clamp (low VF at mA currents) |
+| D10 | 1N4148W SOD-123 | C81598 | Basic.  Cdvdt steering diode (reversed-pack protection of the soft-start) |
+| D7, D8 | Nexperia BAV99,215 SOT-23 | C2500 | Basic.  Motor-NTC clamps (nA leakage; 1 = A1, 2 = K2, 3 = common) |
+| D9 | Nexperia BAT54S,215 SOT-23 | C47546 | Extended, ~286k.  Dynamic-ARM charge pump (Schottky needed for the ~2.9 V output) |
+| RS1–RS3 | Milliohm HoLR2512-3W-2mR-1% | C2844506 | Custom land for 1–4 mΩ parts (2.0 mm terminals) |
+| RS4 | JIERR RE2512F3R001 1 mΩ 3 W | C46961745 | Pack shunt, generic 2512 land |
+| J1 | BOOMELE 1.27-2*10P SMD male | C59981 | Custom footprint to the vendor land; **bottom side** (JLC second side or hand-solder).  Compute board: mirrored female socket |
+| J2, J3 | XUNPU WAFER-SH1.0-6PWB (JST SM06B-SRSS-TB compatible) | C3029345 | 30k.  Alternate LXWCONN SH1.0mm-6P-WT C53055322.  Custom footprint (tab pads 1.2 × 2.5 mm per the XUNPU drawing).  **Confirm the pin-1 end** against a mating SHR-06V-S cable |
+| J4 | JST S5B-XH-A side-entry THT | C263757 | Through-hole: JLC Standard PCBA or hand-solder.  Vertical B5B-XH-A = C157991 |
+| D3 | KENTO KT-0603R | C2286 | Vendor pin numbering is the reverse of KiCad's: check the cathode mark in the JLC preview |
+| R45 | 75 k 0402 1 % | C25798 | Preferred; 0 at LCSC but ~57k at JLC (fine for JLC assembly) |
 
-Datasheets for every non-generic part are in [`datasheets/`](datasheets/).
-
-All resistors and ceramic capacitors are JLC **Basic** parts (numbers in `motor_board.py`'s
-`LCSC` table), chosen so the assembly has as few Extended-part fees as possible: Extended parts
-are U1–U8, Q1–Q7, RS1–RS4, C1, D1, D4, L1, J1–J4.
+**Classes** (JLC fee per Extended line): the ICs U1–U14 (11 lines), Q1–Q8, C1, D1, D4, D9, L1,
+RS1–RS3, RS4, R302/R402, TH1, R4 (390 k, no fee-free option in stock), J1, J2/J3, J4 are Extended.
+Preferred (no fee): R20 56 k, R22/R24/R26/R63 68 k, R45 75 k, R46 18 k.  Everything else is Basic.
 
 ## Off-board parts (not in the JLC order)
 
 | Item | Qty | Note |
 |---|---|---|
-| XT30 pigtail (16–18 AWG, ~100 mm) | 1 | Soldered to J_BAT+/J_BAT−; keep it short (hot-plug sim assumed ~150 nH) |
-| Main power switch | 1 | FingerTech Mini Power Switch (40 A cont, 2.15 g) or Repeat Screw Switch (1.5 g), soldered into the + wire of the pigtail, mounted in the chassis wall |
+| XT30 pigtail (16–18 AWG, ~100 mm) | 1 | Pushed through and soldered in the J_BAT+/J_BAT− plated holes, strain-relieved |
+| Main power switch | 1 | FingerTech Mini Power Switch (40 A cont, 2.15 g) or Repeat Screw Switch (1.5 g), in the + wire of the pigtail, mounted in the chassis wall |
 | Motor leads | 9 | Weapon: 16–18 AWG to J_WA–J_WC; drive: motor leads to J_LA.. / J_RA.. |
-| Sensor cables | 2 | JST-SH 6-pin to the Hall/encoder board on each drive motor |
-| MT6701 sensor PCBs | 2 | Only if the drive motors have no Halls: MT6701 + 100 nF + JST-SH, magnet on the motor shaft/bell |
+| Drive motors | 2 | Repeat Mini Mk4.1 (1106, 3500 KV, 28.5:1) — plan of record, currently sold out |
+| MT6701 sensor PCBs + magnets | 2 | MT6701 + 100 nF + JST-SH, diametric magnet on the motor end |
+| Sensor cables | 2 | JST-SH 6-pin (SHR-06V-S + SSH crimps, or pre-crimped) |
+| Nylon M2 standoffs + screws | 4 | Clamp the two-board stack through MH1–MH4 |
 
 ## Before ordering
 
-1. Re-check stock and Basic/Extended class on jlcpcb.com for every line the day you order.
-2. Confirm footprints for L1, J1 and C1 against the chosen parts' drawings.
-3. Run `python3 design/motor_board.py` after any change: it must print `checks: OK`.
+1. Re-check stock and class on jlcpcb.com for every line the day you order; reserve U1, U2 and U7 (all under ~210 in stock).
+2. Draw the custom footprints listed in DESIGN §6.12.
+3. Run `python3 design/motor_board.py` after any change: it must print `checks: OK` (it also
+   fails on any placed part without an LCSC number, and on one LCSC number used with two
+   footprints).

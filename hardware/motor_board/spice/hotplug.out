@@ -1,10 +1,46 @@
-```
-4S pack 16.8 V step into the board through ~150 nH of battery lead
-case                                          VM peak   max dV/dt   final
-470 uF polymer + MLCC + TVS (as designed)       16.2V      1.67V/us   16.2V  
-no polymer bulk (MLCC only) + TVS               19.6V      4.38V/us   19.5V  EXCEEDS 4 V/us ramp
-no polymer bulk, no TVS                         19.6V      4.38V/us   19.5V  EXCEEDS 4 V/us ramp
-as designed, 300 nH lead (long pigtail)         16.2V      0.93V/us   16.2V  
-as designed, stiff pack (4 x 5 mOhm)            16.2V      1.81V/us   16.2V  
-no polymer bulk, stiff pack (4 x 5 mOhm)        23.5V      5.45V/us   23.3V  EXCEEDS 4 V/us ramp
-```
+4S pack switched onto the board through the LM74502 + Q7/Q8 high-side switch; DRV8316 VM limits 40 V and 4 V/us
+case                                                      peak dV/dt        ramp  I peak  Q7 Ppk    Q7 E
+nominal pack/lead, new C1                                   0.003V/us    2.18V/ms  13.20A   16.5W  54.7mJ  
+stiff pack, 50 nH lead, C1 ESR 40 mOhm (aged)               0.005V/us    2.19V/ms  22.58A   16.2W  54.8mJ  
+stiff pack, 50 nH lead, C1 ESR 300 mOhm (-40 C)             0.005V/us    2.19V/ms  22.52A   14.5W  53.8mJ  
+300 nH lead (long pigtail)                                  0.003V/us    2.19V/ms   9.53A   16.5W  54.7mJ  
+12 V pack (tired 4S)                                        0.003V/us    2.27V/ms   9.41A   11.6W  26.7mJ  
+gate source at the 77 uA max, stiff pack                    0.005V/us    2.95V/ms  22.57A   22.0W  54.0mJ  
+gate source at the 40 uA min, nominal pack                  0.002V/us    1.28V/ms  13.20A   10.5W  56.9mJ  
+
+Reversed pack (-16.8 V), U13 unpowered; its internal gate-source hold is unspecified, modelled as a resistor:
+  gate hold   300 ohm, with D10: peak pack current  13.14 A
+  gate hold   300 ohm, WITHOUT D10: peak pack current  13.18 A
+  gate hold    3k ohm, with D10: peak pack current  13.15 A
+  gate hold    3k ohm, WITHOUT D10: peak pack current 102.19 A
+  gate hold  100k ohm, with D10: peak pack current  13.15 A
+  gate hold  100k ohm, WITHOUT D10: peak pack current 146.78 A
+
+Switch opened at 60 ms and re-closed (stiff pack, 50 nH lead); 'VM before' = bus at re-close:
+  off     1 ms, C1 ESR  40 mOhm           VM before  16.4 V    0.059V/us    7.06V/ms   6.86A    0.1W   0.0mJ  
+  off    10 ms, C1 ESR  40 mOhm           VM before  12.1 V    0.664V/us   97.10V/ms  76.50A    8.0W   0.1mJ  
+  off   100 ms, C1 ESR  40 mOhm           VM before   8.9 V    0.002V/us    1.98V/ms  20.16A    6.7W  13.8mJ  
+  off   300 ms, C1 ESR  40 mOhm           VM before   8.2 V    0.002V/us    1.99V/ms  22.54A    6.8W  16.1mJ  
+  off   500 ms, C1 ESR  40 mOhm           VM before   7.5 V    0.002V/us    2.01V/ms  22.55A    7.5W  18.4mJ  
+  off   700 ms, C1 ESR  40 mOhm           VM before   6.9 V    0.002V/us    2.02V/ms  22.51A    8.1W  20.6mJ  
+  off   100 ms, C1 ESR 300 mOhm min UVLO  VM before   8.9 V    1.833V/us  690.34V/ms 104.77A   14.9W   0.1mJ  
+  off   300 ms, C1 ESR 300 mOhm min UVLO  VM before   8.2 V    2.010V/us  759.72V/ms 115.07A   17.9W   0.1mJ  
+  off   350 ms, C1 ESR 300 mOhm min UVLO  VM before   8.0 V    2.056V/us  771.19V/ms 117.40A   18.7W   0.1mJ  
+  off   400 ms, C1 ESR 300 mOhm min UVLO  VM before   7.8 V    2.092V/us  785.27V/ms 119.61A   19.4W   0.1mJ  
+  off   450 ms, C1 ESR 300 mOhm min UVLO  VM before   7.7 V    0.002V/us    2.01V/ms  20.49A    6.7W  17.4mJ  
+  off   500 ms, C1 ESR 300 mOhm min UVLO  VM before   7.5 V    0.002V/us    2.00V/ms  22.65A    6.7W  18.0mJ  
+  off   700 ms, C1 ESR 300 mOhm min UVLO  VM before   6.9 V    0.002V/us    2.03V/ms  22.68A    7.2W  20.2mJ  
+  off   500 ms, C1 ESR  60 mOhm min UVLO  VM before   7.5 V    0.002V/us    2.01V/ms  22.54A    7.4W  18.4mJ  
+  off  1000 ms, C1 ESR 300 mOhm min UVLO  VM before   6.0 V    0.002V/us    2.04V/ms  22.36A    8.0W  23.3mJ  
+  off  1500 ms, C1 ESR 300 mOhm min UVLO  VM before   4.9 V    0.002V/us    2.07V/ms  22.39A    9.2W  28.2mJ  
+
+Contact bounce under a 20 A weapon load (C18 delays the UVLO, the FETs stay on while the bus falls);
+  C1 ESR 40 mOhm = aged limit at 20 C, 100 mOhm = bound for aged at 0 C (interpolated between the ZK 20 C and -40 C limits);
+  (all at the DRV8316 VM pins, behind R302/R402 0.1 ohm + ~16 uF):
+   0.3 ms bounce, 20 A load, nominal    C1  40 mOhm VM before   4.6 V    0.801V/us   132.2A  
+   0.3 ms bounce, 20 A load, stiff      C1  40 mOhm VM before   4.7 V    1.627V/us   206.2A  
+   0.8 ms bounce, 20 A load, stiff      C1  40 mOhm VM before   4.4 V    1.655V/us   209.8A  
+   0.1 ms bounce, 20 A load, stiff, 0 C C1 100 mOhm VM before   9.3 V    1.430V/us   109.4A  
+   0.3 ms bounce, 20 A load, stiff, 0 C C1 100 mOhm VM before   4.7 V    2.212V/us   181.6A  
+   0.8 ms bounce, 20 A load, stiff, 0 C C1 100 mOhm VM before   4.5 V    2.258V/us   185.1A  
+   0.3 ms bounce, 20 A load, -40 C limit C1 300 mOhm VM before   4.8 V    2.662V/us   167.7A  

@@ -1,0 +1,12 @@
+Dynamic ARM (C15 470n, D9 BAT54S, C16 2.2u, R41 47k, U14 74LVC1G17)
+case                             armed W_ARM              arm    disarm, stuck low   disarm, stuck high
+25 C    250 Hz                   2.58-2.66 V  28.0 ms/ 8 edges      68- 120 ms            87- 151 ms
+25 C    500 Hz                   2.79-2.83 V  12.0 ms/ 7 edges      76- 128 ms            95- 159 ms
+25 C   1000 Hz                   2.89-2.91 V   6.0 ms/ 7 edges      80- 132 ms            99- 162 ms
+25 C  10000 Hz                   2.95-2.95 V   0.9 ms/10 edges      82- 134 ms           100- 164 ms
+85 C    250 Hz                   2.50-2.60 V  28.0 ms/ 8 edges      52-  97 ms            67- 115 ms
+85 C    500 Hz                   2.74-2.79 V  12.1 ms/ 7 edges      60- 106 ms            74- 122 ms
+85 C   1000 Hz                   2.86-2.89 V   6.0 ms/ 7 edges      64- 110 ms            77- 125 ms
+85 C  10000 Hz                   2.94-2.94 V   0.9 ms/10 edges      66- 112 ms            78- 126 ms
+
+Pause tolerance: a gap in the toggling is survived while W_ARM stays above VT- (max 1.33 V): equal to the 'disarm' columns' first number, measured from the last edge.

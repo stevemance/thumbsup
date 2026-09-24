@@ -4,10 +4,10 @@
 
 | Quantity | Value | Basis |
 |---|---|---|
-| Drive DRV8316 CSA gain 0.15 V/A | +-9.3 A, 5.4 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSF16B 7.5)  <- use (covers the 8 A peak) |
-| Drive DRV8316 CSA gain 0.3 V/A | +-4.7 A, 2.7 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSF16B 7.5) |
-| Drive DRV8316 CSA gain 0.6 V/A | +-2.3 A, 1.3 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSF16B 7.5) |
-| Drive DRV8316 CSA gain 1.2 V/A | +-1.2 A, 0.7 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSF16B 7.5) |
+| Drive DRV8316 CSA gain 0.15 V/A | +-9.3 A (+-8.7..9.9 A over AVDD), 5.4 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSH07 7.5)  <- use (covers the 8 A peak) |
+| Drive DRV8316 CSA gain 0.3 V/A | +-4.7 A (+-4.3..4.9 A over AVDD), 2.7 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSH07 7.5) |
+| Drive DRV8316 CSA gain 0.6 V/A | +-2.3 A (+-2.2..2.5 A over AVDD), 1.3 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSH07 7.5) |
+| Drive DRV8316 CSA gain 1.2 V/A | +-1.2 A (+-1.1..1.2 A over AVDD), 0.7 mA/LSB | SOx biased at VREF/2; linear to 0.25 V from the rails (SLVSH07 7.5) |
 | Weapon 2 mOhm x 20 V/V | +-35 A, 20 mA/LSB | bidirectional (VREF_DIV=1)  <- use: 20 A limit at 0.8 V, 1.5x headroom for fault detection |
 | Weapon 2 mOhm x 10 V/V | +-70 A, 40 mA/LSB | bidirectional (VREF_DIV=1) |
 | Weapon 1 mOhm x 40 V/V | +-35 A, 20 mA/LSB | bidirectional (VREF_DIV=1) |
@@ -29,12 +29,13 @@
 |---|---|---|
 | L min at VIN 16.8 V (ripple 40 %) | 20.9 uH | SNVSA24 eq. 1 -> 22 uH standard |
 | L min at VIN 25.2 V (ripple 40 %) | 23.9 uH | SNVSA24 eq. 1 -> 22 uH standard |
-| Ripple current at 12.0 V, 22 uH | 189 mA p-p, peak 695 mA | inductor Isat >= 1.2 A (the LMR16006 current limit) recommended |
-| Ripple current at 16.8 V, 22 uH | 228 mA p-p, peak 714 mA | inductor Isat >= 1.2 A (the LMR16006 current limit) recommended |
-| Ripple current at 25.2 V, 22 uH | 260 mA p-p, peak 730 mA | inductor Isat >= 1.2 A (the LMR16006 current limit) recommended |
+| Ripple current at 12.0 V, 22 uH | 189 mA p-p, peak 695 mA | inductor Isat >= 1.6 A (TI SNVSA24 9.2.2.2; current limit 1.2 typ / 1.7 max A) |
+| Ripple current at 16.8 V, 22 uH | 228 mA p-p, peak 714 mA | inductor Isat >= 1.6 A (TI SNVSA24 9.2.2.2; current limit 1.2 typ / 1.7 max A) |
+| Ripple current at 25.2 V, 22 uH | 260 mA p-p, peak 730 mA | inductor Isat >= 1.6 A (TI SNVSA24 9.2.2.2; current limit 1.2 typ / 1.7 max A) |
 | FB divider | 0.765 x (1 + 56k/10k) = 5.05 V | VFB 0.747-0.782 V -> 4.93-5.16 V |
 | Cout min (3 % droop, 0.57 A step) | 10.9 uF | SNVSA24 eq. 5 -> 2 x 22 uF 25 V (derates to ~2 x 10 uF at 5 V) |
-| Diode | B5819W 40 V 1 A SOD-123 | >=1.25 x VIN max (21 V at 4S; 31.5 V at 6S) |
+| Inductor | FNR5040S220MT: 22 uH, Isat 1.6 A guaranteed / 1.8 A typ (-30 % L), DCR 0.17 max, 5 x 5 mm | meets TI's 1.6 A recommendation (SNVSA24 9.2.2.2); only a hard +5V short (current limit 1.2 typ / 1.7 max A) reaches soft ferrite roll-off |
+| Diode | SS34 40 V 3 A SMA | >=1.25 x VIN max; carries ~ILIMIT (<= 1.7 A) almost continuously into a shorted output |
 | Input power at 0.45 A out | 2.65 W (179 mA from the pack) | 85 % assumed |
 
 ## 4. Logic power budget (5 V rail, 600 mA max)
@@ -43,21 +44,22 @@
 |---|---|---|
 | STM32G474 at 170 MHz, all timers/ADCs | 80 mA | 3V3 |
 | 3 x driver logic (DVDD/AVDD from VM, not 5 V) | 0 mA | - |
-| 2 x MT6701 encoder | 24 mA | 3V3 |
-| CSA VREF (3 x ~2 mA) | 6 mA | 3V3 |
-| LED, pull-ups | 4 mA | 3V3 |
-| 3.3 V total | 114 mA | AP2112K from 5 V dissipates 194 mW |
-| Available for the compute board | 456 mA at 5 V | Pico W peak ~300 mA with Wi-Fi; IMUs/flash/LEDs ~100 mA |
+| 2 x MT6701 encoder (or 6 Hall ICs) | 30 mA | 3V3 |
+| CSA VREF (U2) | 2 mA | 3V3 |
+| INA239, BQ76907 (from BAT), logic (U6, U9, U10, U11, U12, U14) | 2 mA | 3V3 |
+| Sensor pull-ups 6 x 4.7k (all low), NTC/fault pull-ups | 6 mA | 3V3 |
+| 3.3 V total | 120 mA | AP2112K from 5 V dissipates 204 mW |
+| Available for the compute board | 450 mA at 5 V | Pico W peak ~300 mA with Wi-Fi; IMUs/flash/LEDs ~100 mA |
 
-## 5. Drive channel (DRV8316) thermal
+## 5. Drive channel (DRV8316C) thermal
 
 | Quantity | Value | Basis |
 |---|---|---|
-| Phase current 1 A rms | 0.14 W conduction (+ ~0.1 W switching) | RthJA 25.7 C/W (JEDEC) -> +4 C |
-| Phase current 2 A rms | 0.57 W conduction (+ ~0.1 W switching) | RthJA 25.7 C/W (JEDEC) -> +15 C |
-| Phase current 3 A rms | 1.28 W conduction (+ ~0.1 W switching) | RthJA 25.7 C/W (JEDEC) -> +33 C |
-| Phase current 4 A rms | 2.28 W conduction (+ ~0.1 W switching) | RthJA 25.7 C/W (JEDEC) -> +59 C |
-| Guidance | <= 2.5-3 A rms continuous per motor, 8 A peak | real RthJA depends on copper; Repeat Mini class needs ~1 A running, 4 A limit |
+| Phase current 1.0 A rms | typ 0.89 W (cond 0.21 + sw 0.30 + dead-time 0.10 + quiescent 0.27); worst 1.26 W | RthJA 25.7 C/W (JEDEC) -> +23 C typ / +32 C worst |
+| Phase current 1.5 A rms | typ 1.35 W (cond 0.47 + sw 0.46 + dead-time 0.16 + quiescent 0.27); worst 1.96 W | RthJA 25.7 C/W (JEDEC) -> +35 C typ / +50 C worst |
+| Phase current 2.0 A rms | typ 1.93 W (cond 0.84 + sw 0.61 + dead-time 0.21 + quiescent 0.27); worst 2.80 W | RthJA 25.7 C/W (JEDEC) -> +49 C typ / +72 C worst |
+| Phase current 3.0 A rms | typ 3.38 W (cond 1.89 + sw 0.91 + dead-time 0.31 + quiescent 0.27); worst 4.90 W | RthJA 25.7 C/W (JEDEC) -> +87 C typ / +126 C worst |
+| Guidance | <= 2 A rms continuous per motor at 48 kHz; the Mk4.1 is traction-limited at ~1-1.5 A (section 10) | OTW 135 C min, OTSD 165 C min; the board's real RthJA is worse than JEDEC.  Firmware enables OTW reporting and derates |
 
 ## 6. Weapon bridge (HYG015N04LS1C2, 1.4 mOhm @10 V)
 
@@ -70,37 +72,79 @@
 | IDRIVE 120 mA source | dV/dt edge 71 ns, switching loss 0.57 W per switching FET at 20 A / 24 kHz | Qgd 8.5 nC |
 | IDRIVE 260 mA source | dV/dt edge 33 ns, switching loss 0.26 W per switching FET at 20 A / 24 kHz | Qgd 8.5 nC |
 | Charge pump budget | 3 x Qg x f = 4.2 mA at 24 kHz | DRV8323 VCP supplies 25 mA at VM >= 13 V: OK |
-| Recommendation | IDRIVE ~60/120 mA (source/sink), loop <= 6 nH | see spice/sim_weapon_bridge.py: 400 mA overshoots, 50-100 mA stays in limits |
+| Chosen (DRV8323RH strap) | IDRIVE 75k to AGND = 60/120 mA (source/sink), loop <= 6 nH | see spice/sim_weapon_bridge.py: 400 mA overshoots, 50-100 mA stays in limits |
+| VDS OCP trip (18k to AGND = 0.13 V), cold typ | 93 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
+| VDS OCP trip (18k to AGND = 0.13 V), cold max | 76 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
+| VDS OCP trip (18k to AGND = 0.13 V), hot | 62 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
 
 ## 7. Battery current and bulk capacitor
 
 | Quantity | Value | Basis |
 |---|---|---|
 | Weapon spin-up (20 A limit) | 22 A pack peak, bus sags to ~14.1 V, 0.52 s to 90 % | spice/sim_weapon_spinup.py |
-| Bus-capacitor ripple current at 20 A phase peak | ~8 A rms (SVPWM, M~0.5) | shared by C1 polymer and 4 x 10 uF MLCC; bursts < 1 s |
-| Why the 470 uF polymer is mandatory | keeps VM dV/dt at plug-in < 2 V/us | spice/sim_hotplug.py: MLCC-only gives 4.4-5.5 V/us (> DRV8316 4 V/us limit) |
+| Bus-capacitor ripple current at 20 A phase peak | ~8 A rms (SVPWM, M~0.5) | shared by C1 polymer and the weapon MLCCs C25/C26/C31; bursts < 1 s |
+| Switch-closure VM ramp (DRV8316 abs max 4 V/us) | <= 0.01 V/us with the U13/Q7/Q8 soft-start (see section 9) | without a limiter the ramp is set by C1 ESR x dI/dt: a stiff pack, short leads or an aged/cold C1 exceed 4 V/us (round-2 simulation) |
+| DRV8316 VM filter (R302/R402 0.1 ohm 1 W + 4 x 10 uF ~16 uF) | RC ~1.6 us (corner ~99 kHz, above the 48 kHz PWM); 0.11/0.24/0.52 W at 1/1.5/2 A rms incl. PWM ripple, <= ~1 W in weapon bursts; 0.8 V drop at 8 A | spice/sim_hotplug.py: every switch/bounce event <= 2.75 V/us at the VM pins in the 0-50 C environment (loaded bounce, re-close; 2.82 V/us only with C1 at its -40 C ESR and a ~1.3 ms bounce); weapon fault-clear kick ~1-2 V/us (review round 10 sims) |
+| C1 voltage rating | 35 V vs SMBJ20A clamp 32.4 V max | the TVS protects the capacitor, not the other way round |
 | XT30 on the pack lead | 15 A continuous / 30 A burst | pack peak 22 A for 0.5 s is within the burst rating |
 
 ## 8. Timer / sensor plan
 
 | Quantity | Value | Basis |
 |---|---|---|
-| PWM | 24 kHz centre-aligned, TIM1 (weapon), TIM8 (drive L), TIM20 (drive R) | 3x PWM mode: drivers generate complementary + dead time |
+| PWM | TIM1 (weapon) 24 kHz; TIM8 (drive L) and TIM20 (drive R) 48 kHz, synchronised to TIM1 | 3x PWM mode: drivers generate complementary + dead time; ADC injected trigger TIM8_TRGO2 (OC6REF) at 48 kHz, drives in PWM mode 2 |
 | Weapon INL (Hi-Z) | TIM1_CH1N-3N | timer-driven phase enables for six-step/coast; high for FOC |
 | Drive sensors | TIM3 (L), TIM2 (R) CH1-3: Hall interface or encoder mode | MT6701 ABZ up to 1024 PPR x4, or UVW Hall emulation |
 | Odometry resolution (MT6701 1024 PPR on motor, 28.5:1) | 116736 counts/wheel rev = 1.16 um | 43.2 mm wheel |
-| Odometry resolution (Halls, 2 pole pairs, 28.5:1) | 342 counts/wheel rev = 0.40 mm |  |
+| Odometry resolution (Halls, 6 pole pairs, 28.5:1) | 1026 counts/wheel rev = 0.13 mm | only if a Hall-equipped motor is used |
 
 ## 9. Pack monitoring and power entry
 
 | Quantity | Value | Basis |
 |---|---|---|
-| INA229 range with 1 mOhm (ADCRANGE=1, +-40.96 mV) | +-41 A | pack peak 22-27 A during spin-up |
-| INA229 current resolution | 78 uA/LSB (20-bit) | energy (J) and charge (C) accumulate in hardware: mAh used per match |
+| INA239 range with 1 mOhm (ADCRANGE=1, +-40.96 mV) | +-41 A | pack peak 22-27 A during spin-up |
+| INA239 current resolution | 1.25 mA/LSB (16-bit) | mAh per match integrated in firmware (INA229 drop-in: 20-bit + hardware energy/charge) |
 | Pack shunt loss | 0.48 W at 22 A, 25 mW at 5 A | RS4 1 mOhm 2512 3 W |
-| RPP FET (Q7) loss | 1.02 W at 22 A (hot RDS) | vs ~0.5 V x 22 A = 11 W for a Schottky; zener bias 48 uA at 16.8 V |
+| Switch FETs (Q7 + Q8) loss | 2.03 W typ-hot / 2.47 W max-hot at 22 A | 0.5 s bursts; vs ~0.5 V x 22 A = 11 W for a Schottky |
+| Soft-start (U13 LM74502, Cdvdt 22 nF, R32 1M bleed) | ~2.2 V/ms ramp (sim; 1.3 V/ms at the 40 uA min, 3.0 V/ms at the 77 uA max gate current), ~0.8 A into ~380 uF | spice/sim_hotplug.py: <= 0.01 V/us peak at VM, Q7 16 W peak (22.0 W at the max gate current) / 54-57 mJ per closure; >= 2x SOA margin hot |
+| Switch UVLO (EN/UVLO 100k/15k + 0-5 uA EN sink) | on 9.8 V / off 9.0 V typ | off 7.72-10.13 V, on <= 10.79 V (1 % resistors, EN sink 0-5 uA); C18 filters the weapon ripple (1.3 ms): below a tired 4S pack under load (~11.5 V average) as long as firmware folds back current at ~12 V; limits an unloaded quick re-close step to ~9 V (loaded bounce: DESIGN 7.2) |
+| Bus decay after the switch opens (R15 6.8k ∥ ~66k of DC dividers, ~374 uF) | tau ~2.3 s; the switch UVLO (~9.0 V typ, 7.7 V min) opens about when the buck stops (~9.2 V), i.e. within ~0.1 s (typical) to ~0.4 s (minimum threshold) | a re-close before that finds the FETs on (see spice/hotplug.out: under 4 V/us in every case); later re-closes are soft.  The weapon phase dividers have no DC path from VBAT while the bridge is Hi-Z |
+| INA239 limits | SOVL 0x76C0 = 38 A, BOVL 0x17C0 = 19.0 V | ADCRANGE = 1 (1.25 uV/LSB -> 1.25 mA/LSB at 1 mOhm); BOVL 3.125 mV/LSB |
+| Sensor supply short (per connector) | TPS22945: 100-200 mA for 5-20 ms, then off, 80 ms auto-retry | worst case 0.66 W for 20 ms in U11/U12; the +3V3 LDO (600 mA) stays in regulation; 4.7 uF at VIN covers the switch's response time |
+| Motor NTC line shorted to a phase | (16.8 - 4.0) / 2.2k = 5.8 mA into the BAV99 | clamped to ~+3V3 + 0.7 V; R113/R117 0603 dissipate 74 mW (100 mW rating) |
+| Motor NTC series 2.2k | adds a fixed 2.2 kOhm to the NTC reading | subtract in firmware (R_ntc = R_meas - 2.2k) |
 | Buck UVLO at SHDN threshold 1.05 V | on 8.7 V / off 7.4 V | datasheet min/max threshold |
 | Buck UVLO at SHDN threshold 1.25 V | on 10.4 V / off 9.2 V | 390 k / 51 k; typ = 1.25 V |
 | Buck UVLO at SHDN threshold 1.38 V | on 11.5 V / off 10.3 V | datasheet min/max threshold |
 | UVLO vs weapon sag | off <= 10.3 V worst case vs 13.7 V minimum bus during a 25 A spin-up | margin for a tired pack; firmware warns long before (3.5 V/cell) |
-| Drain with the buck off (left plugged in) | ~0.9 mA (4 x 68k/10k dividers) + driver sleep currents | the few % of capacity left below the cutoff lasts ~1-2 days: unplug the pack after use |
+| Drain with the buck off (switch closed, pack flat) | ~1.3-1.5 mA (R15 bleeder + DC dividers) until the switch UVLO opens at ~9 V | then ~0.1-0.2 mA (R13/R14 + U13 in UVLO): switch the robot off after use |
+| Drain switched on and idle | ~95-113 mA (~1.6-1.9 W: logic through the buck, awake drivers, dividers) | flattens a 450-650 mAh pack in 2-3 h: the board is not pack protection |
+
+## 10. Drive motor: Repeat Mini Mk4.1 (1106, 3500 KV, 28.5:1), 43.2 mm wheels
+
+| Quantity | Value | Basis |
+|---|---|---|
+| Top speed (full 4S, 16.8 V, duty-capped) | 46.5 k rpm motor, 1630 rpm wheel, 3.7 m/s (8.2 mph) | electrical frequency 4.6 kHz (6 pole pairs); field weakening only in sensorless mode (MT6701 rated 55 k rpm) |
+| Top speed (4S under load, 14.0 V, duty-capped) | 38.7 k rpm motor, 1358 rpm wheel, 3.1 m/s (6.9 mph) | electrical frequency 3.9 kHz (6 pole pairs); field weakening only in sensorless mode (MT6701 rated 55 k rpm) |
+| Torque constant | 2.73 mN m/A | Kt = 60 / (2 pi KV) |
+| Tractive force per wheel at 0.5 A (80 % gearbox) | 1.4 N |  |
+| Tractive force per wheel at 1.0 A (80 % gearbox) | 2.9 N |  |
+| Tractive force per wheel at 1.5 A (80 % gearbox) | 4.3 N |  |
+| Tractive force per wheel at 2.0 A (80 % gearbox) | 5.8 N |  |
+| Tractive force per wheel at 4.0 A (80 % gearbox) | 11.5 N |  |
+| Traction limit per drive wheel (mu 1.0, half the weight) | 2.2 N = 0.77 A | the useful FOC current limit per motor; more only spins the tyre |
+| Traction limit per drive wheel (mu 1.3, half the weight) | 2.9 N = 1.01 A | the useful FOC current limit per motor; more only spins the tyre |
+| Stall current if uncontrolled | ~50-80 A at 16.8 V (1106 at 3500 KV, ~0.2-0.3 ohm line-line, not published) | FOC current limit + DRV8316C OCP 16 A: never run open-loop at speed; measure R on the real motor |
+| FOC update rate | 48 kHz = 12.4 updates per electrical cycle at 14 V (10.3 at 16.8 V top speed) | 24 kHz would give only ~5; with the duty cap the motor tops out at ~47 k rpm, inside the MT6701's ~55 k rpm rating |
+
+## 11. Board heat budget
+
+| Quantity | Value | Basis |
+|---|---|---|
+| Weapon bridge, 20 A burst (per switching FET 0.84 + 1.1 W, 2 FETs active + shunts) | 5.5 W peak | ~15 % duty in a match -> 0.82 W average |
+| Drive channels at 1.5 A each (typ, 48 kHz) | 2.7 W peak | ~60 % duty in a match -> 1.62 W average |
+| R302/R402 VM filters at 1.5 A rms each (incl. PWM ripple) | 0.5 W peak | ~60 % duty in a match -> 0.29 W average |
+| Switch FETs Q7+Q8 + RS4 at 22 A burst | 2.5 W peak | ~15 % duty in a match -> 0.38 W average |
+| DRV8323 quiescent + weapon gate drive (VCP) | 0.3 W peak | ~100 % duty in a match -> 0.32 W average |
+| Buck (85 %) + LDO + logic | 1.0 W peak | ~100 % duty in a match -> 1.00 W average |
+| Total average over a 3-minute match | ~4.4 W | spread over the board; copper pours + chassis airflow; weapon/switch bursts are thermal-mass limited, not steady state |

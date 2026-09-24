@@ -10,25 +10,25 @@ Every alternate function below was checked against ST's pin database (`../ref/ST
 | 4 | PC15 | R_nFAULT | GPIO / analog |
 | 5 | PF0 | L_MTEMP | ADC1_IN10 |
 | 6 | PF1 | R_MTEMP | ADC2_IN10 |
-| 7 | PG10-NRST | NRST | GPIO / analog |
-| 8 | PC0 | L_SOA | ADC1_IN6 |
-| 9 | PC1 | L_SOB | ADC2_IN7 |
+| 7 | PG10-NRST | NRST | reset |
+| 8 | PC0 | W_INHA | TIM1_CH1 |
+| 9 | PC1 | W_INHB | TIM1_CH2 |
 | 10 | PC2 | R_INHB | TIM20_CH2 |
-| 11 | PC3 | L_SOC | ADC1_IN9 |
+| 11 | PC3 | L_SOC_F | OPAMP5_VINP |
 | 12 | PA0 | W_SOA | ADC1_IN1 |
 | 13 | PA1 | W_SOB | ADC2_IN2 |
-| 14 | PA2 | W_SOC | ADC1_IN3 |
+| 14 | PA2 | W_VC | ADC1_IN3 |
 | 15 | VSS | GND | power |
 | 16 | VDD | +3V3 | power |
 | 17 | PA3 | VBAT_SNS | ADC1_IN4 |
 | 18 | PA4 | W_VA | ADC2_IN17 |
 | 19 | PA5 | W_VB | ADC2_IN13 |
-| 20 | PA6 | R_SOA | ADC2_IN3 |
-| 21 | PA7 | R_SOB | ADC2_IN4 |
+| 20 | PA6 | W_NTC | ADC2_IN3 |
+| 21 | PA7 | W_INLA_M | TIM1_CH1N |
 | 22 | PC4 | MB_TX | USART1_TX |
 | 23 | PC5 | MB_RX | USART1_RX |
 | 24 | PB0 | L_S3 | TIM3_CH3 |
-| 25 | PB1 | R_SOC | ADC1_IN12 |
+| 25 | PB1 | R_SOC_F | ADC3_IN1 |
 | 26 | PB2 | R_INHA | TIM20_CH1 |
 | 27 | VSSA | GND | power |
 | 28 | VREF+ | +3V3A | power |
@@ -36,17 +36,17 @@ Every alternate function below was checked against ST's pin database (`../ref/ST
 | 30 | PB10 | R_S3 | TIM2_CH3 |
 | 31 | VSS | GND | power |
 | 32 | VDD | +3V3 | power |
-| 33 | PB11 | W_VC | ADC1_IN14 |
-| 34 | PB12 | W_NTC | ADC1_IN11 |
-| 35 | PB13 | W_INLA | TIM1_CH1N |
-| 36 | PB14 | W_INLB | TIM1_CH2N |
-| 37 | PB15 | W_INLC | TIM1_CH3N |
+| 33 | PB11 | W_SOC | COMP6_INP |
+| 34 | PB12 | R_SOA_F | ADC4_IN3 |
+| 35 | PB13 | R_SOB_F | ADC3_IN5 |
+| 36 | PB14 | W_INLB_M | TIM1_CH2N |
+| 37 | PB15 | W_INLC_M | TIM1_CH3N |
 | 38 | PC6 | L_S1 | TIM3_CH1 |
 | 39 | PC7 | L_INHB | TIM8_CH2 |
 | 40 | PC8 | R_INHC | TIM20_CH3 |
 | 41 | PC9 | L_nCS | GPIO / analog |
-| 42 | PA8 | W_INHA | TIM1_CH1 |
-| 43 | PA9 | W_INHB | TIM1_CH2 |
+| 42 | PA8 | L_SOA_F | ADC5_IN1 |
+| 43 | PA9 | L_SOB_F | ADC5_IN2 |
 | 44 | PA10 | W_INHC | TIM1_CH3 |
 | 45 | PA11 | INA_nCS | GPIO / analog |
 | 46 | PA12 | W_EN | GPIO / analog |
@@ -58,13 +58,13 @@ Every alternate function below was checked against ST's pin database (`../ref/ST
 | 52 | PC10 | SPI_SCK | SPI3_SCK |
 | 53 | PC11 | SPI_MISO | SPI3_MISO |
 | 54 | PC12 | SPI_MOSI | SPI3_MOSI |
-| 55 | PD2 | W_nCS | GPIO / analog |
+| 55 | PD2 | W_ARM_S | GPIO / analog |
 | 56 | PB3 | R_S2 | TIM2_CH2 |
 | 57 | PB4 | R_nCS | GPIO / analog |
 | 58 | PB5 | L_S2 | TIM3_CH2 |
 | 59 | PB6 | L_INHA | TIM8_CH1 |
 | 60 | PB7 | L_nFAULT | TIM8_BKIN |
-| 61 | PB8-BOOT0 | BOOT0 | GPIO / analog |
+| 61 | PB8-BOOT0 | BOOT0 | boot mode |
 | 62 | PB9 | L_INHC | TIM8_CH3 |
 | 63 | VSS | GND | power |
 | 64 | VDD | +3V3 | power |
