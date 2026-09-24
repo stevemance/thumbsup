@@ -130,6 +130,70 @@ def check_hidden(name, sym):
             errors.append(f"{name}: hidden power_in pin {p['number']} '{p['name']}' (KiCad makes it a global net)")
 
 
+def arrangement(pads_a, pads_b):
+    """Worst pad-centre deviation between two footprints after the best whole-footprint rotation.
+
+    Numbered pads are matched by number; repeated-number pads (MP tabs) are matched as a set to the
+    nearest same-number pad, so a reversed or mirrored row next to its tabs cannot line up.
+    Rotation (not mirroring) is allowed because JLC often draws a part turned.
+    """
+    def pts(pads):
+        return [(p["number"], p["at"][0], p["at"][1]) for p in pads]
+
+    def rot_centre(points, rot):
+        r = math.radians(rot)
+        q = [(n, x * math.cos(r) - y * math.sin(r), x * math.sin(r) + y * math.cos(r)) for n, x, y in points]
+        xs = [v[1] for v in q]
+        ys = [v[2] for v in q]
+        cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+        return [(n, x - cx, y - cy) for n, x, y in q]
+
+    A = rot_centre(pts(pads_a), 0)
+    best = None
+    for rot in (0, 90, 180, 270):
+        B = rot_centre(pts(pads_b), rot)
+        by_num = collections.defaultdict(list)
+        for n, x, y in B:
+            by_num[n].append((x, y))
+        worst = 0.0
+        for n, x, y in A:
+            cands = by_num.get(n)
+            if not cands:
+                worst = float("inf")
+                break
+            worst = max(worst, min(max(abs(x - bx), abs(y - by)) for bx, by in cands))
+        if best is None or worst < best[0]:
+            best = (worst, rot)
+    return best
+
+
+MARGINS = ("solder_paste_margin", "solder_paste_margin_ratio", "solder_mask_margin", "solder_paste_ratio")
+
+
+def check_fab_flags(name, fp, expect_attr):
+    """Nothing that silently drops a part or its paste from JLC's outputs."""
+    attr = K.child(fp, "attr")
+    words = [str(w) for w in (attr[1:] if attr else [])]
+    if not words or words[0] != expect_attr or len(words) > 1:
+        errors.append(f"{name}: footprint attributes {words} (expected just '{expect_attr}': no dnp/exclude flags)")
+    # small paste reductions are normal (KiCad's PQFN-8 uses -0.05 mm on its leads); anything that
+    # grows paste/mask, or removes most of the paste, is not
+    limits = {"solder_paste_margin": (-0.1, 0.0), "solder_paste_margin_ratio": (-0.3, 0.0),
+              "solder_paste_ratio": (-0.3, 0.0), "solder_mask_margin": (-0.05, 0.05)}
+    for n in [fp] + K.children(fp, "pad"):
+        for m in MARGINS:
+            c = K.child(n, m)
+            if c and not limits[m][0] <= float(c[1]) <= limits[m][1]:
+                errors.append(f"{name}: {m} {c[1]} set on {'the footprint' if n is fp else 'pad ' + str(n[1])}")
+
+
+def check_symbol_flags(name, sym):
+    for flag in ("in_bom", "on_board", "in_pos_files"):
+        c = K.child(sym, flag)
+        if not c or c[1] != "yes":
+            errors.append(f"{name}: symbol {flag} is {c[1] if c else 'missing'} (must be yes)")
+
+
 def check_stock_arrangement(fp_full):
     ref = P.STOCK_EASYEDA_REF.get(fp_full)
     if not ref:
@@ -139,13 +203,10 @@ def check_stock_arrangement(fp_full):
     b = {}
     for p in K.fp_pads(K.load_footprint(EASYEDA / f"{ref}.kicad_mod")):
         b.setdefault(p["number"], p)
-    common = [n for n in set(a) & set(b)]
     if set(a) != set(b):
         errors.append(f"{fname}: pad numbers differ from JLC {ref}")
         return
-    ca = centred({n: a[n]["at"][:2] for n in common}, 0)
-    best = min((max(max(abs(ca[n][0] - cb[n][0]), abs(ca[n][1] - cb[n][1])) for n in common), rot)
-               for rot in (0, 90, 180, 270) for cb in [centred({n: b[n]["at"][:2] for n in common}, rot)])
+    best = arrangement(list(a.values()), [p for p in K.fp_pads(K.load_footprint(EASYEDA / f"{ref}.kicad_mod")) if p["number"]])
     (errors if best[0] > 0.35 else notes).append(
         f"{fname} vs JLC {ref}: pad arrangement within {best[0]:.2f} mm (rotation {best[1]})")
 
@@ -224,10 +285,9 @@ def check_footprint_geometry(path):
     diffs = []
     if set(a) != set(b):
         diffs.append(f"pad numbers differ: ours only {sorted(set(a) - set(b))}, JLC only {sorted(set(b) - set(a))}")
-    common = [n for n in set(a) & set(b) if n != "MP"]
-    ca = centred({n: a[n]["at"][:2] for n in common}, 0)
-    best = min((max(max(abs(ca[n][0] - cb[n][0]), abs(ca[n][1] - cb[n][1])) for n in common), rot)
-               for rot in (0, 90, 180, 270) for cb in [centred({n: b[n]["at"][:2] for n in common}, rot)])
+    b_all = [dict(p, number=P.EASYEDA_PAD_RENAME.get(name, {}).get(p["number"], p["number"]))
+             for p in K.fp_pads(K.load_footprint(ep)) if p["number"]]
+    best = arrangement(pads, b_all)
     if best[0] > 0.05:
         diffs.append(f"pad positions differ by up to {best[0]:.2f} mm (best rotation {best[1]})")
     for num in sorted(set(a) & set(b), key=lambda n: (len(n), n)):
@@ -279,6 +339,7 @@ def main():
         spec = specs[name]
         check_units(name, s)
         check_hidden(name, s)
+        check_symbol_flags(name, s)
         if props["Footprint"] in P.STOCK_EASYEDA_REF and name not in checked_stock:
             checked_stock.add(name)
             check_stock_arrangement(props["Footprint"])
@@ -324,7 +385,9 @@ def main():
         if not fpath.exists():
             errors.append(f"{name}: footprint file {fpath} missing")
             continue
-        pad_nums = {p["number"] for p in K.fp_pads(K.load_footprint(fpath)) if p["number"]}
+        fpnode = K.load_footprint(fpath)
+        check_fab_flags(fp_name, fpnode, "through_hole" if fp_name.startswith("JST_XH") else "smd")
+        pad_nums = {p["number"] for p in K.fp_pads(fpnode) if p["number"]}
         if pad_nums != sym_nums:
             errors.append(f"{name}: footprint {fp_name} pads without pin {sorted(pad_nums - sym_nums)}, "
                           f"pins without pad {sorted(sym_nums - pad_nums)}")

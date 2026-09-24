@@ -481,7 +481,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
     the nearest board edge/standoff line and kept ≥ 3 mm from the holes (flex cracks across the
     bus are shorts on an unfused LiPo); keep the Pico W antenna area of the compute board clear.
 11. U8 uses KiCad's QFN-20 EP 2.0 mm land (TI's RGR0020A is 2.05 mm): acceptable; paste per KiCad.
-12. **Custom footprints to draw** (`thumbsup.pretty`): TI_RGF0040E… (U3/U4, TI RGF0040E
+12. **Custom footprints** (project library `motor_board.pretty`, built by `kicad/lib_build/`): TI_RGF0040E… (U3/U4, TI RGF0040E
     drawing), R_2512_HoLR_1-4mR (RS1–RS3, Milliohm HoLR datasheet land), BOOMELE_1.27-2x10P_SMD
     (J1, BOOMELE drawing), SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB (J2/J3, XUNPU drawing: tab pads
     1.2 × 2.5 mm).  RS4 uses JIERR's small-electrode land (2.1 × 4.0 pads, 4.1 mm gap, datasheet p.5): R_2512_JIERR_RE_small_electrode.

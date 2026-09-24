@@ -213,7 +213,7 @@ def fp_rgf0040e(name):
         for sy in (-1, 1):
             body += line(sx * 2.61, sy * 3.61, sx * 2.61, sy * 3.25, "F.SilkS", s)
             body += line(sx * 2.61, sy * 3.61, sx * 2.25, sy * 3.61, "F.SilkS", s)
-    body += line(-2.85, -3.35, -2.85, -3.35, "F.SilkS", 0.3)  # pin-1 dot, inside the courtyard
+    body += line(-2.75, -3.3, -2.75, -3.3, "F.SilkS", 0.25)  # pin-1 dot, wholly inside the courtyard
     return footprint(name, "TI RGF0040E VQFN-40 5x7 mm, 0.5 mm pitch, EP 3.7x5.7 (SLVSH07 p.92-94)",
                      body, "".join(pads), (-2.95, -3.95, 2.95, 3.95), -4.7, 4.7)
 

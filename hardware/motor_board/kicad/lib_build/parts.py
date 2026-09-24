@@ -209,14 +209,14 @@ FOOTPRINTS = {
     # pitch 1.27, 2 x 10 → pad centres x = ±2.0, y = ±5.715 (KiCad PinHeader_2x10_P1.27mm SMD
     # orientation: odd pins in the x < 0 column, pin 1 at the top).  Body 12.7 x 3.4.
     "BOOMELE_1.27-2x10P_SMD": dict(kind="header_2xN", n=10, pitch=1.27, pad=(2.5, 0.74), x=2.0, body=(3.4, 12.7)),
+    # JIERR RE2512 small-electrode (no "L" suffix; LCSC C46961745 is this version, 1.0 mm terminals)
+    # suggested PCB dimensions (datasheet p.5): a = 4.0 (pad height), b = 2.1 (pad length),
+    # L = 4.1 (gap) → pads 2.1 x 4.0 at x = ±3.1.  Body 6.4 x 3.2.
+    "R_2512_JIERR_RE_small_electrode": dict(kind="two_pad", pad=(2.1, 4.0), x=3.1, body=(6.4, 3.2),
+        descr="JIERR RE2512 small-electrode 2512 shunt, suggested land 2.1x4.0 mm, gap 4.1 mm (datasheet p.5)"),
     # XUNPU WAFER-SH1.0-6PWB drawing "P.C.B LAYOUT" (measured at 300 dpi): signal pads 0.5 x 1.7 at
     # pitch 1.0 (x = -2.5 … 2.5), y = -1.7; tab pads 1.2 x 2.5, inner edge 0.5 outside pad 6's
     # centre → x = ±3.6, y = +1.7 (overall 5.5); identical to JLC's EasyEDA footprint.
-    # JIERR RE2512 small-electrode (no "L" suffix; LCSC C46961745 is this version, 1.0 mm terminals)
-    # suggested PCB dimensions (datasheet p.5): a = 4.0 (pad height), b = 2.1 (pad length),
-    # L = 4.1 (gap) → pads 2.1 x 4.0 at x = ±3.1.  Body 6.35 x 3.2.
-    "R_2512_JIERR_RE_small_electrode": dict(kind="two_pad", pad=(2.1, 4.0), x=3.1, body=(6.35, 3.2),
-        descr="JIERR RE2512 small-electrode 2512 shunt, suggested land 2.1x4.0 mm, gap 4.1 mm (datasheet p.5)"),
     "SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": dict(kind="sh_ra", n=6, pitch=1.0, sig=(0.5, 1.7), sig_y=-1.7,
                                                mp=(1.2, 2.5), mp_x=3.6, mp_y=1.7, body=(8.35, 4.3)),
 }

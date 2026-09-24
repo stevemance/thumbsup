@@ -60,7 +60,7 @@ mutations = {
                                               sub(d / "build_lib.py", "pads.append(pad(2 * i + 2, x, y, pw, ph))", "pads.append(pad(2 * i + 2, -x, y, pw, ph))")),
     "J1 pitch 1.0 instead of 1.27": lambda d: sub(d / "parts.py", "n=10, pitch=1.27, pad=(2.5, 0.74), x=2.0", "n=10, pitch=1.0, pad=(2.5, 0.74), x=2.0"),
     "HoLR land moved outward": lambda d: sub(d / "parts.py", "pad=(3.1, 4.0), x=2.2, body=(6.4, 3.2)", "pad=(3.1, 4.0), x=2.5, body=(6.4, 3.2)"),
-    "JIERR given the HoLR land": lambda d: sub(d / "parts.py", "pad=(2.1, 4.0), x=3.1, body=(6.35, 3.2)", "pad=(3.1, 4.0), x=2.2, body=(6.35, 3.2)"),
+    "JIERR given the HoLR land": lambda d: sub(d / "parts.py", "pad=(2.1, 4.0), x=3.1, body=(6.4, 3.2)", "pad=(3.1, 4.0), x=2.2, body=(6.4, 3.2)"),
     "RGF signal pads without paste": lambda d: sub(d / "build_lib.py", "pads.append(pad(1 + i, -2.4, -2.75 + 0.5 * i, pw, ph))",
                                                    "pads.append(pad(1 + i, -2.4, -2.75 + 0.5 * i, pw, ph, layers='\"F.Cu\" \"F.Mask\"'))"),
     "EP paste windows deleted": lambda d: sub(d / "build_lib.py", """            pads.append(pad("", cx, cy, 1.05, 1.15, rr=0.1, layers='"F.Paste"'))""", "            pass"),
@@ -88,7 +88,26 @@ def pad_to_back(d):  # post-build: move an SH connector signal pad to the back s
     f.write_text(s.replace('(layers "F.Cu" "F.Paste" "F.Mask")', '(layers "B.Cu" "B.Paste" "B.Mask")', 1))
 
 
-post_mutations = {"hidden power_in pin (DRV8316 VM)": hide_first_vm, "pad moved to the back side": pad_to_back}
+def symbol_not_in_bom(d):  # post-build: a symbol excluded from the BOM
+    f = d / "out" / "motor_board.kicad_sym"
+    f.write_text(f.read_text().replace("(in_bom yes)", "(in_bom no)", 1))
+
+
+def paste_margin(d):  # post-build: a large paste margin on an RGF pad
+    f = d / "out" / "motor_board.pretty" / "TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm.kicad_mod"
+    s = f.read_text()
+    f.write_text(s.replace("(roundrect_rratio 0.25)", "(roundrect_rratio 0.25)\n\t\t(solder_paste_margin 0.2)", 1))
+
+
+mutations.update({
+    "J2 pin order reversed": lambda d: sub(d / "build_lib.py", "pads = [pad(i + 1, -pitch * (n - 1) / 2 + i * pitch, sy, sw, sh) for i in range(n)]",
+                                           "pads = [pad(n - i, -pitch * (n - 1) / 2 + i * pitch, sy, sw, sh) for i in range(n)]"),
+    "J2 mirrored (tabs above the row)": lambda d: sub(d / "parts.py", "sig_y=-1.7,", "sig_y=1.7,") or sub(d / "parts.py", "mp_x=3.6, mp_y=1.7,", "mp_x=3.6, mp_y=-1.7,"),
+    "J2 signal row shifted 0.5 mm": lambda d: sub(d / "parts.py", "sig_y=-1.7,", "sig_y=-2.2,"),
+    "custom footprint marked dnp": lambda d: sub(d / "build_lib.py", "def fp_sh(name, spec):", "def fp_sh(name, spec):\n    global footprint\n    _f = footprint\n    footprint = lambda *a, **k: _f(*a, **k).replace('(attr smd)', '(attr smd dnp)')"),
+})
+post_mutations = {"hidden power_in pin (DRV8316 VM)": hide_first_vm, "pad moved to the back side": pad_to_back,
+                  "symbol excluded from the BOM": symbol_not_in_bom, "large paste margin on a pad": paste_margin}
 ok = True
 for name, fn in list(mutations.items()) + [(k, v) for k, v in post_mutations.items()]:
     d = fresh()
