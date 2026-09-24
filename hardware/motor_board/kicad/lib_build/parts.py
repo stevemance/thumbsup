@@ -236,3 +236,35 @@ EASYEDA_DEVIATIONS = {
     "R_2512_JIERR_RE_small_electrode": "JIERR p.5 small-electrode land (2.1 x 4.0, gap 4.1); JLC's pads are 2.0 x 3.46, gap 3.34",
     "BOOMELE_1.27-2x10P_SMD": "BOOMELE drawing land (0.74 x 2.5, 6.5 outer, 1.5 gap); JLC's pads are 0.8 wide, 0.86 gap",
 }
+
+# Gate grouping per unit for multi-unit symbols (datasheet pinouts), checked by check_lib.
+UNITS = {
+    # SN74LVC08A PW: gate 1 = 1A,1B,1Y (1,2,3); gate 2 = 4,5,6; gate 3 = 3A,3B,3Y (9,10,8);
+    # gate 4 = 4A,4B,4Y (12,13,11); power GND 7, VCC 14
+    "SN74LVC08APWR": [{"1", "2", "3"}, {"4", "5", "6"}, {"8", "9", "10"}, {"11", "12", "13"}, {"7", "14"}],
+    # SN74LVC3G17 DCU: 1A/1Y (1,7), 2A/2Y (3,5), 3A/3Y (6,2); power GND 4, VCC 8
+    "SN74LVC3G17DCUR": [{"1", "7"}, {"3", "5"}, {"2", "6"}, {"4", "8"}],
+}
+
+# JLC's EasyEDA footprints for the stock footprints (pad-arrangement cross-check only: a mirrored,
+# re-numbered or wrong-pitch footprint fails; toe/heel length differences within 0.35 mm are normal).
+STOCK_EASYEDA_REF = {
+    "Package_TO_SOT_SMD:SOT-353_SC-70-5": "SC-70-5_L2.1-W1.3-P0.65-LS2.1-BL",
+    "Package_TO_SOT_SMD:Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm": "SOT-23-8_L2.9-W1.6-P0.65-LS2.8-BL",
+    "Package_SO:TSSOP-14_4.4x5mm_P0.65mm": "TSSOP-14_L5.0-W4.4-P0.65-LS6.4-BL",
+    "Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm": "VQFN-20_L3.5-W3.5-P0.50-TL-EP2.1",
+    "Package_DFN_QFN:Texas_RGZ0048A_VQFN-48-1EP_7x7mm_P0.5mm_EP5.15x5.15mm": "VQFN-48_L7.0-W7.0-P0.50-TL-EP5.1",
+    "Package_SO:MSOP-10_3x3mm_P0.5mm": "VSSOP-10_L3.0-W3.0-P0.50-LS4.9-BL",
+}
+
+# Deviated custom footprints: the manufacturer-drawing values, transcribed again here (independently
+# of FOOTPRINTS above) for check_lib to measure the built footprint against.
+DRAWING = {
+    # HoLR2512 datasheet p.3, 1-4 mOhm: B = 3.1 (pad length), A = 4.0 (pad height), L = 1.3 (gap)
+    "R_2512_HoLR_1-4mR": dict(pad=(3.1, 4.0), gap=1.3),
+    # JIERR RE2512 datasheet p.5, small electrode: b = 2.1, a = 4.0, L = 4.1
+    "R_2512_JIERR_RE_small_electrode": dict(pad=(2.1, 4.0), gap=4.1),
+    # BOOMELE 1.27-2*10P "P.C.B Layout": pad 0.74 wide x 2.5 long, pitch 1.27, 1.5 between rows,
+    # 6.5 overall; 2 x 10
+    "BOOMELE_1.27-2x10P_SMD": dict(pad=(2.5, 0.74), pitch=1.27, row_gap=1.5, n=10),
+}
