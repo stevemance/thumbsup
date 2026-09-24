@@ -7,8 +7,6 @@ the KiCad project; copy the two into kicad/motor_board/ once check_lib.py passes
     python3 build_lib.py && python3 check_lib.py
 """
 import copy
-import csv
-import re
 from pathlib import Path
 
 import kicadlib as K
@@ -19,16 +17,6 @@ HERE = Path(__file__).parent
 OUT = HERE / "out"
 DESIGN = HERE.parent.parent / "design"
 GRID = 2.54
-
-
-def lcsc_by_symbol():
-    """Symbol name -> (LCSC, BOM comment) from design/bom.csv."""
-    out = {}
-    for row in csv.DictReader(open(DESIGN / "bom.csv")):
-        sym = P.BOM_TO_SYMBOL.get(row["Comment"])
-        if sym:
-            out[sym] = (row["LCSC Part #"], row["Comment"])
-    return out
 
 
 # ------------------------------------------------------------------ symbol helpers
@@ -152,13 +140,12 @@ def new_symbol(name, spec, lcsc):
 
 
 def build_symbols():
-    lcsc = lcsc_by_symbol()
     lib = ["kicad_symbol_lib", ["version", "20251024"], ["generator", Str("motor_board_lib_build")],
            ["generator_version", Str("10.0")]]
     cache = {}
     names = sorted(list(P.NEW) + list(P.STOCK))
     for name in names:
-        code = lcsc.get(name, ("", ""))[0]
+        code = (P.NEW.get(name) or P.STOCK.get(name))["lcsc"]  # from parts.py, not the BOM (check_lib compares)
         if name in P.NEW:
             lib.append(new_symbol(name, P.NEW[name], code))
         else:

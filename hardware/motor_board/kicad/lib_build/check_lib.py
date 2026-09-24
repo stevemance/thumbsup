@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 """Verify out/motor_board.kicad_sym + out/motor_board.pretty against the reviewed design.
 
-Checks, for every BOM line that maps to a library symbol:
-  1. fields: Footprint and LCSC match design/bom.csv;
-  2. pins: the symbol's pin numbers equal the netlist's pin numbers for every designator using it,
-     and the pin names agree (ICs; connectors and two-terminal parts compare numbers only);
-  3. pads: the symbol's pin numbers equal the footprint's numbered pads (stock or custom);
-  4. ERC preview: per netlist net, pin-type conflicts KiCad's ERC would flag
-     (output/power-out collisions, power-in nets without a power-out driver → PWR_FLAG needed);
-and, for the custom footprints, compares pads with JLC's EasyEDA footprint when one is given.
-
-Exit status 1 on any error (warnings and notes do not fail).
+Errors (exit 1):
+  coverage  every design/bom.csv line is either a library symbol or a generic R/C/NTC (by footprint);
+            every library symbol is used by some BOM line;
+  fields    symbol Footprint == BOM footprint; symbol LCSC == parts.py's expected code == BOM LCSC
+            (two independent sources, so a BOM_TO_SYMBOL mix-up is caught);
+  pins      per designator: symbol pin numbers == netlist pin numbers, names agree (all parts
+            except connectors and plain R/L, whose netlist names are signal names or 1/2);
+            a pin number used twice must carry one name (KiCad stacking);
+  pads      symbol pin numbers == the footprint's numbered pads; every numbered pad has copper and
+            mask; only "MP" may repeat;
+  geometry  (custom footprints) copper pads of different numbers >= 0.15 mm apart; courtyard
+            encloses every pad; pads agree with JLC's EasyEDA footprint (ref/easyeda/) within
+            0.05 mm unless a deviation is documented in parts.EASYEDA_DEVIATIONS;
+  ERC       per netlist net: output-output, output-power_out, power_out-power_out between different
+            parts, a no_connect pin on a real net.
+Notes: nets needing a PWR_FLAG, minimum copper gaps, documented JLC deviations.
 """
 import collections
 import csv
+import math
 import sys
 from pathlib import Path
 
@@ -23,7 +30,10 @@ import parts as P
 HERE = Path(__file__).parent
 OUT = HERE / "out"
 DESIGN = HERE.parent.parent / "design"
-EASYEDA = Path("/home/smance/.claude/jobs/7be37e37/tmp/ee/ee.pretty")  # optional cross-check
+EASYEDA = HERE / "ref" / "easyeda"
+GENERIC_FP = ("R_0402", "R_0603", "R_0805", "R_1206", "C_0402", "C_0603", "C_0805", "C_1206")
+NUMBER_ONLY_PREFIX = ("J",)   # connectors: netlist pin names are signal names
+PLAIN_2T = ("R", "L")         # netlist names 1/2
 
 errors, warnings, notes = [], [], []
 
@@ -35,55 +45,149 @@ def norm(name):
 def names_match(sym_name, net_name):
     a, b = norm(sym_name), norm(net_name)
     if not a:
-        return None  # stock symbol with unnamed pins (e.g. 74xx gates): number check only
-    return a == b or b.startswith(a + "-") or a.replace("/", "") == b.replace("/", "")
+        return None
+    return a == b or b.startswith(a + "-")
 
 
-def centred(d, rot):
-    """Pad centres rotated by rot degrees and centred on their bounding box."""
-    import math
+def pad_box(p):
+    (x, y, *rot), (w, h) = p["at"], p["size"]
+    if rot and int(round(float(rot[0]))) % 180 == 90:
+        w, h = h, w
+    return x - w / 2, y - h / 2, x + w / 2, y + h / 2
+
+
+def centred(pts, rot):
     r = math.radians(rot)
-    pts = {n: (p["at"][0] * math.cos(r) - p["at"][1] * math.sin(r),
-               p["at"][0] * math.sin(r) + p["at"][1] * math.cos(r)) for n, p in d.items()}
-    xs = [v[0] for v in pts.values()]
-    ys = [v[1] for v in pts.values()]
+    q = {n: (x * math.cos(r) - y * math.sin(r), x * math.sin(r) + y * math.cos(r)) for n, (x, y) in pts.items()}
+    xs = [v[0] for v in q.values()]
+    ys = [v[1] for v in q.values()]
     cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
-    return {n: (x - cx, y - cy) for n, (x, y) in pts.items()}
+    return {n: (x - cx, y - cy) for n, (x, y) in q.items()}
+
+
+def courtyard(fp):
+    xs, ys = [], []
+    for ln in K.children(fp, "fp_line") + K.children(fp, "fp_rect"):
+        if K.child(ln, "layer") and K.child(ln, "layer")[1] == "F.CrtYd":
+            for key in ("start", "end"):
+                c = K.child(ln, key)
+                xs.append(float(c[1]))
+                ys.append(float(c[2]))
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None
+
+
+def check_footprint_geometry(path):
+    fp = K.load_footprint(path)
+    allpads = K.fp_pads(fp)
+    pads = [p for p in allpads if p["number"]]
+    name = path.stem
+    for p in pads:
+        if not any(l.endswith("Cu") for l in p["layers"]) or not any("Mask" in l for l in p["layers"]):
+            errors.append(f"{name}: pad {p['number']} lacks copper or mask ({p['layers']})")
+    for num, n in collections.Counter(p["number"] for p in pads).items():
+        if n > 1 and num != "MP":
+            errors.append(f"{name}: pad number {num} used {n} times")
+    boxes = [(p["number"], pad_box(p)) for p in pads]
+    worst = None
+    for i, (na, a) in enumerate(boxes):
+        for nb, b in boxes[i + 1:]:
+            if na == nb:
+                continue
+            gap = max(b[0] - a[2], a[0] - b[2], b[1] - a[3], a[1] - b[3])
+            if worst is None or gap < worst[0]:
+                worst = (gap, na, nb)
+    if worst and worst[0] < 0.15:
+        errors.append(f"{name}: pads {worst[1]} and {worst[2]} are {worst[0]:.3f} mm apart"
+                      f" ({'overlap' if worst[0] < 0 else 'too close'})")
+    elif worst:
+        notes.append(f"{name}: minimum copper gap {worst[0]:.3f} mm (pads {worst[1]}/{worst[2]})")
+    crt = courtyard(fp)
+    if not crt:
+        errors.append(f"{name}: no F.CrtYd outline")
+    else:
+        for p in allpads:
+            b = pad_box(p)
+            if b[0] < crt[0] - 1e-6 or b[1] < crt[1] - 1e-6 or b[2] > crt[2] + 1e-6 or b[3] > crt[3] + 1e-6:
+                errors.append(f"{name}: pad {p['number'] or '(paste)'} outside the courtyard")
+                break
+    ref = P.EASYEDA_REF.get(name)
+    if not ref:
+        errors.append(f"{name}: no EasyEDA reference listed in parts.EASYEDA_REF")
+        return
+    ep = EASYEDA / f"{ref}.kicad_mod"
+    if not ep.exists():
+        errors.append(f"{name}: EasyEDA reference {ep} missing")
+        return
+    a = {p["number"]: p for p in pads}
+    b = {}
+    for p in K.fp_pads(K.load_footprint(ep)):
+        num = P.EASYEDA_PAD_RENAME.get(name, {}).get(p["number"], p["number"])
+        b.setdefault(num, p)
+    diffs = []
+    if set(a) != set(b):
+        diffs.append(f"pad numbers differ: ours only {sorted(set(a) - set(b))}, JLC only {sorted(set(b) - set(a))}")
+    common = [n for n in set(a) & set(b) if n != "MP"]
+    ca = centred({n: a[n]["at"][:2] for n in common}, 0)
+    best = min((max(max(abs(ca[n][0] - cb[n][0]), abs(ca[n][1] - cb[n][1])) for n in common), rot)
+               for rot in (0, 90, 180, 270) for cb in [centred({n: b[n]["at"][:2] for n in common}, rot)])
+    if best[0] > 0.05:
+        diffs.append(f"pad positions differ by up to {best[0]:.2f} mm (best rotation {best[1]})")
+    for num in sorted(set(a) & set(b), key=lambda n: (len(n), n)):
+        if max(abs(x - y) for x, y in zip(sorted(a[num]["size"]), sorted(b[num]["size"]))) > 0.05:
+            diffs.append(f"pad {num} size {a[num]['size']} vs JLC {b[num]['size']}")
+            break
+    dev = P.EASYEDA_DEVIATIONS.get(name)
+    if diffs and not dev:
+        errors.append(f"{name} vs JLC {ref}: " + "; ".join(diffs))
+    elif diffs:
+        notes.append(f"{name} vs JLC {ref}: documented deviation ({dev}): " + "; ".join(diffs))
+    elif dev:
+        warnings.append(f"{name}: deviation documented but the footprint now matches JLC")
+    else:
+        notes.append(f"{name} vs JLC {ref}: all pads agree within 0.05 mm")
 
 
 def main():
-    lib = K.load_symbol_lib(OUT / "motor_board.kicad_sym")
-    syms = K.symbols(lib)
+    syms = K.symbols(K.load_symbol_lib(OUT / "motor_board.kicad_sym"))
+    specs = {**P.NEW, **P.STOCK}
     netlist = collections.defaultdict(dict)
     nets = collections.defaultdict(list)
     for r in csv.DictReader(open(DESIGN / "netlist.csv")):
         netlist[r["ref"]][r["pin"]] = r["pin_name"]
         nets[r["net"]].append((r["ref"], r["pin"]))
-    ref_symbol = {}
+    used = set()
+    ref_types = {}
     for row in csv.DictReader(open(DESIGN / "bom.csv")):
         name = P.BOM_TO_SYMBOL.get(row["Comment"])
+        refs = row["Designator"].split(",")
         if not name:
+            if not row["Footprint"].startswith(GENERIC_FP):
+                errors.append(f"BOM line '{row['Comment']}' ({row['Designator']}) has no library symbol and is not a generic R/C")
             continue
+        used.add(name)
         s = syms.get(name)
         if s is None:
             errors.append(f"{name}: missing from the library")
             continue
         props = K.sym_props(s)
-        # 1. fields
+        spec = specs[name]
         fp_lib, fp_name = props["Footprint"].split(":")
         if fp_name != row["Footprint"]:
             errors.append(f"{name}: Footprint {fp_name} != BOM {row['Footprint']}")
-        if props.get("LCSC") != row["LCSC Part #"]:
-            errors.append(f"{name}: LCSC {props.get('LCSC')} != BOM {row['LCSC Part #']}")
+        if not (props.get("LCSC") == spec["lcsc"] == row["LCSC Part #"]):
+            errors.append(f"{name}: LCSC symbol {props.get('LCSC')} / parts.py {spec['lcsc']} / BOM {row['LCSC Part #']} disagree")
         pins = K.sym_pins(s)
-        sym_nums = {p["number"] for p in pins}
         by_num = collections.defaultdict(set)
         for p in pins:
             by_num[p["number"]].add(p["name"])
-        # 2. pins vs netlist
-        compare_names = s is not None and props["Reference"] == "U" or name in ("HYG015N04LS1C2", "BAV99", "BAT54S")
-        for ref in row["Designator"].split(","):
-            ref_symbol[ref] = (name, {p["number"]: p["type"] for p in pins})
+        for num, nm in by_num.items():
+            if len(nm) > 1:
+                errors.append(f"{name}: pin number {num} used with different names {sorted(nm)}")
+        sym_nums = set(by_num)
+        types = {p["number"]: p["type"] for p in pins}
+        compare_names = not refs[0].startswith(NUMBER_ONLY_PREFIX) and refs[0][0] not in PLAIN_2T
+        for ref in refs:
+            ref_types[ref] = types
             npins = netlist.get(ref)
             if not npins:
                 errors.append(f"{name}/{ref}: not in the netlist")
@@ -96,10 +200,9 @@ def main():
                     for sname in by_num.get(num, ()):
                         m = names_match(sname, nname)
                         if m is False:
-                            errors.append(f"{name}/{ref}: pin {num} named '{sname}' in the symbol, '{nname}' in the netlist")
+                            errors.append(f"{name}/{ref}: pin {num} is '{sname}' in the symbol, '{nname}' in the netlist")
                         elif m is None:
-                            notes.append(f"{name}/{ref}: pin {num} unnamed in the symbol (netlist '{nname}')")
-        # 3. pads vs pins
+                            errors.append(f"{name}/{ref}: pin {num} unnamed in the symbol (netlist '{nname}')")
         fpath = (OUT / "motor_board.pretty" / f"{fp_name}.kicad_mod") if fp_lib == "motor_board" \
             else K.stock_footprint_path(fp_lib, fp_name)
         if not fpath.exists():
@@ -107,88 +210,30 @@ def main():
             continue
         pad_nums = {p["number"] for p in K.fp_pads(K.load_footprint(fpath)) if p["number"]}
         if pad_nums != sym_nums:
-            errors.append(f"{name}: footprint {fp_name} pads {sorted(pad_nums - sym_nums)} have no pin, "
-                          f"pins {sorted(sym_nums - pad_nums)} have no pad")
-    # every non-passive netlist part is covered
-    for ref in netlist:
-        if ref not in ref_symbol and ref[0] in "UQDJL" and not ref.startswith(("J_", "JP")):
-            warnings.append(f"{ref}: not covered by the library (check it is a stock/generic part)")
-    # 4. ERC preview on the netlist's nets
+            errors.append(f"{name}: footprint {fp_name} pads without pin {sorted(pad_nums - sym_nums)}, "
+                          f"pins without pad {sorted(sym_nums - pad_nums)}")
+    for name in syms:
+        if name not in used:
+            errors.append(f"{name}: in the library but used by no BOM line")
+    for path in sorted((OUT / "motor_board.pretty").glob("*.kicad_mod")):
+        check_footprint_geometry(path)
     for net, members in sorted(nets.items()):
         if net == "NC":  # the netlist's bucket for unconnected pins (no-connect flags in the schematic)
             continue
-        types = collections.Counter()
+        by = collections.defaultdict(set)
         for ref, pin in members:
-            if ref in ref_symbol:
-                types[ref_symbol[ref][1].get(pin, "?")] += 1
-        drivers = types["power_out"]
-        outs = types["output"]
-        if drivers > 1 and not (net.startswith(("GND",)) or net == "NC"):
-            same = {ref for ref, pin in members if ref_symbol.get(ref, (0, {}))[1].get(pin) == "power_out"}
-            if len(same) > 1:
-                warnings.append(f"ERC: net {net} has {drivers} power_out pins ({', '.join(sorted(same))})")
-        if outs > 1:
-            src = sorted({ref for ref, pin in members if ref_symbol.get(ref, (0, {}))[1].get(pin) == "output"})
-            if len(src) > 1:
-                errors.append(f"ERC: net {net} has output pins from {', '.join(src)} (output-output conflict)")
-        if types["power_in"] and not drivers and net != "NC":
-            notes.append(f"ERC: net {net} has power_in pins but no power_out → needs a PWR_FLAG (or a power symbol)")
-    # 5. copper geometry of the custom footprints: no two copper pads of different numbers may
-    #    overlap or come closer than 0.15 mm (JLC's minimum copper gap class is 0.1 mm)
-    for fp_file in sorted((OUT / "motor_board.pretty").glob("*.kicad_mod")):
-        cu = [p for p in K.fp_pads(K.load_footprint(fp_file)) if p["number"] and any("Cu" in l for l in p["layers"])]
-        boxes = []
-        for p in cu:
-            (x, y, *rot), (w, h) = p["at"], p["size"]
-            if rot and int(float(rot[0])) % 180 == 90:
-                w, h = h, w
-            boxes.append((p["number"], x - w / 2, y - h / 2, x + w / 2, y + h / 2))
-        worst = None
-        for i, a in enumerate(boxes):
-            for b in boxes[i + 1:]:
-                if a[0] == b[0]:
-                    continue
-                gx = max(b[1] - a[3], a[1] - b[3])
-                gy = max(b[2] - a[4], a[2] - b[4])
-                gap = max(gx, gy)  # < 0 → overlap
-                if worst is None or gap < worst[0]:
-                    worst = (gap, a[0], b[0])
-        if worst and worst[0] < 0.15:
-            errors.append(f"{fp_file.stem}: pads {worst[1]} and {worst[2]} are {worst[0]:.3f} mm apart "
-                          f"({'overlap' if worst[0] < 0 else 'too close'})")
-        elif worst:
-            notes.append(f"{fp_file.stem}: minimum copper gap {worst[0]:.3f} mm (pads {worst[1]}/{worst[2]})")
-    # 6. custom footprints vs EasyEDA
-    pairs = {"SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": "CONN-SMD_6P-P1.00_XUNPU_WAFER-SH1.0-6PWB",
-             "R_2512_HoLR_1-4mR": "RES-SMD_L6.4-W3.2-A",
-             "BOOMELE_1.27-2x10P_SMD": "HDR-SMD_20P-P1.27-V-M-R2-C10-S1.27-LS5.5-1",
-             "TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm": "VQFN-40_L7.0-W5.0-P0.50-BL-EP5.7"}
-    for ours, theirs in pairs.items():
-        ep = EASYEDA / f"{theirs}.kicad_mod"
-        if not ep.exists():
-            continue
-        a = {p["number"]: p for p in K.fp_pads(K.load_footprint(OUT / "motor_board.pretty" / f"{ours}.kicad_mod")) if p["number"]}
-        b = {}
-        for p in K.fp_pads(K.load_footprint(ep)):
-            num = {"7": "MP", "8": "MP"}.get(p["number"], p["number"]) if "SH1.0" in ours else p["number"]
-            b.setdefault(num, p)
-        diffs = []
-        # best of four rotations (EasyEDA often draws parts turned), centred on the pad bounding box
-        common = [n for n in set(a) & set(b) if n != "MP"]
-        ca = centred({n: a[n] for n in common}, 0)
-        best = min((max(max(abs(ca[n][0] - cb[n][0]), abs(ca[n][1] - cb[n][1])) for n in common), rot)
-                   for rot in (0, 90, 180, 270) for cb in [centred({n: b[n] for n in common}, rot)])
-        if best[0] > 0.05:
-            diffs.append(f"pad positions differ by up to {best[0]:.2f} mm (best rotation {best[1]} deg)")
-        for num in sorted(set(a) & set(b), key=lambda n: (len(n), n)):
-            sa = sorted(a[num]["size"]); sb = sorted(b[num]["size"])
-            if max(abs(x - y) for x, y in zip(sa, sb)) > 0.05:
-                diffs.append(f"pad {num} size {a[num]['size']} vs {b[num]['size']}")
-        pitch = lambda d, n1, n2: round(((d[n1]["at"][0] - d[n2]["at"][0]) ** 2 + (d[n1]["at"][1] - d[n2]["at"][1]) ** 2) ** 0.5, 3)
-        if "1" in a and "2" in a and "1" in b and "2" in b and pitch(a, "1", "2") != pitch(b, "1", "2"):
-            diffs.append(f"pad 1-2 distance {pitch(a, '1', '2')} vs {pitch(b, '1', '2')}")
-        (notes if not diffs else warnings).append(
-            f"{ours} vs EasyEDA {theirs}: " + ("all pad positions and sizes agree (within 0.05 mm)" if not diffs else "; ".join(diffs[:6])))
+            if ref in ref_types:
+                by[ref_types[ref].get(pin)].add(ref)
+        if len(by["output"]) > 1:
+            errors.append(f"ERC {net}: outputs from {sorted(by['output'])}")
+        if by["output"] and by["power_out"]:
+            errors.append(f"ERC {net}: output {sorted(by['output'])} vs power_out {sorted(by['power_out'])}")
+        if len(by["power_out"]) > 1:
+            errors.append(f"ERC {net}: power_out from {sorted(by['power_out'])}")
+        if by["no_connect"]:
+            errors.append(f"ERC {net}: no_connect pin of {sorted(by['no_connect'])} on a real net")
+        if by["power_in"] and not by["power_out"]:
+            notes.append(f"ERC {net}: power_in without a power_out driver → PWR_FLAG in the schematic")
     for kind, items in (("ERROR", errors), ("WARN", warnings), ("note", notes)):
         for i in items:
             print(f"{kind}: {i}")

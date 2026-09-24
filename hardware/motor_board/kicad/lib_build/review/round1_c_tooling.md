@@ -152,3 +152,24 @@ Suggested fix: use the full KiCad default matrix in the ERC preview.
      deviations. SH1.0 matches EasyEDA.
    - Cosmetic: FNR5040S220MT description says 1.6 A while the BOM comment says 1.8A. Value is the MPN
      even on Device:R-based shunts.
+
+---
+
+## Addendum: concurrent working-tree changes
+
+This audit covers commit f1ccde1, which had a clean tree when the audit started. While it ran, someone
+else changed `parts.py`, `build_lib.py`, `check_lib.py` and `out/` without committing. The changes:
+- move the RGF pads to x = ±2.4 / y = ±3.4;
+- move the courtyard to ±2.95 / ±3.95;
+- rework the silk;
+- add a copper-gap check (step 5) to check_lib.
+
+I re-checked the working tree:
+- `pcbnew` Collide finds 0 copper overlaps in the RGF footprint;
+- check_lib reports a 0.225 mm minimum gap (pads 1/40);
+- the RGF footprint now agrees with EasyEDA within 0.05 mm.
+
+So BLOCKER-1 looks fixed in the working tree. The first MAJOR-1 bullet is partly addressed: the
+overlap/gap check exists, but pad layers and courtyard containment are still unchecked. Its second
+bullet still stands: EasyEDA differences are still WARN, and a missing EasyEDA file is still skipped
+silently. MINOR-1 to MINOR-3 are unchanged.
