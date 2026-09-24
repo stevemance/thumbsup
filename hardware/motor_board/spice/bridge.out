@@ -1,0 +1,22 @@
+```
+Weapon half bridge, 16.8 V, +-20 A, 100 ns dead time.  (An RC snubber across each FET made no difference; run(snub=True) to see.)
+snub IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max
+  no  400mA     20A     3nH    37.8V    21.3V  -10.34V   -5.18V    3.80V  SH<-7V SP out of +-3V
+  no  400mA    -20A     3nH    36.3V    21.6V   -9.51V   -4.76V    3.71V  SH<-7V SP out of +-3V
+  no  400mA     20A     6nH    44.2V    22.0V  -11.71V   -3.89V    2.34V  VDS>40V SH<-7V SP out of +-3V
+  no  400mA    -20A     6nH    42.5V    22.5V  -10.84V   -3.55V    2.35V  VDS>40V SH<-7V SP out of +-3V
+  no  400mA     20A    12nH    44.3V    22.3V  -10.61V   -2.15V    1.30V  VDS>40V SH<-7V
+  no  400mA    -20A    12nH    44.3V    23.1V  -10.51V   -2.08V    1.34V  VDS>40V SH<-7V
+  no  150mA     20A     3nH    31.8V    21.6V   -6.98V   -3.53V    3.72V  SP out of +-3V
+  no  150mA    -20A     3nH    31.1V    21.8V   -6.56V   -3.33V    3.71V  SP out of +-3V
+  no  150mA     20A     6nH    39.3V    22.8V   -9.20V   -2.95V    2.45V  SH<-7V
+  no  150mA    -20A     6nH    38.2V    23.1V   -8.66V   -2.75V    2.48V  SH<-7V
+  no  150mA     20A    12nH    44.3V    23.5V  -10.51V   -2.08V    1.48V  VDS>40V SH<-7V
+  no  150mA    -20A    12nH    44.3V    24.0V  -10.37V   -1.98V    1.50V  VDS>40V SH<-7V
+  no   60mA     20A     3nH    23.7V    20.1V   -2.62V   -1.40V    3.23V  SP out of +-3V
+  no   60mA    -20A     3nH    23.3V    20.3V   -2.37V   -1.29V    3.23V  SP out of +-3V
+  no   60mA     20A     6nH    29.4V    22.2V   -4.58V   -1.35V    2.55V  
+  no   60mA    -20A     6nH    28.9V    22.4V   -4.28V   -1.24V    2.57V  
+  no   60mA     20A    12nH    37.6V    23.8V   -7.33V   -1.19V    1.70V  SH<-7V
+  no   60mA    -20A    12nH    36.7V    24.0V   -6.92V   -1.08V    1.74V  
+```

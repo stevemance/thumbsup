@@ -1,0 +1,10 @@
+```
+4S pack 16.8 V step into the board through ~150 nH of battery lead
+case                                          VM peak   max dV/dt   final
+470 uF polymer + MLCC + TVS (as designed)       16.2V      1.67V/us   16.2V  
+no polymer bulk (MLCC only) + TVS               19.6V      4.38V/us   19.5V  EXCEEDS 4 V/us ramp
+no polymer bulk, no TVS                         19.6V      4.38V/us   19.5V  EXCEEDS 4 V/us ramp
+as designed, 300 nH lead (long pigtail)         16.2V      0.93V/us   16.2V  
+as designed, stiff pack (4 x 5 mOhm)            16.2V      1.81V/us   16.2V  
+no polymer bulk, stiff pack (4 x 5 mOhm)        23.5V      5.45V/us   23.3V  EXCEEDS 4 V/us ramp
+```

@@ -4,6 +4,7 @@ Custom control / power / motor board for the 1 lb plastic-antweight robot.
 
 | Document | What it is |
 |---|---|
+| [motor_board/](motor_board/) | **Current direction (2026-09-23):** two-board stack, this is the motor board: STM32G474 + DRV8323RS weapon + 2 × DRV8316R FOC drive, 4S. Design, netlist, BOM, SPICE. |
 | [REVIEW.md](REVIEW.md) | 2026-09-03 design reviews (initial + layout-readiness): what was wrong, what changed, what is still open. |
 | [LAYOUT.md](LAYOUT.md) | The generated layout: mechanical frame, stackup and rules, floorplan, copper plan, routing, what is left for a human. |
 | [DESIGN_REQUIREMENTS.md](DESIGN_REQUIREMENTS.md) | v1 board spec: simple teleop + instrumentation for later autonomy. |

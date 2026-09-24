@@ -1,0 +1,7 @@
+```
+4S pack (15.6 V under load, 70 mOhm), 2822 1800 KV, drum J 1.8e-5 kg m2
+ I limit  final rpm     t90  drum energy  pack I peak  min VBUS
+     15A     25573   0.68s      64.5 J       17.2 A    14.40 V   tip 53.6 m/s
+     20A     25573   0.52s      64.5 J       22.1 A    14.06 V   tip 53.6 m/s
+     25A     25573   0.43s      64.5 J       26.9 A    13.71 V   tip 53.6 m/s
+```
