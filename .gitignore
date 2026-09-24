@@ -63,6 +63,13 @@ motor_calibration_fits.png
 *.ses
 fp-info-cache
 *.kicad_prl
+# KiCad 10 local history (a nested git repo per project), lock files, autosaves
+.history/
+~*.lck
+_autosave-*
+# kicad-jlcpcb-tools generated fabrication output (its project.db stays tracked)
+**/jlcpcb/gerber/
+**/jlcpcb/production_files/
 
 # Vendor datasheet PDFs (download with hardware/tools/download_datasheets.py)
 hardware/datasheets/pdf/
