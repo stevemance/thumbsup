@@ -125,8 +125,10 @@ T_ += [trk(N("GHB"), B, [(54.25, R1), (54.25, 17.8), (54.05, 17.6), (52.65, 17.6
                        (53.1, 7.0), (59.35, 7.0), SH["B"]], 0.2),
        trk(N("GLB"), B, [(55.25, R1), (55.25, 13.75), (55.0, 13.5), (55.0, 12.1), (54.8, 11.9), GL["B"]], 0.25)]
 # phase C: L3 behind the rows to the staircase; GHC on the bottom behind the rows
-STAIR = {"SNC": (47.5, 18.55), "SLC": (48.05, 19.05), "GLC": (48.6, 19.72), "C": (49.2, 20.1)}
-T_ += [trk(N("SNC"), L3, [(51.75, R2), (51.3, 18.55), STAIR["SNC"]], 0.2),
+# SNC's stair via sits north of the others, reached by an L3 lane at y 18.1 (just inside the VBAT feed's rear edge,
+# like the phase B Kelvin pair), so the top-layer strip in front of U2 pins 23/24 stays free for W_SOB/W_SOC
+STAIR = {"SNC": (47.15, 17.65), "SLC": (48.05, 19.05), "GLC": (48.6, 19.72), "C": (49.1, 20.1)}
+T_ += [trk(N("SNC"), L3, [(51.75, R2), (51.55, 17.9), (47.4, 17.9), STAIR["SNC"]], 0.15),
        trk(N("SLC"), L3, [(52.25, R1), (52.25, 19.25), (48.25, 19.25), STAIR["SLC"]], 0.2),
        trk(N("GLC"), L3, [(52.75, R2), (52.75, 19.63), (48.69, 19.63), STAIR["GLC"]], 0.2),
        trk(N("C"), L3, [(53.25, R1), (53.25, 20.0), (49.3, 20.0), STAIR["C"]], 0.2),
@@ -186,7 +188,8 @@ def pp(tag, net, a, b, **kw):
 
 
 # charge pump: pins 5/4/3 fan out as parallel 0.2 lanes (0.5 pitch kept through the 45-degree jog under C24)
-CP = [trk("/weapon/U2_VCP", F, [(57.2, 23.75), (57.7, 23.75), (57.95, 24.0), (60.45, 24.0), (60.45, 23.4)], 0.2),
+CP = [trk("+3V3", F, [(50.06, 20.835), (48.85, 20.835)], 0.15),     # VREF: straight, between W_SOA and pin 27   # VREF: pin 26 -> C23
+      trk("/weapon/U2_VCP", F, [(57.2, 23.75), (57.7, 23.75), (57.95, 24.0), (60.45, 24.0), (60.45, 23.4)], 0.2),
       trk("/weapon/U2_CPH", F, [(57.2, 24.25), (57.7, 24.25), (57.95, 24.5), (60.22, 24.5), (60.22, 25.0)], 0.2),
       trk("/weapon/U2_CPL", F, [(57.2, 24.75), (57.7, 24.75), (57.95, 25.0), (58.5, 25.0)], 0.2)]
 b2 = [
@@ -200,7 +203,6 @@ b2 = [
     pp("VM 6-7", "VBAT", "U2.6", "U2.7", w=0.25, layers=[F]),
     pp("VCP cap VM", "VBAT", "C21.2", "C24.1", w=0.3),
     pp("DVDD", "/weapon/U2_DVDD", "C22.1", "U2.36", w=0.25),
-    pp("VREF", "+3V3", "C23.1", "U2.26", w=0.25),
     pp("MODE", "/weapon/U2_MODE", "R44.1", "U2.29"),
     pp("IDRIVE", "/weapon/U2_IDRIVE", "R45.1", "U2.30"),
     pp("VDS", "/weapon/U2_VDS", "R46.1", "U2.31"),
@@ -459,12 +461,37 @@ def ic_fanout(ref, pairs_name, skip=("GND",), side_layer=None, depths=(0.5, 0.95
 
 
 # block 7: fan-out of the drive / gate ICs' logic pins (the buses then run via-to-via, mostly on L3)
-BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open") + ic_fanout("U3", "b7_open") + ic_fanout("U4", "b7_open")
+BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open", skip=("GND", "W_SOA", "W_SOB", "W_SOC")) + ic_fanout("U3", "b7_open") + ic_fanout("U4", "b7_open")
 
 # block 8: logic and rails, via to via: L3 is the main layer in the rear half (outer layers cost more), fan-out vias
 # are free layer changes, shortest first
 # (tried as one greedy auto block: 112 of 230 routed but L3 came out as spaghetti that fragments the layer; not kept.
 #  The buses get planned lanes instead; this block is only for the short leftovers once they're in.)
+
+# block 7b: U2's front-left current-sense outputs (pins 23/24/25), boxed in by phase C's escape.  W_SOC and W_SOB drop
+# straight to vias just in front of pins 23/24 (the L3 band there is free since SNC's lane moved to y 17.95) and run west
+# on L3 between SNC's lane (y 17.9, stair via tucked into the VBAT feed's edge) and phase C's (y 18.2 / 18.6); W_SOA
+# leaves pin 25 west at y 20.515 between the SHC stair via and the VREF trace.  The router takes all three on to U1.
+def u2_sense_escape():
+    tr = [trk("W_SOC", F, [(51.25, 19.3), (51.25, 18.4)], 0.15),
+          trk("W_SOB", F, [(50.75, 19.3), (50.75, 18.7)], 0.15),
+          trk("W_SOC", L3, [(51.25, 18.4), (51.05, 18.2), (47.0, 18.2), (46.7, 18.5)], 0.15),   # off the pour edge
+          trk("W_SOB", L3, [(50.75, 18.7), (50.65, 18.6), (47.2, 18.6)], 0.15),
+          trk("W_SOA", F, [(49.8, 20.25), (49.6, 20.25), (49.4, 20.53), (47.6, 20.53)], 0.127)]
+    tr.append(trk("W_SOA", B, [(37.25, 20.32), (37.25, 18.95)], 0.15))    # U1 pin 12 straight out to its via
+    vi = [via("W_SOC", (51.25, 18.4)), via("W_SOB", (50.75, 18.7)), via("W_SOA", (37.25, 18.95))]
+    rt = dict(layers=[F, L3, B], layer_cost={L3: 1.0, F: 1.4, B: 1.4}, via_cost=1.0, margin=4.0, w=0.15)
+    return [dict(tag="U2 sense escape (fixed)", fixed=dict(tracks=tr, vias=vi)),
+            dict(tag="W_SOC to U1", net="W_SOC", a=("pt", 46.7, 18.5, L3), b=("via", 39.25, 30.45), **rt),
+            dict(tag="W_SOB to U1", net="W_SOB", a=("pt", 47.2, 18.6, L3), b=("via", 37.5, 21.55), **rt),
+            dict(tag="W_SOA to U1", net="W_SOA", a=("pt", 47.6, 20.53, F), b=("via", 37.25, 18.95), **rt)] + [
+            dict(tag=t, net=n, a=a, b=b, retry=True, **dict(rt, margin=8.0, via_cost=0.6))
+            for t, n, a, b in (("W_SOC to U1", "W_SOC", ("pt", 46.7, 18.5, L3), ("via", 39.25, 30.45)),
+                               ("W_SOB to U1", "W_SOB", ("pt", 47.2, 18.6, L3), ("via", 37.5, 21.55)),
+                               ("W_SOA to U1", "W_SOA", ("pt", 47.6, 20.53, F), ("via", 37.25, 18.95)))]
+
+
+BLOCKS["7b U2 sense escape"] = u2_sense_escape()
 
 # block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
 def gnd_drops(name):

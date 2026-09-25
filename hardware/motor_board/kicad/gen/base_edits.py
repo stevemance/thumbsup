@@ -40,6 +40,8 @@ U4OF = {"C303": "C403", "C301": "C401", "C304": "C404", "C300": "C400"}
 PADPOS = dict(U3CAPS)
 for r3, (p1, p2) in U3CAPS.items():
     PADPOS[U4OF[r3]] = ((round(89.5 - p1[0], 3), round(54.5 - p1[1], 3)), (round(89.5 - p2[0], 3), round(54.5 - p2[1], 3)))
+# C23 (U2 VREF cap) 0.35 mm rearward: opens U2 pin 25 (W_SOA)'s only exit, between it and the SHC stair via
+PADPOS["C23"] = ((48.78, 21.1), (47.82, 21.1))
 # except C400: its mirror spot touches MH4's courtyard, so it goes on the bottom right under U4's VM caps, standing
 # (VM pad nearest the pins, GND pad clear of MH4's washer keep-out), reached by one via from C403's VM pad
 FLIP = {"C400"}
@@ -47,6 +49,7 @@ PADPOS["C400"] = ((68.9, 29.9), (68.9, 31.45))
 DROP_VIAS = [("GND", 55.4, 15.9), ("GND", 45.5, 16.7), ("GND", 46.7, 16.5),   # channels for GLB / SNC's lane
              ("VBAT", 68.15, 13.05), ("GND", 67.9, 15.9),                      # and for GHA/SHA through cell A
              ("GND", 33.905, 22.0), ("GND", 36.155, 22.0)]    # old TP12/TP5 GND vias, stranded in U1's fan-out field
+DROP_VIAS += [("GND", 46.7, 17.9), ("GND", 46.03, 19.195), ("GND", 37.225, 19.03)]  # + a cap GND via over U1 pin 12 (W_SOA exit)   # room for SNC's stair via and W_SOB's via (U2 front-left)
 DROP_VIAS += [("GND", 18.555, 29.25), ("GND", 18.555, 30.75), ("GND", 70.945, 23.75), ("GND", 70.945, 25.25)]  # U3/U4 GND pins 15/18: tied to the EP instead (the motor-output lanes run there)
 # (a dropped via's stub tracks go with it)
 L3_FEED = [(21.0, 1.5), (34.6, 1.5), (34.6, 6.0), (72.8, 6.0), (72.8, 18.2), (34.6, 18.2), (34.6, 20.8), (21.0, 20.8)]
