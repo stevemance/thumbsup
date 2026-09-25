@@ -155,7 +155,8 @@ def route(req):
     lcost = req.get("layer_cost", {})
     via_cost = req.get("via_cost", 1.5)
     starts, pa = endpoint(req["a"])
-    goals, pb = endpoint(req["b"])
+    drop = req["b"][0] == "drop"             # ("drop",): end at the nearest legal via spot (e.g. a GND pad to the plane)
+    goals, pb = ([], pa) if drop else endpoint(req["b"])
     starts = [s for s in starts if s[0] in layers]
     goals = [g for g in goals if g[0] in layers]
     m = req.get("margin", 5.0)
@@ -185,8 +186,12 @@ def route(req):
         if l in free_t and i0 <= i < i1 and j0 <= j < j1:
             free_t[l][i - i0, j - j0] = True
     goalset = {(l, i - i0, j - j0) for l, i, j in goals}
+    if drop:
+        own = {l for l, _, _ in starts}
+        ii, jj = np.nonzero(free_v)
+        goalset = {(l, i, j) for l in own for i, j in zip(ii, jj) if free_t[l][i, j]}
     hi, hj = (pb[1] / RES - i0), (pb[0] / RES - j0)
-    minc = min([lcost.get(l, 1.0) for l in layers] or [1.0])
+    minc = 0.0 if drop else min([lcost.get(l, 1.0) for l in layers] or [1.0])     # drop: plain Dijkstra
     lidx = {l: k for k, l in enumerate(RL)}
     Hh, Ww = i1 - i0, j1 - j0
     best = {}
@@ -241,6 +246,8 @@ def route(req):
     path.reverse()
     pts = [(l, (j + j0) * RES, (i + i0) * RES) for l, i, j in path]
     pts[0] = (pts[0][0], pa[0], pa[1])
+    if drop:
+        pb = (pts[-1][1], pts[-1][2])
     pts[-1] = (pts[-1][0], pb[0], pb[1])
     # split into per-layer runs, simplify collinear points
     tracks, vias = [], []
@@ -265,6 +272,8 @@ def route(req):
                 simp.append(b_)
         simp.append(r_[-1])
         out_t.append(dict(net=net, layer=r_[0][0], pts=[[round(p[1], 4), round(p[2], 4)] for p in simp], w=w))
+    if drop:
+        vias.append(pb)
     out_v = [dict(net=net, c=[round(x, 4), round(y, 4)], d=vd, drill=vdr) for x, y in vias]
     # the new copper is an obstacle for the next requests
     for tt in out_t:

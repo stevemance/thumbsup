@@ -168,6 +168,70 @@ b2 = [
 BLOCKS["2 U2 local"] = b2
 
 
+# ---------------------------------------------------------------- block 5: U1 fan-out under its own body
+# U1 (LQFP-64, bottom) has no exposed pad, so the 9.8 x 9.8 mm inside its pin ring is a free via field.  Each pin
+# whose net leaves U1's immediate ring of bottom-side parts gets a straight 0.15 stub inward to a 0.4/0.2 via;
+# depths step through 0.45/1.15/1.85/2.55 mm past the pad end so neighbouring vias never touch (at 0.5 pitch a
+# neighbour's via can never reach a stub: 0.2 + 0.075 + 0.15 < 0.5).  The vias then carry the pin on L3 (or F).
+# Pins whose only partners are bottom-side parts within 3 mm stay on the bottom (hooked up outward later).
+def u1_fanout():
+    here = __import__("pathlib").Path(__file__).resolve().parent
+    sys.path.insert(0, str(here))
+    from geo import Space
+    g = json.load(open(here / "out" / "route" / "geom.json"))
+    sp = Space(g, clr=0.16)
+    u1 = [p for p in g["pads"] if p["ref"] == "U1"]
+    bynet = {}
+    for p in g["pads"]:
+        bynet.setdefault(p["net"], []).append(p)
+    tracks, vias, local, fails = [], [], [], []
+    # corner pins first (least room), then the rest from the side centres outward
+    order = sorted(u1, key=lambda p: -max(abs(p["c"][0] - 35.5), abs(p["c"][1] - 26.0)) - 0.001 * min(
+        abs(p["c"][0] - 35.5), abs(p["c"][1] - 26.0)))
+    for p in order:
+        x0_, y0_, x1_, y1_ = p["box"]
+        cx, cy = p["c"]
+        net = p["net"]
+        others = [q for q in bynet[net] if q["ref"] != "U1"]
+        near_b = [q for q in others if "B.Cu" in q["layers"] and abs(q["c"][0] - cx) + abs(q["c"][1] - cy) < 3.0]
+        if net not in ("GND", "+3V3") and others and len(near_b) == len(others):
+            local.append(p["num"])
+            continue
+        if y1_ - y0_ > x1_ - x0_:                                   # vertical pad: top or bottom row
+            d = (0.0, 1.0) if cy < 26 else (0.0, -1.0)
+            end = (cx, y1_ if cy < 26 else y0_)
+        else:
+            d = (1.0, 0.0) if cx < 35.5 else (-1.0, 0.0)
+            end = (x1_ if cx < 35.5 else x0_, cy)
+        side = (-d[1], d[0])                                        # along the row
+        w = 0.25 if net in ("GND", "+3V3") else 0.15
+        vd, vdr = (0.45, 0.25) if net == "GND" else (0.4, 0.2)
+        best = None
+        for depth in (0.45, 0.8, 1.15, 1.5, 1.85, 2.2, 2.55, 2.9, 3.25, 3.6):
+            for lat in (0.0, 0.25, -0.25, 0.5, -0.5):
+                bend = (end[0] + d[0] * max(0.0, depth - 0.35), end[1] + d[1] * max(0.0, depth - 0.35))
+                c = (round(bend[0] + d[0] * 0.35 + side[0] * lat, 3), round(bend[1] + d[1] * 0.35 + side[1] * lat, 3))
+                pts = [tuple(p["c"]), end] + ([bend] if lat else []) + [c]
+                if sp.via_ok(c, vd, vdr, net) and sp.track_ok(pts[1:], w, B, net):
+                    best = (c, pts)
+                    break
+            if best:
+                break
+        if not best:
+            fails.append(p["num"])
+            continue
+        c, pts = best
+        sp.add_via(c, vd, vdr, net)
+        sp.add_track(pts[1:], w, B, net)
+        vias.append(via(net, c, vd, vdr))
+        tracks.append(trk(net, B, pts, w))
+    tag = f"U1 fan-out (fixed; bottom-local: {' '.join(sorted(local, key=int))}; no spot: {' '.join(sorted(fails, key=int))})"
+    return [dict(tag=tag, fixed=dict(tracks=tracks, vias=vias))]
+
+
+BLOCKS["5 U1 fan-out"] = u1_fanout()
+
+
 # ---------------------------------------------------------------- auto blocks: frozen pair lists (make_pairs.py)
 def auto(name, first=(), **kw):
     """Requests from pairs/<name>.json: the listed nets first (in that order), then shortest first."""
@@ -196,6 +260,22 @@ NARROW = {"+3V3": 0.25, "+5V": 0.3, "VBAT": 0.3}
 BLOCKS["3 power switch corner"] = auto("b3_power_switch", first=(
     "/power/PSW_G", "/power/PSW_S", "/power/BAT_IN", "/power/PSW_CAP", "/power/PSW_EN", "/power/PSW_DV",
     "/power/PSW_RG", "/power/VBAT_SW", "/power/INA_INP", "/power/INA_INN"))
+
+
+# block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
+def gnd_drops(name):
+    here = __import__("pathlib").Path(__file__).resolve().parent
+    seen, out = set(), []
+    for p in json.load(open(here / "pairs" / f"{name}.json")):
+        for e in (p["a"], p["b"]):
+            if e[0] == "pad" and tuple(e) not in seen:
+                seen.add(tuple(e))
+                out.append(dict(tag=f"GND via {e[1]}.{e[2]}", net="GND", a=tuple(e), b=("drop",), w=0.3,
+                                via=0.45, drill=0.25, layers=[F, B], margin=1.5))
+    return out
+
+
+BLOCKS["4 GND pad vias"] = gnd_drops("b4_gnd")
 
 # survey (not kept): auto("b9_rest") over everything still open after block 3 routed ~165 of 272 pairs greedily,
 # failed ~110 (MCU fan-out, +3V3, weapon logic, drives) and left clearance errors: the greedy one-net-at-a-time
