@@ -262,6 +262,52 @@ BLOCKS["3 power switch corner"] = auto("b3_power_switch", first=(
     "/power/PSW_RG", "/power/VBAT_SW", "/power/INA_INP", "/power/INA_INN"))
 
 
+# block 6a: U3 / U4 charge pump + VM caps, hand-planned (caps re-placed to the pin order, see base_edits.PADPOS).
+# U3 front row: VM 11-9 (x 20.75-21.75), CP 8 (22.25), CPH 7 (22.75), CPL 6 (23.25), SWBK 5 (23.75), FBBK 3 (24.75).
+# VM pins tied by a bar and dropped straight into C303's VM pad; CP straight into C303's CP pad; CPH straight out to
+# C304 one row further; CPL out then across under C304's CPL pad; SWBK/FBBK through vias to R300/C307 on the bottom.
+# C300/C301 VM pads join C303's.  U4 is the mirror image (x -> 89.5 - x, y -> 54.5 - y).
+def drive_caps():
+    L = dict(VM="/drive_left/L_VM", CP="/drive_left/L_CP", CPH="/drive_left/L_CPH", CPL="/drive_left/L_CPL",
+             SW="/drive_left/L_SWBK", FB="/drive_left/L_FBBK")
+    T3 = [("VM", [(20.75, 27.35), (20.75, 27.05), (21.75, 27.05), (21.75, 27.35)], 0.25),
+          ("VM", [(21.25, 27.35), (21.25, 27.05)], 0.25),
+          ("VM", [(20.75, 27.05), (20.75, 26.3)], 0.25),
+          ("CP", [(22.25, 27.35), (22.25, 26.3)], 0.25),
+          ("CPH", [(22.75, 27.35), (22.75, 24.8)], 0.25),
+          ("CPL", [(23.25, 27.35), (23.25, 25.7), (23.8, 25.15), (24.5, 25.15), (24.6, 24.8)], 0.25),
+          ("SW", [(23.75, 27.35), (23.75, 26.9)], 0.25),
+          ("FB", [(24.75, 27.35), (24.75, 26.9)], 0.25),
+          ("VM", [(18.8, 26.05), (20.35, 26.05)], 0.4),
+          ("VM3", [(21.0, 24.55), (20.35, 25.2), (20.35, 26.05)], 0.4)]     # C300's VM pad (U3 only: C400 is on the bottom)
+    V3 = [("SW", (23.75, 26.9)), ("FB", (24.75, 26.9))]
+    tr, vi = [], []
+    for side in ("L", "R"):
+        for k, pts, w in T3:
+            if k == "VM3":
+                if side == "R":
+                    continue
+                k = "VM"
+            net = L[k] if side == "L" else L[k].replace("drive_left/L_", "drive_right/R_")
+            if side == "R":
+                pts = [(round(89.5 - x, 3), round(54.5 - y, 3)) for x, y in pts]
+            tr.append(trk(net, F, pts, w))
+        for k, c in V3:
+            net = L[k] if side == "L" else L[k].replace("drive_left/L_", "drive_right/R_")
+            if side == "R":
+                c = (round(89.5 - c[0], 3), round(54.5 - c[1], 3))
+            vi.append(via(net, c))
+    tr += [trk("/drive_right/R_VM", F, [(69.15, 28.45), (68.9, 28.7), (68.9, 29.4)], 0.4),      # C403 VM -> C400 (bottom)
+           trk("/drive_right/R_VM", B, [(68.9, 29.4), (68.9, 29.9)], 0.4)]
+    vi.append(via("/drive_right/R_VM", (68.9, 29.4), 0.45, 0.25))
+    return [dict(tag="U3/U4 charge pump + VM caps (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["6a U3/U4 charge pump"] = drive_caps()
+
+# block 6: U3 / U4 local (charge pump, AVDD, buck FB/SW): short cap hookups, top first; 0.25 leaves a 0.5-pitch pin
+BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0)
+
 # block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
 def gnd_drops(name):
     here = __import__("pathlib").Path(__file__).resolve().parent
