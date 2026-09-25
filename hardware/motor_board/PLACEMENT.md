@@ -340,10 +340,10 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
 | C19 | 1nF 50V | bottom | 30.75, 18.10 | 90 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 2.3 mm to U1.2 |
-| C41 | 1nF 50V | bottom | 44.95, 21.75 | 90 | phase A divider bottom + filter at the MCU pin | 3.8 mm to U1.18 |
-| C42 | 1nF 50V | bottom | 45.20, 20.25 | 0 | phase B divider bottom + filter at the MCU pin | 4.6 mm to U1.19 |
-| C43 | 1nF 50V | bottom | 33.25, 15.60 | 180 | phase C divider bottom + filter at the MCU pin | 6.5 mm to U1.14 |
-| C44 | 100nF 16V | bottom | 47.20, 20.25 | 0 | weapon NTC pull-up + filter at the MCU pin | 6.6 mm to U1.20 |
+| C41 | 1nF 50V | bottom | 44.95, 21.75 | 90 | phase A divider bottom + filter: the cap at the MCU pin, the resistor along the line | 3.8 mm to U1.18 |
+| C42 | 1nF 50V | bottom | 45.20, 20.25 | 0 | phase B divider bottom + filter: the cap at the MCU pin, the resistor along the line | 4.6 mm to U1.19 |
+| C43 | 1nF 50V | bottom | 33.25, 15.60 | 180 | phase C divider bottom + filter near the MCU pin (5.5 mm, see 5.3) | 6.5 mm to U1.14 |
+| C44 | 100nF 16V | bottom | 47.20, 20.25 | 0 | weapon NTC pull-up + filter near the MCU pin (5.4 mm, see 5.3) | 6.6 mm to U1.20 |
 | C60 | 100nF 16V | bottom | 43.25, 20.35 | 0 | VDD decoupling at U1 pin 16 (ST: as close as possible, may be on the underside) | 3.5 mm to U1.16 |
 | C61 | 100nF 16V | bottom | 42.95, 29.25 | 90 | VDD decoupling at U1 pin 32 (ST: as close as possible, may be on the underside) | 1.8 mm to U1.32 |
 | C62 | 100nF 16V | bottom | 32.25, 33.40 | 0 | VDD decoupling at U1 pin 48 (ST: as close as possible, may be on the underside) | 1.7 mm to U1.48 |
@@ -352,39 +352,39 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | C65 | 100nF 16V | bottom | 42.95, 27.25 | 90 | VDDA cap / VDDA feed at pin 29 | 1.9 mm to U1.29 |
 | C66 | 4.7uF 16V | bottom | 43.95, 25.50 | 0 | VREF+ caps at pin 28 | 3.0 mm to U1.28 |
 | C67 | 100nF 16V | bottom | 33.75, 18.10 | 90 | NRST cap at pin 7 | 2.0 mm to U1.7 |
-| C68 | 100nF 16V | bottom | 33.45, 14.50 | 180 | pack voltage divider + filter at the MCU pin | 10.6 mm to U1.17 |
+| C68 | 100nF 16V | bottom | 33.45, 14.50 | 180 | pack voltage divider + filter toward the MCU pin (DC node; 9.6 mm, see 5.3) | 10.6 mm to U1.17 |
 | C69 | 1uF 25V | top | 40.85, 33.00 | 90 | U5 input cap | 1.5 mm to U5.1 |
 | C70 | 1uF 25V | top | 41.85, 29.70 | 180 | U5 output cap | 1.5 mm to U5.5 |
 | C71 | 100nF 16V | bottom | 44.45, 27.25 | 0 | VREF+ caps at pin 28 | 2.8 mm to U1.28 |
 | C74 | 100nF 16V | bottom | 32.25, 18.60 | 0 | VBAT-pin cap at pin 1 | 1.7 mm to U1.1 |
-| C80 | 22pF C0G | bottom | 35.25, 33.40 | 0 | drive L CSA A filter at the MCU pin (DESIGN 6.8) | 1.7 mm to U1.42 |
-| C81 | 22pF C0G | bottom | 37.25, 33.40 | 0 | drive L CSA B filter at the MCU pin | 3.0 mm to U1.43 |
-| C82 | 22pF C0G | bottom | 33.25, 16.60 | 180 | drive L CSA C filter at the MCU pin | 4.8 mm to U1.11 |
-| C90 | 22pF C0G | bottom | 39.25, 33.40 | 0 | drive R CSA A filter at the MCU pin | 1.7 mm to U1.34 |
-| C91 | 22pF C0G | bottom | 41.25, 33.40 | 0 | drive R CSA B filter at the MCU pin | 3.0 mm to U1.35 |
-| C92 | 22pF C0G | bottom | 43.45, 22.25 | 0 | drive R CSA C filter at the MCU pin | 4.4 mm to U1.25 |
+| C80 | 22pF C0G | bottom | 35.25, 33.40 | 0 | drive L CSA A filter: the cap at the MCU pin, the resistor along the line (DESIGN 6.8) | 1.7 mm to U1.42 |
+| C81 | 22pF C0G | bottom | 37.25, 33.40 | 0 | drive L CSA B filter: the cap at the MCU pin, the resistor along the line | 3.0 mm to U1.43 |
+| C82 | 22pF C0G | bottom | 33.25, 16.60 | 180 | drive L CSA C filter: the cap at the MCU pin, the resistor along the line | 4.8 mm to U1.11 |
+| C90 | 22pF C0G | bottom | 39.25, 33.40 | 0 | drive R CSA A filter: the cap at the MCU pin, the resistor along the line | 1.7 mm to U1.34 |
+| C91 | 22pF C0G | bottom | 41.25, 33.40 | 0 | drive R CSA B filter: the cap at the MCU pin, the resistor along the line | 3.0 mm to U1.35 |
+| C92 | 22pF C0G | bottom | 43.45, 22.25 | 0 | drive R CSA C filter: the cap at the MCU pin, the resistor along the line | 4.4 mm to U1.25 |
 | D3 | KT-0603R | top | 39.50, 33.05 | 90 | power LED: top, rear edge, visible from above/behind (DESIGN 3.1: visible from outside) | 1.0 mm to 40.5.33.8 |
 | J1 | BOOMELE_1.27-2x10P | bottom | 16.60, 19.20 | 0 | header to the compute board (bottom): left of the MCU beside J4's pin column (outside its solder zone), clear of U2/U3's via fields and the gate corridor, behind the pack-return path (which runs from the bridge to JBAT2 along the front); frees the MCU's ring | placed explicitly |
 | R16 | 10k 1% | bottom | 20.85, 23.60 | -90 | NRST pull-up near J1/U1 | 3.0 mm to J1.8 |
 | R17 | 10k 1% | bottom | 20.85, 25.60 | -90 | MB_RX pull-up near J1 | 3.5 mm to J1.6 |
-| R23 | 10k 1% | bottom | 26.95, 22.25 | 90 | phase A divider bottom + filter at the MCU pin | 14.2 mm to U1.18 |
-| R25 | 10k 1% | bottom | 26.20, 20.25 | 90 | phase B divider bottom + filter at the MCU pin | 15.2 mm to U1.19 |
-| R27 | 10k 1% | bottom | 38.25, 7.85 | 0 | phase C divider bottom + filter at the MCU pin | 12.5 mm to U1.14 |
+| R23 | 10k 1% | bottom | 26.95, 22.25 | 90 | phase A divider bottom + filter: the cap at the MCU pin, the resistor along the line | 14.2 mm to U1.18 |
+| R25 | 10k 1% | bottom | 26.20, 20.25 | 90 | phase B divider bottom + filter: the cap at the MCU pin, the resistor along the line | 15.2 mm to U1.19 |
+| R27 | 10k 1% | bottom | 38.25, 7.85 | 0 | phase C divider bottom + filter near the MCU pin (5.5 mm, see 5.3) | 12.5 mm to U1.14 |
 | R33 | 100k | bottom | 21.35, 17.05 | 180 | header branch of the pack divider: near J1 | 6.4 mm to J1.11 |
 | R40 | 100k | bottom | 22.00, 25.90 | 90 | W_EN pull-down near the MCU pin | 12.0 mm to U1.46 |
 | R42 | 10k 1% | bottom | 23.75, 17.10 | 180 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 8.6 mm to U1.2 |
-| R43 | 10k 1% | bottom | 46.45, 34.00 | 180 | weapon NTC pull-up + filter at the MCU pin | 11.3 mm to U1.20 |
+| R43 | 10k 1% | bottom | 46.45, 34.00 | 180 | weapon NTC pull-up + filter near the MCU pin (5.4 mm, see 5.3) | 11.3 mm to U1.20 |
 | R60 | 0R | bottom | 44.20, 28.75 | 90 | VDDA cap / VDDA feed at pin 29 | 3.0 mm to U1.29 |
 | R61 | 10k 1% | bottom | 28.05, 24.25 | -90 | BOOT0 pull-down at pin 60 | 1.9 mm to U1.60 |
 | R62 | 1k | bottom | 59.50, 21.75 | -90 | power LED resistor: bottom, anywhere on the +5V-LED line (3 mA) | 22.4 mm to D3.2 |
-| R63 | 68k 1% | bottom | 33.95, 13.00 | -90 | pack voltage divider + filter at the MCU pin | 11.3 mm to U1.17 |
-| R64 | 10k 1% | bottom | 33.95, 11.00 | 90 | pack voltage divider + filter at the MCU pin | 12.9 mm to U1.17 |
-| R70 | 330R | bottom | 30.25, 33.40 | 0 | drive L CSA A filter at the MCU pin (DESIGN 6.8) | 4.3 mm to U1.42 |
-| R71 | 330R | bottom | 28.00, 30.90 | -90 | drive L CSA B filter at the MCU pin | 6.3 mm to U1.43 |
-| R72 | 330R | bottom | 27.75, 20.10 | 0 | drive L CSA C filter at the MCU pin | 8.5 mm to U1.11 |
-| R80 | 330R | bottom | 28.00, 28.90 | -90 | drive R CSA A filter at the MCU pin | 11.0 mm to U1.34 |
-| R81 | 330R | bottom | 28.00, 26.90 | -90 | drive R CSA B filter at the MCU pin | 11.1 mm to U1.35 |
-| R82 | 330R | bottom | 48.45, 34.00 | 180 | drive R CSA C filter at the MCU pin | 10.3 mm to U1.25 |
+| R63 | 68k 1% | bottom | 33.95, 13.00 | -90 | pack voltage divider + filter toward the MCU pin (DC node; 9.6 mm, see 5.3) | 11.3 mm to U1.17 |
+| R64 | 10k 1% | bottom | 33.95, 11.00 | 90 | pack voltage divider + filter toward the MCU pin (DC node; 9.6 mm, see 5.3) | 12.9 mm to U1.17 |
+| R70 | 330R | bottom | 30.25, 33.40 | 0 | drive L CSA A filter: the cap at the MCU pin, the resistor along the line (DESIGN 6.8) | 4.3 mm to U1.42 |
+| R71 | 330R | bottom | 28.00, 30.90 | -90 | drive L CSA B filter: the cap at the MCU pin, the resistor along the line | 6.3 mm to U1.43 |
+| R72 | 330R | bottom | 27.75, 20.10 | 0 | drive L CSA C filter: the cap at the MCU pin, the resistor along the line | 8.5 mm to U1.11 |
+| R80 | 330R | bottom | 28.00, 28.90 | -90 | drive R CSA A filter: the cap at the MCU pin, the resistor along the line | 11.0 mm to U1.34 |
+| R81 | 330R | bottom | 28.00, 26.90 | -90 | drive R CSA B filter: the cap at the MCU pin, the resistor along the line | 11.1 mm to U1.35 |
+| R82 | 330R | bottom | 48.45, 34.00 | 180 | drive R CSA C filter: the cap at the MCU pin, the resistor along the line | 10.3 mm to U1.25 |
 | U1 | STM32G474RET6 | bottom | 35.50, 26.00 | -90 | STM32G474 (bottom): cool (~0.26 W); central rear, between the drive ICs and the weapon driver, away from the pack current (DESIGN 6.2); vias to U2/U3/U4 logic | 5.7 mm to 35.5.26.0 |
 | U5 | AP2112K-3.3TRG1 | top | 43.30, 32.35 | 90 | 3.3 V LDO: fed from the buck's +5V; 0.2 W (+38 C), top | 5.3 mm to C29.1 |
 
