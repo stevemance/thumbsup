@@ -6,6 +6,7 @@ and rotation change.  Run with /usr/bin/python3 (KiCad's pcbnew).  Close KiCad f
     /usr/bin/python3 place_v2.py --dry    # place and check only
 """
 import csv
+import os
 import importlib
 import math
 import re
@@ -88,15 +89,36 @@ def court(fp):
     return min(xs) - OX - 0.25, min(ys) - OY - 0.25, max(xs) - OX + 0.25, max(ys) - OY + 0.25
 
 
-def through_rect(fp):
-    """what a through-hole part blocks on the opposite side: its drilled pads' bbox + 0.3 mm (fillets)."""
+def tht_clear(ref):
+    for pre, mm in S.THT_CLEAR.items():
+        if ref.startswith(pre):
+            return mm
+    return 0.3
+
+
+def through_rect(fp, side=B):
+    """what a through-hole part blocks: its drilled pads' bbox + the soldering clearance.  Wires and J4's pins
+    come in from the top and are soldered on the BOTTOM (the side facing the compute board, before stacking), so
+    the full S.THT_CLEAR (iron tip + fillet) applies there and a 1.0 mm mask-protected margin on the top.
+    Mounting holes block their whole courtyard (washer / standoff) on both sides."""
+    ref = fp.GetReference()
+    if ref.startswith("MH"):
+        c = court(fp)
+        return c[0] - 0.2, c[1] - 0.2, c[2] + 0.2, c[3] + 0.2
     xs, ys = [], []
     for p in fp.Pads():
         if p.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
             b = p.GetBoundingBox(); xs += [t(b.GetLeft()), t(b.GetRight())]; ys += [t(b.GetTop()), t(b.GetBottom())]
     if not xs:
         return None
-    return min(xs) - OX - 0.3, min(ys) - OY - 0.3, max(xs) - OX + 0.3, max(ys) - OY + 0.3
+    m = tht_clear(ref) if side == B else min(1.0, tht_clear(ref))
+    return min(xs) - OX - m, min(ys) - OY - m, max(xs) - OX + m, max(ys) - OY + m
+
+
+def box_hit(pad, r):
+    b = pad.GetBoundingBox()
+    x0, y0, x1, y1 = t(b.GetLeft()) - OX, t(b.GetTop()) - OY, t(b.GetRight()) - OX, t(b.GetBottom()) - OY
+    return x0 < r[2] and r[0] < x1 and y0 < r[3] and r[1] < y1
 
 
 def is_tht(fp):
@@ -119,9 +141,16 @@ def occupy(ref):
     fp = fps[ref]
     side = B if fp.IsFlipped() else T
     occ[side].append((court(fp), ref))
-    tr = through_rect(fp)
-    if tr:
-        occ[B if side == T else T].append((tr, ref + " pins"))
+    if through_rect(fp):
+        occ[T].append((through_rect(fp, T), ref + " solder zone"))
+        occ[B].append((through_rect(fp, B), ref + " solder zone"))
+
+
+def ep_rect(ref, margin):
+    """the exposed (largest) pad of an IC + margin: the thermal-via field that the other side must leave free."""
+    p = max(fps[ref].Pads(), key=lambda p: t(p.GetBoundingBox().GetWidth()) * t(p.GetBoundingBox().GetHeight()))
+    b = p.GetBoundingBox()
+    return t(b.GetLeft()) - OX - margin, t(b.GetTop()) - OY - margin, t(b.GetRight()) - OX + margin, t(b.GetBottom()) - OY + margin
 
 
 def overlaps(r, side, gap):
@@ -138,6 +167,7 @@ def inside(r, edge):
 
 # ---------------------------------------------------------------- explicit parts
 problems = []
+EXPLICIT_REFS = set(S.EXPLICIT)
 for ref, (x, y, rot, side, text) in S.EXPLICIT.items():
     fp = fps[ref]
     set_pose(fp, x, y, rot, side)
@@ -146,10 +176,29 @@ for ref, (x, y, rot, side, text) in S.EXPLICIT.items():
     pos = fp.GetPosition()
     fp.SetPosition(pcbnew.VECTOR2I(pos.x + pcbnew.FromMM(dx), pos.y + pcbnew.FromMM(dy)))
     r = court(fp)
-    who = overlaps(r, B if side == B else T, 0.0)
-    tr = through_rect(fp)
-    if not who and tr:
-        who = overlaps(tr, T if side == B else B, 0.0)
+    who = None
+    for (a0, b0, a1, b1), w in occ[B if side == B else T]:
+        if not (r[0] < a1 and a0 < r[2] and r[1] < b1 and b0 < r[3]):
+            continue
+        if w.endswith("solder zone"):
+            hole = fps[w.split()[0]]
+            if is_tht(fp):
+                continue                  # hole next to hole: soldered one at a time
+            hole_nets = {p.GetNetname() for p in hole.Pads()}
+            if not any(p.GetNetname() and p.GetNetname() not in hole_nets and box_hit(p, (a0, b0, a1, b1)) for p in fp.Pads()):
+                continue                  # only same-net copper (e.g. Q7's drain tab at JBAT1) inside the zone
+        who = w
+        break
+    if not who and through_rect(fp):
+        for sd in (T, B):
+            tr = through_rect(fp, sd)
+            for (a0, b0, a1, b1), w in occ[sd]:
+                if w.split()[0] not in fps:
+                    continue
+                if tr[0] < a1 and a0 < tr[2] and tr[1] < b1 and b0 < tr[3] and not is_tht(fps[w.split()[0]]):
+                    tn = {p.GetNetname() for p in fp.Pads()}
+                    if any(q.GetNetname() and q.GetNetname() not in tn and box_hit(q, tr) for q in fps[w.split()[0]].Pads()):
+                        who = w + f" ({sd})"
     if who:
         problems.append(f"{ref}: courtyard overlaps {who}")
     if not inside(r, 0.0) and ref not in S.EDGE_OK:
@@ -158,6 +207,19 @@ for ref, (x, y, rot, side, text) in S.EXPLICIT.items():
     why[ref] = text
     rule_of[ref] = "explicit"
     occupy(ref)
+
+# ---------------------------------------------------------------- keep-outs for the anchored parts
+for ref, side, margin, why_k in S.EP_KEEPOUT:
+    r = ep_rect(ref, margin)
+    occ[side].append((r, f"{ref} thermal-via field"))
+    for (a0, b0, a1, b1), who in list(occ[side]):
+        if who in EXPLICIT_REFS and side == (B if fps[who].IsFlipped() else T) and a0 < r[2] and r[0] < a1 and b0 < r[3] and r[1] < b1:
+            problems.append(f"{who}: explicit part inside {ref}'s thermal-via field")
+for (x0, y0, x1, y1), side, name in S.KEEPOUT:
+    occ[side].append(((x0, y0, x1, y1), name))
+    for (a0, b0, a1, b1), who in list(occ[side]):
+        if who in EXPLICIT_REFS and a0 < x1 and x0 < a1 and b0 < y1 and y0 < b1 and fps[who].IsFlipped() == (side == B):
+            problems.append(f"{who}: explicit part inside keep-out '{name}'")
 
 # ---------------------------------------------------------------- anchored parts
 GRID = 0.25
@@ -253,6 +315,15 @@ for ref, side, anchor, rots, text in S.ANCHORED:
             if seen >= CANDIDATES:
                 break
     if best is None:
+        if os.environ.get("DEBUG_REF") == ref:
+            import collections
+            why_not = collections.Counter()
+            for rot in rots:
+                set_pose(fp, 0, 0, rot, side); c0 = court(fp); w, h = c0[2] - c0[0], c0[3] - c0[1]
+                for dx, dy in OFFS[:4000]:
+                    r = (tx + dx - w / 2, ty + dy - h / 2, tx + dx + w / 2, ty + dy + h / 2)
+                    why_not["edge" if not inside(r, S.EDGE) else (overlaps(r, side, S.GAP) or ("flex" if not flex_ok(fp, rot, r) else "ok"))] += 1
+            print(ref, "blocked by", why_not.most_common(8))
         problems.append(f"{ref}: no free spot near its anchor")
         continue
     _, rot, x, y = best
@@ -268,7 +339,13 @@ if missing:
     problems.append(f"not placed ({len(missing)}): {missing}")
 
 # ---------------------------------------------------------------- report
-area = {s: sum((r[2] - r[0]) * (r[3] - r[1]) for r, who in occ[s]) for s in (T, B)}
+area = {T: 0.0, B: 0.0}
+for fp in fps.values():          # part courtyards only (keep-outs and solder zones are not parts)
+    c = court(fp)
+    a = (c[2] - c[0]) * (c[3] - c[1])
+    area[B if fp.IsFlipped() else T] += a
+    if is_tht(fp):
+        area[T if fp.IsFlipped() else B] += a if fp.GetReference().startswith("MH") else 0.0
 print(f"board {BW} x {BH} = {BW * BH:.0f} mm2; courtyard use top {area[T]:.0f} ({100 * area[T] / (BW * BH):.0f} %), "
       f"bottom {area[B]:.0f} ({100 * area[B] / (BW * BH):.0f} %)")
 for p in problems:
