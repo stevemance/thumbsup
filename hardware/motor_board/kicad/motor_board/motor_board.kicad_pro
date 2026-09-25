@@ -140,7 +140,7 @@
       },
       "rules": {
         "max_error": 0.005,
-        "min_clearance": 0.1,
+        "min_clearance": 0.127,
         "min_connection": 0.0,
         "min_copper_edge_clearance": 0.3,
         "min_groove_width": 0.0,
@@ -152,10 +152,10 @@
         "min_silk_clearance": 0.0,
         "min_text_height": 0.8,
         "min_text_thickness": 0.08,
-        "min_through_hole_diameter": 0.2,
-        "min_track_width": 0.1,
+        "min_through_hole_diameter": 0.25,
+        "min_track_width": 0.127,
         "min_via_annular_width": 0.1,
-        "min_via_diameter": 0.4,
+        "min_via_diameter": 0.45,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
       },
@@ -203,7 +203,18 @@
           "td_width_to_size_filter_ratio": 0.9
         }
       ],
-      "track_widths": [],
+      "track_widths": [
+        0.0,
+        0.127,
+        0.15,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.8,
+        1.0,
+        1.5
+      ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
           "corner_radius_percentage": 80,
@@ -230,7 +241,24 @@
           "spacing": 0.6
         }
       },
-      "via_dimensions": [],
+      "via_dimensions": [
+        {
+          "diameter": 0.0,
+          "drill": 0.0
+        },
+        {
+          "diameter": 0.45,
+          "drill": 0.25
+        },
+        {
+          "diameter": 0.6,
+          "drill": 0.3
+        },
+        {
+          "diameter": 0.8,
+          "drill": 0.4
+        }
+      ],
       "zones_allow_external_fillets": false
     },
     "ipc2581": {
@@ -495,7 +523,7 @@
     "classes": [
       {
         "bus_width": 12,
-        "clearance": 0.127,
+        "clearance": 0.15,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.2,
@@ -511,6 +539,101 @@
         "via_diameter": 0.45,
         "via_drill": 0.25,
         "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Power",
+        "pcb_color": "rgba(220, 40, 40, 0.900)",
+        "priority": 0,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 1.0,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Drive",
+        "pcb_color": "rgba(240, 140, 0, 0.900)",
+        "priority": 1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.8,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.2,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Gate",
+        "pcb_color": "rgba(170, 60, 220, 0.900)",
+        "priority": 2,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.3,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Sense",
+        "pcb_color": "rgba(0, 180, 90, 0.900)",
+        "priority": 3,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.2,
+        "tuning_profile": "",
+        "via_diameter": 0.45,
+        "via_drill": 0.25,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Rail",
+        "pcb_color": "rgba(40, 110, 240, 0.900)",
+        "priority": 4,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.4,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
       }
     ],
     "meta": {
@@ -518,7 +641,144 @@
     },
     "net_colors": null,
     "netclass_assignments": null,
-    "netclass_patterns": []
+    "netclass_patterns": [
+      {
+        "netclass": "Power",
+        "pattern": "/power/BAT_IN"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/power/PSW_S"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/power/VBAT_SW"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_A"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_B"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_C"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_SLA"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_SLB"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/weapon/W_SLC"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "VBAT"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_left/L_A"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_left/L_B"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_left/L_C"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_left/L_VM"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_right/R_A"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_right/R_B"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_right/R_C"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "/drive_right/R_VM"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/power/PSW_G"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/power/PSW_RG"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GHA"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GHB"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GHC"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GLA"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GLB"
+      },
+      {
+        "netclass": "Gate",
+        "pattern": "/weapon/W_GLC"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "/power/INA_INN"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "/power/INA_INP"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "/weapon/W_SNA"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "/weapon/W_SNB"
+      },
+      {
+        "netclass": "Sense",
+        "pattern": "/weapon/W_SNC"
+      },
+      {
+        "netclass": "Rail",
+        "pattern": "+3V3"
+      },
+      {
+        "netclass": "Rail",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "Rail",
+        "pattern": "/mcu/+3V3A"
+      }
+    ]
   },
   "pcbnew": {
     "last_paths": {
