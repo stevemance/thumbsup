@@ -49,9 +49,9 @@ Preferred (no fee): R20 56 k, R22/R24/R26/R63 68 k, R45 75 k, R46 18 k.  Everyth
 
 | Item | Qty | Note |
 |---|---|---|
-| XT30 pigtail (16–18 AWG, ~100 mm) | 1 | Pushed through and soldered in the J_BAT+/J_BAT− plated holes, strain-relieved |
+| XT30 pigtail (16–18 AWG, ~100 mm) | 1 | Pushed through and soldered in the JBAT1/J_BAT− plated holes, strain-relieved |
 | Main power switch | 1 | FingerTech Mini Power Switch (40 A cont, 2.15 g) or Repeat Screw Switch (1.5 g), in the + wire of the pigtail, mounted in the chassis wall |
-| Motor leads | 9 | Weapon: 16–18 AWG to J_WA–J_WC; drive: motor leads to J_LA.. / J_RA.. |
+| Motor leads | 9 | Weapon: 16–18 AWG to JW1–JW3; drive: motor leads to JL1.. / JR1.. |
 | Drive motors | 2 | Repeat Mini Mk4.1 (1106, 3500 KV, 28.5:1) — plan of record, currently sold out |
 | MT6701 sensor PCBs + magnets | 2 | MT6701 + 100 nF + JST-SH, diametric magnet on the motor end |
 | Sensor cables | 2 | JST-SH 6-pin (SHR-06V-S + SSH crimps, or pre-crimped) |

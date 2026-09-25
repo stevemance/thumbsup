@@ -96,8 +96,8 @@ LCSC = {
 # reverse when on; its body diode blocks a reversed pack.  Board GND is tied to pack- at all times (the BQ76907 cell inputs never see a floating ground).
 # EN/UVLO (filtered by C18) turns the pair off below ~9.0 V; the bus reaches it within ~0.1-0.4 s of the switch opening, so any
 # re-close after that is soft again (spice/sim_hotplug.py).
-part("J_BAT+", "BAT+ wire", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": ("BAT+", "BAT_IN")}, desc="battery + (pigtail to an XT30 on the lead, through the external power switch)")
-part("J_BAT-", "BAT- wire", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": ("BAT-", "GND")}, desc="battery - (board ground)")
+part("JBAT1", "BAT+ wire", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": ("BAT+", "BAT_IN")}, desc="battery + (pigtail to an XT30 on the lead, through the external power switch)")
+part("JBAT2", "BAT- wire", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": ("BAT-", "GND")}, desc="battery - (board ground)")
 part("Q7", "HYG015N04LS1C2", "Package_DFN_QFN:PQFN-8-EP_6x5mm_P1.27mm_Generic",
      {"1": ("S", "PSW_S"), "2": ("S", "PSW_S"), "3": ("S", "PSW_S"), "4": ("G", "PSW_G"), "5": ("D", "BAT_IN")}, LCSC["FET"],
      "inrush FET, high side (drain to the pack): body diode blocks the plug-in surge; linear during the soft-start ramp (16 W peak, 54-57 mJ); 1.4 mOhm typ when on")
@@ -220,9 +220,9 @@ for ph, hi, lo, shunt, nt in (("A", "Q1", "Q2", "RS1", "NT1"), ("B", "Q3", "Q4",
     fet = lambda d, g, s: {"1": ("S", s), "2": ("S", s), "3": ("S", s), "4": ("G", g), "5": ("D", d)}   # HYG015N04LS1C2 on PQFN-8-EP 6x5: leads 1-3 S, 4 G, tab 5 D
     part(hi, "HYG015N04LS1C2", "Package_DFN_QFN:PQFN-8-EP_6x5mm_P1.27mm_Generic", fet("VBAT", f"W_GH{ph}", f"W_{ph}"), LCSC["FET"], f"weapon phase {ph} high side")
     part(lo, "HYG015N04LS1C2", "Package_DFN_QFN:PQFN-8-EP_6x5mm_P1.27mm_Generic", fet(f"W_{ph}", f"W_GL{ph}", f"W_SL{ph}"), LCSC["FET"], f"weapon phase {ph} low side")
-    two(shunt, "2mR 1% 2512", "thumbsup:R_2512_HoLR_1-4mR", f"W_SL{ph}", "GND", LCSC["SHUNT_2m"], f"phase {ph} low-side shunt; custom land = Milliohm HoLR 1-4 mOhm pattern (2.0 mm terminals), Kelvin taps at the pad inner edges")
+    two(shunt, "2mR 1% 2512", "motor_board:R_2512_HoLR_1-4mR", f"W_SL{ph}", "GND", LCSC["SHUNT_2m"], f"phase {ph} low-side shunt; custom land = Milliohm HoLR 1-4 mOhm pattern (2.0 mm terminals), Kelvin taps at the pad inner edges")
     two(nt, "NetTie", "NetTie:NetTie-2_SMD_Pad0.5mm", f"W_SN{ph}", "GND", desc=f"Kelvin tie SN{ph} to the shunt's ground pad", names=("1", "2"))
-    part(f"J_W{ph}", f"Weapon {ph}", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": (ph, f"W_{ph}")}, desc=f"weapon motor phase {ph}")
+    part(f"JW{'ABC'.index(ph) + 1}", f"Weapon {ph}", "Connector_Wire:SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm", {"1": (ph, f"W_{ph}")}, desc=f"weapon motor phase {ph}")
     # phase voltage divider (catch-spinning-drum restart, six-step BEMF, sensorless observer check)
     k = 22 + 2 * (ord(ph) - 65)
     two(f"R{k}", "68k 1%", R0402, f"W_{ph}", f"W_V{ph}", LCSC["R68k"], f"phase {ph} divider top (25.2 V -> 3.23 V)")
@@ -281,7 +281,7 @@ def drv8316(ref, s):
         "41": ("PAD", "GND"),
     }
     side = "left" if s == "L" else "right"
-    part(ref, "DRV8316CRRGFR", "thumbsup:TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm", pins, LCSC["DRV8316CRRGFR"],
+    part(ref, "DRV8316CRRGFR", "motor_board:TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm_EP3.7x5.7mm", pins, LCSC["DRV8316CRRGFR"],
          f"drive {side}: 3 half bridges 8 A pk, 3 CSA (no shunts), SPI; 3x PWM mode, INLx tied high, DRVOFF shared.  "
          f"Footprint: draw from TI RGF0040E land pattern (not in the KiCad library)")
     n = int(ref[1:]) * 100
@@ -306,7 +306,7 @@ def drv8316(ref, s):
     two(f"R{n+1}", "10k 1%", R0402, f"{s}_nFAULT", f"{s}_AVDD", LCSC["R10k"],
         f"{ref} nFAULT pull-up to its own AVDD (TI: pull up to AVDD; valid whenever the chip is powered)")
     for ph in "ABC":
-        part(f"J_{s}{ph}", f"Drive {s} {ph}", "Connector_Wire:SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm", {"1": (ph, f"{s}_{ph}")}, desc=f"drive {side} motor phase {ph}")
+        part(f"J{s}{'ABC'.index(ph) + 1}", f"Drive {s} {ph}", "Connector_Wire:SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm", {"1": (ph, f"{s}_{ph}")}, desc=f"drive {side} motor phase {ph}")
 
 
 drv8316("U3", "L")
@@ -319,7 +319,7 @@ two("R50", "10k 1%", R0402, "DRV_OFF", "+3V3", LCSC["R10k"], "DRVOFF high = both
 # so 5 V push-pull sensors are safe and the MCU's TT_a pins (PB0, PB10) never see more than 3.3 V.
 for s, jref, jp, rt, ub, us, rp, cn, sr, dt in (("L", "J2", "JP1", "R52", "U9", "U11", 54, 45, 110, 7),
                                                ("R", "J3", "JP2", "R53", "U10", "U12", 57, 48, 114, 8)):
-    part(jref, "SH1.0 6P SMD R/A", "thumbsup:SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB",
+    part(jref, "SH1.0 6P SMD R/A", "motor_board:SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB",
          {"1": ("VS", f"{s}_VS"), "2": ("GND", "GND"), "3": ("S1", f"{s}_H1"), "4": ("S2", f"{s}_H2"),
           "5": ("S3", f"{s}_H3"), "6": ("TEMP", f"{s}_TEMPJ"), "MP": ("MP", "GND")},
          LCSC["SM06B"], f"drive {s} sensor: 1 VS, 2 GND, 3 H1/A/U, 4 H2/B/V, 5 H3/Z/W, 6 motor NTC (JST SH compatible)")
@@ -403,7 +403,7 @@ two("C69", "1uF 25V", C0402, "+5V", "GND", LCSC["1u_25V_0402"], "U5 in")
 two("C70", "1uF 25V", C0402, "+3V3", "GND", LCSC["1u_25V_0402"], "U5 out")
 
 # ============================================================== board-to-board header (to the compute board)
-part("J1", "B2B 2x10 1.27mm male", "thumbsup:BOOMELE_1.27-2x10P_SMD",
+part("J1", "B2B 2x10 1.27mm male", "motor_board:BOOMELE_1.27-2x10P_SMD",
      {"1": ("+5V", "+5V"), "2": ("+5V", "+5V"), "3": ("GND", "GND"), "4": ("GND", "GND"),
       "5": ("MB_TX", "MB_TX"), "6": ("MB_RX", "MB_RX"), "7": ("SPARE1", "NC"), "8": ("NRST", "NRST"),
       "9": ("SWDIO", "SWDIO"), "10": ("SWCLK", "SWCLK"), "11": ("VBAT_SNS_H", "VBAT_SNS_H"), "12": ("GND", "GND"),
