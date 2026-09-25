@@ -47,7 +47,11 @@ for ph, x0 in CELL.items():
     EXPLICIT[rs] = (x0 + 3.2, 15.35, 0, T, f"phase {ph} shunt: directly behind {ls}'s source pins (pad 1), GND pad 2 toward the cell centre next to {cap}'s GND pad; 0.8 W peak, top")
     EXPLICIT[nt] = (x0 + 4.3, 18.3, 0, T, f"Kelvin tie SN{ph}: directly behind the inner edge of {rs}'s GND pad, so the sense return starts at the shunt, not in the cap's return copper (DESIGN 6.3)")
     if ph == "B":
-        EXPLICIT[nt] = (x0 + 4.1, 17.6, 90, T, "Kelvin tie SNB: standing on the inner-rear corner of RS2's GND pad (same net), so it stays out of the strip in front of U2's phase-C pins (verification review)")
+        EXPLICIT[nt] = (x0 + 3.6, 13.85, 0, T, "Kelvin tie SNB: GND pad on the inner-front corner of RS2's GND pad, sense pad in the gap between the shunt pads, so both B Kelvin vias sit in the gap and the pair leaves on L3 in front of U2's fan-out (routing)")
+    if ph == "A":
+        EXPLICIT[nt] = (x0 + 3.6, 13.85, 0, T, "Kelvin tie SNA: GND pad on the inner-front corner of RS1's GND pad, sense pad in the pad gap (its via there), in front of the SL via so the pair from U2's right side arrives in order (routing)")
+    if ph == "C":
+        EXPLICIT[nt] = (x0 + 3.6, 16.85, 0, T, "Kelvin tie SNC: GND pad on the inner-rear corner of RS3's GND pad, sense pad in the gap between the shunt pads (its via there), rear of the SL via so phase C's bottom-layer bundle arrives in order (routing)")
     EXPLICIT[cap] = (x0 + 8.6, 15.5, 270, T, f"phase {ph} bridge 10 uF: VBAT pad on {hs}'s drain tab, GND pad beside {rs}'s GND pad: closes the commutation loop on L1 (DESIGN 6.1)")
 
 EXPLICIT.update({
@@ -176,10 +180,10 @@ add("R17", B, ("J1", "6"), "MB_RX pull-up near J1")
 add("R40", B, ("U1", "46"), "W_EN pull-down near the MCU pin")
 add("R42 C19", B, ("U1", "2"), "W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin)")
 add("R50", B, ("U1", "3"), "DRV_OFF pull-up: near PC14, trace short (DESIGN 6.6)")
-add("R62", B, ("D3", "2"), "power LED resistor: bottom, anywhere on the +5V-LED line (3 mA)", rots=(0, 90, 180, 270))
+EXPLICIT["R62"] = (61.3, 21.3, 270, B, "power LED resistor: bottom, anywhere on the +5V-LED line (3 mA); right of C20, out of phase A's gate escape from U2's right side (routing)")
 # ---------------------------------------------------------------- bottom: phase dividers (top resistor at the phase)
 add("R22", B, ("JW1", "1"), "phase A divider top: beside JW1, just outside its solder zone, so the phase voltage stays local and only the divided node runs to the MCU")
-add("R24", B, ("JW2", "1"), "phase B divider top: just behind JW2's solder zone")
+EXPLICIT["R24"] = (48.5, 4.5, 0, B, "phase B divider top: in the gap between JW3's and JW2's solder zones, in front of phase C's gate columns, so the divided node leaves on the L3 front strip without crossing a gate/sense bundle (routing); phase via to cell B's copper beside it")
 add("R26", B, ("JW3", "1"), "phase C divider top: just behind JW3's solder zone")
 # ---------------------------------------------------------------- bottom: weapon interlock and ARM
 add("U6", B, (32.0, 9.5), "interlock AND gates (bottom): the free block right of RS4, beside the pack path, out of the gate-via corridor; CHxN in from the MCU, INLx out to U2; LVC logic does not mind the few mV of pack-return offset")

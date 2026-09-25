@@ -71,7 +71,7 @@ for ph, x0 in CELLS.items():
 
 # 5. L3 VBAT feed: from RS4 / D1 / C1's VBAT pad under all three cells (the high sides are fed from below)
 made["L3 VBAT feed"] = zone("L3 VBAT feed", "VBAT", pcbnew.In2_Cu, [
-    (21.0, 1.5), (34.6, 1.5), (34.6, 5.3), (72.8, 5.3), (72.8, 18.5), (34.6, 18.5), (34.6, 20.8), (21.0, 20.8)], priority=1)
+    (21.0, 1.5), (34.6, 1.5), (34.6, 6.0), (72.8, 6.0), (72.8, 18.2), (34.6, 18.2), (34.6, 20.8), (21.0, 20.8)], priority=1)
 
 # ---------------------------------------------------------------- via fields (GND -> L2, VBAT -> L3), only on free copper
 pads = []

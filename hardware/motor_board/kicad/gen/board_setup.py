@@ -15,20 +15,20 @@ PCB, PRO = PROJ / "motor_board.kicad_pcb", PROJ / "motor_board.kicad_pro"
 
 # ---------------------------------------------------------------- net classes (name, track, clearance, via pad, via drill, patterns)
 CLASSES = [
-    ("Power", 1.0, 0.15, 0.6, 0.3, ["VBAT", "BAT_IN", "*PSW_S", "VBAT_SW", "W_A", "W_B", "W_C", "*W_SL?"],
-     "pack / weapon current: carried by pours; the track width only sets the minimum neck"),
-    ("Drive", 0.8, 0.15, 0.6, 0.3, ["L_VM", "R_VM", "L_A", "L_B", "L_C", "R_A", "R_B", "R_C"],
+    ("Power", 0.5, 0.15, 0.6, 0.3, ["VBAT", "BAT_IN", "*PSW_S", "VBAT_SW", "W_A", "W_B", "W_C", "*W_SL?"],
+     "pack / weapon current: carried by the pours; tracks of these nets are short links to fine-pitch pins (widen where room)"),
+    ("Drive", 0.5, 0.15, 0.6, 0.3, ["L_VM", "R_VM", "L_A", "L_B", "L_C", "R_A", "R_B", "R_C"],
      "DRV8316 supply and phases: 8 A peak, 1-2 A rms"),
-    ("Gate", 0.3, 0.2, 0.6, 0.3, ["*W_GH?", "*W_GL?", "*PSW_G", "*PSW_RG"],
-     "gate drive: 60/120 mA IDRIVE on the weapon, route with its source return"),
+    ("Gate", 0.25, 0.15, 0.6, 0.3, ["*W_GH?", "*W_GL?", "*PSW_G", "*PSW_RG"],
+     "gate drive: 60/120 mA IDRIVE on the weapon (0.25 mm leaves U2's 0.5 mm-pitch pins), route with its source return"),
     ("Sense", 0.2, 0.15, 0.45, 0.25, ["*W_SN?", "*INA_INP", "*INA_INN"],
      "Kelvin sense pairs, route as tight pairs away from the phase nodes"),
     ("Rail", 0.4, 0.15, 0.6, 0.3, ["+5V", "+3V3", "+3V3A"], "logic rails (+5V up to 0.6 A)"),
 ]
 DEFAULT = dict(track=0.15, clearance=0.15, via=0.45, drill=0.25)
 TRACKS = [0.127, 0.15, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 1.5]
-VIAS = [(0.45, 0.25), (0.6, 0.3), (0.8, 0.4)]
-RULES = dict(min_clearance=0.127, min_track_width=0.127, min_via_diameter=0.45, min_through_hole_diameter=0.25,
+VIAS = [(0.4, 0.2), (0.45, 0.25), (0.6, 0.3), (0.8, 0.4)]
+RULES = dict(min_clearance=0.127, min_track_width=0.127, min_via_diameter=0.4, min_through_hole_diameter=0.2,
              min_via_annular_width=0.1, min_hole_clearance=0.25, min_hole_to_hole=0.25, min_copper_edge_clearance=0.3)
 
 # ---------------------------------------------------------------- stack-up (JLC04161H-7628, 1 oz outer + 1 oz inner)
