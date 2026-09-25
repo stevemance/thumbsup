@@ -9,6 +9,33 @@ F, L3, B = "F.Cu", "In2.Cu", "B.Cu"
 BLOCKS = {}
 
 
+_SPACE = None
+
+
+def space():
+    """Clearance model of the base board (geo.Space) for picking hand-placed via spots."""
+    global _SPACE
+    if _SPACE is None:
+        here = __import__("pathlib").Path(__file__).resolve().parent
+        sys.path.insert(0, str(here))
+        from geo import Space
+        _SPACE = Space(json.load(open(here / "out" / "route" / "geom.json")))
+    return _SPACE
+
+
+def pick_via(net, target, d=0.4, drill=0.2, rmax=1.5, step=0.05):
+    """Nearest legal via spot to `target` (spiral over a grid), claimed in the model so later picks respect it."""
+    sp = space()
+    cands = sorted(((i * step, j * step) for i in range(-int(rmax / step), int(rmax / step) + 1)
+                    for j in range(-int(rmax / step), int(rmax / step) + 1)), key=lambda o: o[0] ** 2 + o[1] ** 2)
+    for dx, dy in cands:
+        c = (round(target[0] + dx, 3), round(target[1] + dy, 3))
+        if sp.via_ok(c, d, drill, net):
+            sp.add_via(c, d, drill, net)
+            return c
+    raise SystemExit(f"no via spot for {net} near {target}")
+
+
 def via(net, c, d=0.4, drill=0.2):
     return dict(net=net, c=list(c), d=d, drill=drill)
 
@@ -333,6 +360,28 @@ def motor_outputs():
 
 
 BLOCKS["6b motor outputs"] = motor_outputs()
+
+
+# block 6c: VM trunks, top.  L_VM: R302's L_VM pad straight down into the VM cap cluster in front of U3, threaded
+# between C301's and C300's GND pads (0.7 mm), with two 0.6/0.3 vias on the way to the bottom bulk caps (C308/C309,
+# C302).  R_VM: R402's R_VM pad up to C400's via (which joins C403's VM pad on top and C400 on the bottom), plus a via
+# at R402 for C402/C408 underneath.  The far bulk caps (C310, C409, C410) are joined by the router afterwards.
+def vm_trunks():
+    vl = pick_via("/drive_left/L_VM", (22.0, 22.75), 0.6, 0.3)          # beside C308's VM pad (J1 fills x < 20)
+    vr = pick_via("/drive_right/R_VM", (67.0, 33.8), 0.6, 0.3)
+    tr = [trk("/drive_left/L_VM", F, [(16.8, 21.8), (18.3, 23.3), (18.3, 25.9)], 0.7),
+          trk("/drive_left/L_VM", F, [(17.0, 21.5), (vl[0] - 0.7, 21.5), vl], 0.6),
+          trk("/drive_left/L_VM", B, [vl, (21.3, 22.1)], 0.6),
+          trk("/drive_right/R_VM", F, [(67.2, 31.5), (68.9, 29.8), (68.9, 29.4)], 0.7)]
+    vi = [via("/drive_left/L_VM", vl, 0.6, 0.3), via("/drive_right/R_VM", vr, 0.6, 0.3)]
+    return [dict(tag="VM trunks (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["6c VM trunks"] = vm_trunks()
+
+# block 6d: VM bulk caps joined to the trunks (0.5 mm; L3 allowed where it's free)
+BLOCKS["6d VM bulk"] = auto("b6d_vm_bulk", w=0.5, via=0.6, drill=0.3, layers=[F, L3, B],
+                            layer_cost={F: 1.0, B: 1.0, L3: 1.3}, via_cost=1.0, margin=4.0)
 
 # block 6: U3 / U4 local (charge pump, AVDD, buck FB/SW): short cap hookups, top first; 0.25 leaves a 0.5-pitch pin
 BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0)
