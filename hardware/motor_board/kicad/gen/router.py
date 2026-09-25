@@ -105,7 +105,15 @@ for p in G["pads"]:
 for t_ in G["tracks"]:
     if t_["layer"] in RL:
         draw_capsule(owner[t_["layer"]], t_["a"], t_["b"], t_["w"] / 2, NID[t_["net"]])
+VIAS_OF = {}                     # net id -> [(x, y)]: existing vias are free layer changes for their own net
+
+
+def note_via(n, c):
+    VIAS_OF.setdefault(n, []).append((c[0], c[1]))
+
+
 for v in G["vias"]:
+    note_via(NID[v["net"]], v["c"])
     for l in RL:
         draw_disc(owner[l], v["c"], v["d"] / 2, NID[v["net"]])
     draw_disc(novia, v["c"], 0.3 / 2 + 0.25, True)                       # hole-to-hole (drill <= 0.3)
@@ -186,6 +194,14 @@ def route(req):
         if l in free_t and i0 <= i < i1 and j0 <= j < j1:
             free_t[l][i - i0, j - j0] = True
     goalset = {(l, i - i0, j - j0) for l, i, j in goals}
+    own_vias = set()
+    for vx, vy in VIAS_OF.get(n, []):
+        vi_, vj_ = cidx(vx, vy)
+        if i0 <= vi_ < i1 and j0 <= vj_ < j1:
+            own_vias.add((vi_ - i0, vj_ - j0))
+            for l in RL:                                        # its barrel is the net's own copper on every layer
+                if l in layers:
+                    free_t[l][vi_ - i0, vj_ - j0] = True
     if drop:
         own = {l for l, _, _ in starts}
         ii, jj = np.nonzero(free_v)
@@ -226,12 +242,12 @@ def route(req):
                 best[t2] = ng
                 h = RES * minc * (max(abs(ni - hi), abs(nj - hj)) + 0.4142 * min(abs(ni - hi), abs(nj - hj)))
                 heapq.heappush(heap, (ng + h, ng, t2, s))
-        if free_v[i, j]:
+        if free_v[i, j] or (i, j) in own_vias:
             for l2 in layers:
                 if l2 == l or not free_t[l2][i, j]:
                     continue
                 t2 = (l2, i, j)
-                ng = g + via_cost
+                ng = g + (0.0 if (i, j) in own_vias else via_cost)
                 if ng < best.get(t2, 1e18):
                     best[t2] = ng
                     h = RES * minc * (max(abs(i - hi), abs(j - hj)) + 0.4142 * min(abs(i - hi), abs(j - hj)))
@@ -255,7 +271,8 @@ def route(req):
     for p in pts[1:]:
         if p[0] != run[-1][0]:
             tracks.append(run)
-            vias.append((p[1], p[2]))
+            if not any(abs(p[1] - vx) < 0.06 and abs(p[2] - vy) < 0.06 for vx, vy in VIAS_OF.get(n, [])):
+                vias.append((p[1], p[2]))                       # (an existing own via needs no new one)
             run = [p]
         else:
             run.append(p)
@@ -280,6 +297,7 @@ def route(req):
         for a, b_ in zip(tt["pts"], tt["pts"][1:]):
             draw_capsule(owner[tt["layer"]], a, b_, w / 2, n)
     for v in out_v:
+        note_via(n, v["c"])
         for l in RL:
             draw_disc(owner[l], v["c"], vd / 2, n)
         draw_disc(novia, v["c"], vdr / 2 + 0.25, True)
@@ -295,6 +313,7 @@ def fixed(req):
             draw_capsule(owner[tt["layer"]], a, b_, tt["w"] / 2, n)
         out_t.append(tt)
     for v in req["fixed"].get("vias", []):
+        note_via(NID[v["net"]], v["c"])
         n = NID[v["net"]]
         for l in RL:
             draw_disc(owner[l], v["c"], v["d"] / 2, n)

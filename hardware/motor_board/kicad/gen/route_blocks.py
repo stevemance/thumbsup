@@ -6,20 +6,39 @@ import json
 import sys
 
 F, L3, B = "F.Cu", "In2.Cu", "B.Cu"
-BLOCKS = {}
+DEFINED = []                    # request tags of the blocks defined so far, in order
 
 
+class Blocks(dict):
+    def __setitem__(self, k, reqs):
+        super().__setitem__(k, reqs)
+        DEFINED.extend(r.get("tag") or r.get("net") for r in reqs)
+
+
+BLOCKS = Blocks()
 _SPACE = None
+_ADDED = set()
 
 
 def space():
-    """Clearance model of the base board (geo.Space) for picking hand-placed via spots."""
+    """Clearance model for picking hand-placed spots: the base board plus the copper that the blocks defined so far
+    laid down in the last build (out/route/routes.json; earlier blocks only, so picks stay stable build to build)."""
     global _SPACE
+    here = __import__("pathlib").Path(__file__).resolve().parent
     if _SPACE is None:
-        here = __import__("pathlib").Path(__file__).resolve().parent
         sys.path.insert(0, str(here))
         from geo import Space
         _SPACE = Space(json.load(open(here / "out" / "route" / "geom.json")))
+    rp = here / "out" / "route" / "routes.json"
+    if rp.exists():
+        want = set(DEFINED) - _ADDED
+        for r in json.load(open(rp)):
+            if r.get("ok") and r["tag"] in want:
+                for t in r["tracks"]:
+                    _SPACE.add_track(t["pts"], t["w"], t["layer"], t["net"])
+                for v in r["vias"]:
+                    _SPACE.add_via(v["c"], v["d"], v["drill"], v["net"])
+        _ADDED.update(want)
     return _SPACE
 
 
@@ -385,6 +404,67 @@ BLOCKS["6d VM bulk"] = auto("b6d_vm_bulk", w=0.5, via=0.6, drill=0.3, layers=[F,
 
 # block 6: U3 / U4 local (charge pump, AVDD, buck FB/SW): short cap hookups, top first; 0.25 leaves a 0.5-pitch pin
 BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0)
+
+# ---------------------------------------------------------------- fan-out of the other ICs (dog-bones)
+def ic_fanout(ref, pairs_name, skip=("GND",), side_layer=None, depths=(0.5, 0.95, 1.4, 1.85, 2.3)):
+    """Each pin of `ref` that still has an open connection to something > 3 mm away gets a stub straight out along
+    its pad's long axis (away from the part's centre) to the nearest legal 0.4/0.2 via.  The open pins come from a
+    frozen pair list (make_pairs.py over the board routed up to here)."""
+    here = __import__("pathlib").Path(__file__).resolve().parent
+    g = json.load(open(here / "out" / "route" / "geom.json"))
+    pads = {p["num"]: p for p in g["pads"] if p["ref"] == ref}
+    xs = [p["c"][0] for p in pads.values()]
+    ys = [p["c"][1] for p in pads.values()]
+    cx0, cy0 = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    want = {}
+    for pr in json.load(open(here / "pairs" / f"{pairs_name}.json")):
+        for e, o in ((pr["a"], pr["b"]), (pr["b"], pr["a"])):
+            if e[0] == "pad" and e[1] == ref and pr["net"] not in skip and pr["dist"] > 3.0:
+                want[e[2]] = pr["net"]
+    sp = space()
+    tracks, vias, fails = [], [], []
+    for num, net in sorted(want.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0):
+        p = pads[num]
+        x0_, y0_, x1_, y1_ = p["box"]
+        cx, cy = p["c"]
+        lay = side_layer or p["layers"][0]
+        if (x1_ - x0_) >= (y1_ - y0_):                              # long along x: goes out left or right
+            d = (1.0, 0.0) if cx > cx0 else (-1.0, 0.0)
+            end = (x1_ if d[0] > 0 else x0_, cy)
+        else:
+            d = (0.0, 1.0) if cy > cy0 else (0.0, -1.0)
+            end = (cx, y1_ if d[1] > 0 else y0_)
+        side = (-d[1], d[0])
+        best = None
+        for depth in depths:
+            for lat in (0.0, 0.25, -0.25, 0.5, -0.5):
+                bend = (end[0] + d[0] * max(0.0, depth - 0.35), end[1] + d[1] * max(0.0, depth - 0.35))
+                c = (round(bend[0] + d[0] * 0.35 + side[0] * lat, 3), round(bend[1] + d[1] * 0.35 + side[1] * lat, 3))
+                pts = [end] + ([bend] if lat else []) + [c]
+                if sp.via_ok(c, 0.4, 0.2, net) and sp.track_ok(pts, 0.15, lay, net):
+                    best = (c, pts)
+                    break
+            if best:
+                break
+        if not best:
+            fails.append(num)
+            continue
+        c, pts = best
+        sp.add_via(c, 0.4, 0.2, net)
+        sp.add_track(pts, 0.15, lay, net)
+        vias.append(via(net, c))
+        tracks.append(trk(net, lay, [(cx, cy)] + pts, 0.15))
+    return [dict(tag=f"{ref} fan-out (fixed; {len(vias)} pins; no spot: {' '.join(fails)})",
+                 fixed=dict(tracks=tracks, vias=vias))]
+
+
+# block 7: fan-out of the drive / gate ICs' logic pins (the buses then run via-to-via, mostly on L3)
+BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open") + ic_fanout("U3", "b7_open") + ic_fanout("U4", "b7_open")
+
+# block 8: logic and rails, via to via: L3 is the main layer in the rear half (outer layers cost more), fan-out vias
+# are free layer changes, shortest first
+# (tried as one greedy auto block: 112 of 230 routed but L3 came out as spaghetti that fragments the layer; not kept.
+#  The buses get planned lanes instead; this block is only for the short leftovers once they're in.)
 
 # block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
 def gnd_drops(name):
