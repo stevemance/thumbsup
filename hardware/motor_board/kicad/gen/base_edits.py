@@ -16,6 +16,10 @@ MOVE = {                # ref: (x, y, rot or None) of the footprint origin
     "NT1": (64.1, 13.85, 0),     # flat on RS1's GND pad inner-front corner, sense pad in the pad gap
     "R24": (48.5, 4.5, None),    # between JW3's and JW2's solder zones, clear of the gate bundles
     "R62": (61.3, 21.3, None),   # out of phase A's escape diagonals right of U2
+    "C21": (60.45, 22.5, 90),    # charge-pump caps swapped so pins 5/4/3 (VCP, CPH, CPL) reach them as parallel
+    "C20": (59.45, 25.28, 180),  #   top-layer lanes: C21 (VCP-VM) above next to C24, C20 (CPL | CPH) below
+    "R20": (58.7, 26.6, None),   # FB divider 0.1 mm rearward: courtyard room for C20
+    "R21": (60.7, 26.6, None),
 }
 DROP_VIAS = [("GND", 55.4, 15.9), ("GND", 45.5, 16.7), ("GND", 46.7, 16.5),   # channels for GLB / SNC's lane
              ("VBAT", 68.15, 13.05), ("GND", 67.9, 15.9)]                      # and for GHA/SHA through cell A

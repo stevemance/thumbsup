@@ -129,8 +129,8 @@ for s, u in (("30", "U3"), ("40", "U4")):
     add(f"C{s}6", T, (u, "37"), f"{u} VREF cap at pin 37")
 # ---------------------------------------------------------------- top: weapon driver decoupling + straps + buck
 add("C24", T, ("U2", "6"), "U2 VM 100 nF: as close to pin 6 as possible (DRV8323 'must')")
-add("C21", T, ("U2", "5"), "VCP-VM cap at pin 5")
-add("C20", T, ("U2", "4"), "charge-pump flying cap at pins 3/4")
+EXPLICIT["C21"] = (60.45, 22.5, 90, T, "VCP-VM cap at pin 5: beside C24, its VM pad next to C24's, VCP pad reached by a lane under C24 (routing)")
+EXPLICIT["C20"] = (59.45, 25.28, 180, T, "charge-pump flying cap at pins 3/4: CPL pad left, CPH pad right, so pins 5/4/3 fan out to C21/C20 as parallel lanes without crossing (routing)")
 add("C22", T, ("U2", "36"), "DVDD cap at pin 36, short path to AGND")
 add("C23", T, ("U2", "26"), "VREF cap at pin 26")
 add("R44", T, ("U2", "29"), "MODE strap within 2 mm of pin 29, returned to AGND (DESIGN 6.4)")

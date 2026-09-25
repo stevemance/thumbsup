@@ -126,6 +126,47 @@ b1 += [   # phase A from U2's right side
 ]
 BLOCKS["1 weapon gate drive + Kelvin"] = b1
 
+# ---------------------------------------------------------------- block 2: U2 local (buck loop, charge pump, straps)
+# Buck first (switching loop: VIN cap C27 -> pin 47, SW pin 45 -> D2 / C28 bootstrap / L1, all on top and short),
+# then the charge-pump and VM caps, DVDD, the three strap resistors, FB and EN dividers.  Top only where it fits;
+# the router may drop to the bottom for the longer divider legs.
+TOP = dict(layers=[F, B], layer_cost={F: 1.0, B: 1.6}, via_cost=2.0, margin=3.0)
+
+
+def pp(tag, net, a, b, **kw):
+    q = dict(TOP)
+    q.update(kw)
+    return dict(tag=tag, net=net, a=("pad", *a.split(".")), b=("pad", *b.split(".")), **q)
+
+
+# charge pump: pins 5/4/3 fan out as parallel 0.2 lanes (0.5 pitch kept through the 45-degree jog under C24)
+CP = [trk("/weapon/U2_VCP", F, [(57.2, 23.75), (57.7, 23.75), (57.95, 24.0), (60.45, 24.0), (60.45, 23.4)], 0.2),
+      trk("/weapon/U2_CPH", F, [(57.2, 24.25), (57.7, 24.25), (57.95, 24.5), (60.22, 24.5), (60.22, 25.0)], 0.2),
+      trk("/weapon/U2_CPL", F, [(57.2, 24.75), (57.7, 24.75), (57.95, 25.0), (58.5, 25.0)], 0.2)]
+b2 = [
+    dict(tag="charge pump lanes (fixed)", fixed=dict(tracks=CP, vias=[])),
+    pp("SW U2-D2", "/weapon/BUCK_SW", "U2.45", "D2.1", w=0.3, layers=[F]),        # 0.3: leaves a 0.5-pitch pin
+    pp("SW D2-L1", "/weapon/BUCK_SW", "D2.1", "L1.1", w=0.6, layers=[F]),
+    pp("SW C28", "/weapon/BUCK_SW", "C28.2", "D2.1", w=0.4, layers=[F]),
+    pp("CB", "/weapon/BUCK_CB", "U2.44", "C28.1", w=0.3),
+    pp("VIN C27", "VBAT", "C27.1", "U2.47", w=0.3, layers=[F]),
+    pp("VM C24", "VBAT", "C24.1", "U2.6", w=0.4, layers=[F]),
+    pp("VM 6-7", "VBAT", "U2.6", "U2.7", w=0.25, layers=[F]),
+    pp("VCP cap VM", "VBAT", "C21.2", "C24.1", w=0.3),
+    pp("DVDD", "/weapon/U2_DVDD", "C22.1", "U2.36", w=0.25),
+    pp("VREF", "+3V3", "C23.1", "U2.26", w=0.25),
+    pp("MODE", "/weapon/U2_MODE", "R44.1", "U2.29"),
+    pp("IDRIVE", "/weapon/U2_IDRIVE", "R45.1", "U2.30"),
+    pp("VDS", "/weapon/U2_VDS", "R46.1", "U2.31"),
+    pp("FB", "/weapon/BUCK_FB", "U2.1", "R20.2"),
+    pp("FB R21", "/weapon/BUCK_FB", "R20.2", "R21.1"),
+    pp("EN", "/weapon/BUCK_EN", "U2.48", "R4.2"),
+    pp("EN C10", "/weapon/BUCK_EN", "C10.1", "R4.2"),
+    pp("EN R5", "/weapon/BUCK_EN", "R4.2", "R5.1", margin=4.0),
+    pp("EN top", "VBAT", "R4.1", "C27.1", w=0.25),
+]
+BLOCKS["2 U2 local"] = b2
+
 if __name__ == "__main__":
     upto = sys.argv[2] if len(sys.argv) > 2 else None
     out = []
