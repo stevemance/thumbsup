@@ -13904,7 +13904,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "a1df3de4-8af4-4285-a442-54ce84698f48")
-		(at 117.2 99.25)
+		(at 135.55 90.25)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP4"
@@ -14616,7 +14616,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
 		(uuid "ae9aa031-3dcc-45e7-93eb-21e969814248")
-		(at 115 98.7)
+		(at 133.4 90.25)
 		(descr "SMD pad as test Point, diameter 1.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP2"
@@ -48644,14 +48644,6 @@
 		(uuid "2e73bd4a-f83e-4878-8762-1c23972dd3d8")
 	)
 	(segment
-		(start 169.9 93.75)
-		(end 170.945 93.75)
-		(width 0.25)
-		(layer "F.Cu")
-		(net "GND")
-		(uuid "2f370d84-dc2d-4ee6-a68b-8ebcfbc78414")
-	)
-	(segment
 		(start 161.5 98.68)
 		(end 161.15 100.105)
 		(width 0.25)
@@ -48690,14 +48682,6 @@
 		(layer "F.Cu")
 		(net "GND")
 		(uuid "4fd7dec9-5c7b-4c36-926b-00dad6360b4e")
-	)
-	(segment
-		(start 119.6 99.25)
-		(end 118.555 99.25)
-		(width 0.25)
-		(layer "F.Cu")
-		(net "GND")
-		(uuid "533bf2a9-b71f-4290-8a7c-648774aeffb2")
 	)
 	(segment
 		(start 128.65 97.63)
@@ -48828,14 +48812,6 @@
 		(uuid "aa13aae9-d63f-45d4-86f7-a7234a3c6bc9")
 	)
 	(segment
-		(start 119.6 100.75)
-		(end 118.555 100.75)
-		(width 0.25)
-		(layer "F.Cu")
-		(net "GND")
-		(uuid "b0222d24-1fa0-418e-a1be-d5edc08db15f")
-	)
-	(segment
 		(start 158 99.95)
 		(end 158.35 100.795)
 		(width 0.25)
@@ -48858,14 +48834,6 @@
 		(layer "F.Cu")
 		(net "GND")
 		(uuid "b6619ce9-5b2d-4dce-b4d7-bbbf68b6ee0a")
-	)
-	(segment
-		(start 169.9 95.25)
-		(end 170.945 95.25)
-		(width 0.25)
-		(layer "F.Cu")
-		(net "GND")
-		(uuid "bbfdab88-7dc1-4365-9186-c0946157a4c2")
 	)
 	(segment
 		(start 150.0625 95.25)
@@ -49188,14 +49156,6 @@
 		(uuid "2d2fa18c-9d28-4f49-bc21-10bc0d3ddf84")
 	)
 	(via
-		(at 118.555 100.75)
-		(size 0.45)
-		(drill 0.25)
-		(layers "F.Cu" "B.Cu")
-		(net "GND")
-		(uuid "2d711c11-67db-486d-b14f-e3803a302fcd")
-	)
-	(via
 		(at 135.31 77.184999)
 		(size 0.45)
 		(drill 0.25)
@@ -49234,14 +49194,6 @@
 		(layers "F.Cu" "B.Cu")
 		(net "GND")
 		(uuid "3905822c-508e-4d83-81d7-fda77c8f1575")
-	)
-	(via
-		(at 170.945 93.75)
-		(size 0.45)
-		(drill 0.25)
-		(layers "F.Cu" "B.Cu")
-		(net "GND")
-		(uuid "390fb308-d6ed-403e-8f42-dadbeb5362de")
 	)
 	(via
 		(at 153.799999 83.9)
@@ -49508,14 +49460,6 @@
 		(uuid "6510d302-ed61-4d4c-b073-6759b4898324")
 	)
 	(via
-		(at 170.945 95.25)
-		(size 0.45)
-		(drill 0.25)
-		(layers "F.Cu" "B.Cu")
-		(net "GND")
-		(uuid "6544999f-69c6-463d-8266-0e4d6e168924")
-	)
-	(via
 		(at 142.9 85.899999)
 		(size 0.6)
 		(drill 0.3)
@@ -49778,14 +49722,6 @@
 		(layers "F.Cu" "B.Cu")
 		(net "GND")
 		(uuid "9be327c0-16a9-4582-a13b-1088de58399d")
-	)
-	(via
-		(at 118.555 99.25)
-		(size 0.45)
-		(drill 0.25)
-		(layers "F.Cu" "B.Cu")
-		(net "GND")
-		(uuid "a1ce4a0e-fbeb-4eb2-a4de-fa751593bcd2")
 	)
 	(via
 		(at 169.57 90.6)

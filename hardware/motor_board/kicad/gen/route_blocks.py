@@ -305,6 +305,35 @@ def drive_caps():
 
 BLOCKS["6a U3/U4 charge pump"] = drive_caps()
 
+# block 6b: motor outputs, top layer, 0.8 mm lanes (necked to 0.25 at the 0.5-pitch pins, both pins of a phase
+# combed by a short bar); pin order already matches connector order on both sides, so nothing crosses.
+# U3 (left side, x 19.3-19.9): L_A 13/14, L_B 16/17, L_C 19/20 west to JL1/JL2/JL3 (y 32.4): L_C straight into JL3,
+# L_B turns down to JL2 inside L_A, L_A outermost to JL1.  U4 (right side, x 69.6-70.2): R_A straight into JR1, R_B up
+# past JR1's corner into JR2, R_C climbs at x 71.0 (clear of JR2) into JR3.  The GND pins between the pairs (15/18)
+# tie straight into the exposed pad.
+def motor_outputs():
+    tr = []
+    for side, x_pin, x_bar, x_ep, pre in (("L", 19.6, 19.0, 20.4, "/drive_left/L_"), ("R", 69.9, 70.5, 69.1, "/drive_right/R_")):
+        pins = {"A": (13, 14), "B": (16, 17), "C": (19, 20)}
+        ys = {"L": {13: 28.25, 14: 28.75, 15: 29.25, 16: 29.75, 17: 30.25, 18: 30.75, 19: 31.25, 20: 31.75},
+              "R": {13: 26.25, 14: 25.75, 15: 25.25, 16: 24.75, 17: 24.25, 18: 23.75, 19: 23.25, 20: 22.75}}[side]
+        for ph, (p1, p2) in pins.items():
+            net = pre + ph
+            tr.append(trk(net, F, [(x_pin, ys[p1]), (x_bar, ys[p1]), (x_bar, ys[p2]), (x_pin, ys[p2])], 0.25))
+        for p in (15, 18):
+            tr.append(trk("GND", F, [(x_pin, ys[p]), (x_ep, ys[p])], 0.25))
+    W = 0.8
+    tr += [trk("/drive_left/L_C", F, [(19.0, 31.5), (16.6, 31.5), (16.2, 31.9)], W),
+           trk("/drive_left/L_B", F, [(19.0, 30.0), (14.0, 30.0), (12.0, 32.0), (12.0, 32.4)], W),
+           trk("/drive_left/L_A", F, [(19.0, 28.5), (10.0, 28.5), (7.8, 30.7), (7.8, 32.4)], W),
+           trk("/drive_right/R_A", F, [(70.5, 26.0), (73.1, 26.0)], W),
+           trk("/drive_right/R_B", F, [(70.5, 24.5), (71.1, 24.5), (72.3, 23.3), (72.6, 23.0), (73.1, 22.5)], W),
+           trk("/drive_right/R_C", F, [(70.5, 23.0), (71.0, 22.5), (71.0, 19.8), (71.6, 19.2), (72.6, 18.7)], W)]
+    return [dict(tag="motor outputs (fixed)", fixed=dict(tracks=tr, vias=[]))]
+
+
+BLOCKS["6b motor outputs"] = motor_outputs()
+
 # block 6: U3 / U4 local (charge pump, AVDD, buck FB/SW): short cap hookups, top first; 0.25 leaves a 0.5-pitch pin
 BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0)
 

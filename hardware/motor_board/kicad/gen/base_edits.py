@@ -23,8 +23,8 @@ MOVE = {                # ref: (x, y, rot or None) of the footprint origin
     "TP12": (26.45, 25.75, None),
     "TP5": (31.9, 11.35, None),
     "TP8": (21.35, 4.95, None),
-    "TP4": (17.2, 29.25, None),
-    "TP2": (15.0, 28.7, None),
+    "TP4": (35.55, 20.25, None),
+    "TP2": (33.4, 20.25, None),
     "TP3": (14.95, 25.5, None),
     "TP6": (16.5, 13.05, None),
     "TP1": (58.9, 18.8, None),
@@ -47,12 +47,16 @@ PADPOS["C400"] = ((68.9, 29.9), (68.9, 31.45))
 DROP_VIAS = [("GND", 55.4, 15.9), ("GND", 45.5, 16.7), ("GND", 46.7, 16.5),   # channels for GLB / SNC's lane
              ("VBAT", 68.15, 13.05), ("GND", 67.9, 15.9),                      # and for GHA/SHA through cell A
              ("GND", 33.905, 22.0), ("GND", 36.155, 22.0)]    # old TP12/TP5 GND vias, stranded in U1's fan-out field
+DROP_VIAS += [("GND", 18.555, 29.25), ("GND", 18.555, 30.75), ("GND", 70.945, 23.75), ("GND", 70.945, 25.25)]  # U3/U4 GND pins 15/18: tied to the EP instead (the motor-output lanes run there)
 # (a dropped via's stub tracks go with it)
 L3_FEED = [(21.0, 1.5), (34.6, 1.5), (34.6, 6.0), (72.8, 6.0), (72.8, 18.2), (34.6, 18.2), (34.6, 20.8), (21.0, 20.8)]
 
 b = pcbnew.LoadBoard(str(BASE))
 mm = pcbnew.FromMM
+FLIP_MOVE = set()
 for f in b.GetFootprints():
+    if f.GetReference() in FLIP_MOVE and not f.IsFlipped():
+        f.Flip(f.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
     if f.GetReference() in MOVE:
         x, y, rot = MOVE[f.GetReference()]
         if rot is not None:
