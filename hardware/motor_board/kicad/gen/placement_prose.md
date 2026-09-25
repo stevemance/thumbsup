@@ -45,23 +45,25 @@ a 5.2 mm washer/standoff circle clear on both sides.
 **Top side (hot, tall, high-current, BAT_IN):**
 - **Pack path along the front-left:** JBAT1 -> Q7 (drain tab by JBAT1) -> Q7/Q8 sources toward each other (common
   source PSW_S; the gates end up at opposite corners of the pair, so PSW_G reaches Q8 through a via) -> Q8's drain
-  tab -> RS4 -> VBAT. D1 in the front strip with its cathode in front of RS4's VBAT pad. C1 behind RS4 (VBAT pad 5.8
-  mm from RS4's VBAT pad, toward the bridge). U13 in the front strip above the pair, ~2 mm from Q7's gate.
+  tab -> RS4 -> VBAT. D1 in the front strip with its cathode in front of RS4's VBAT pad. C1 behind RS4 (VBAT pads
+  5.8 mm apart edge to edge, 9.0 mm centre to centre; C1's VBAT pad toward the bridge). U13 in the front strip above the pair, ~2 mm from Q7's gate.
 - **Weapon bridge (front right):** three identical U-cells, left to right phase C, B, A. Low side (drain tab
   forward) and high side (source pins forward) side by side, the phase strip across their front edges with the
   wire hole in front of it; the low side's source feeds its shunt directly behind; the local 10 uF stands behind the
   high side's drain tab, its GND pad 0.75 mm from the shunt's GND pad. Loop ~32 mm through the pad centres,
   ~53 mm2; **estimated ~4 nH** (review: JLC 7628 stack, L1-L2 0.21 mm; ~70 % of it is the parts' own inductance)
   against DESIGN 6.1's <= 6 nH (target 3 nH). Kelvin ties NT1-NT3 just behind the inner edge of each shunt's GND
-  pad; TH1 in the gap behind phase B's high-side drain.
+  pad (NT2 is turned to stand on the inner corner of RS2's GND pad, same net, so it stays out of the strip in front of
+  U2's phase-C pins); TH1 in the gap behind phase B's high-side drain.
 - **U2 (behind the bridge centre):** rotated 180: phase B/C gate+sense pins on its front edge, phase A pins on its
   right side, straps/DVDD/VREF on its left, buck pins at its rear-right corner. The buck is built round the pulsed
-  input loop of a non-synchronous buck (C27 -> VIN -> SW -> D2 -> GND): D2's cathode 1.9 mm below SW pin 45, C27's
-  VIN pad 2.4 mm from VIN pin 47 and its GND pad beside D2's anode; C28 between L1 and D2; L1 to the left with the
+  input loop of a non-synchronous buck (C27 -> VIN -> SW -> D2 -> GND): D2's cathode 0.7 mm (pad edges) below SW pin
+  45, C27's VIN pad 1.7 mm from VIN pin 47 and its GND pad 2.0 mm from D2's anode; C28 between L1 and D2; L1 to the left with the
   output caps C29/C30 on the rear edge.
 - **Drive left (rear left):** R302 left of C1 (L_VM end toward U3), U3 behind C1 with its VM pins facing forward
   and its phase outputs facing the JL holes; the 100 nF VM caps and CP caps at the pins, the AVDD cap and nFAULT
-  pull-up behind its rear pins (out of the output fan, AGND return, DESIGN 3.3).
+  pull-up behind its AVDD/nFAULT pins (out of the output fan, AGND return, DESIGN 3.3), leaving the INH/DRV_OFF pins
+  behind U3 free to escape into a reserved via band on the bottom.
 - **Drive right (rear right):** U4 rotated 90, outputs facing the JR holes (phase order matches, no crossing),
   VM/CP caps in the row behind it, R402 on the rear edge behind that row.
 - **Centre rear:** J2 and the left sensor channel (supply switch U11 ~16 mm from U3), the test pads (all on top,
@@ -70,10 +72,12 @@ a 5.2 mm washer/standoff circle clear on both sides.
 **Bottom side (cool, low):**
 - MCU U1 centre-rear with its decoupling and the SOx / divider / nFAULT filters around it; J1 at the left beside
   J4's pin column.
-- Cell monitor U8 under J4's body (left of its pins) with its input network; INA239 U7 under RS4; the power-switch
-  gate network (R1, D10, C13, R32, D4, R14) under Q7/Q8/U13; the interlock U6 and the ARM circuit in the block behind
-  the battery entry (x 27-34, y 5-13).
-- Drive bulk caps (4 x 10 uF each) and the unused-buck R/C near U3/U4, outside their thermal-via fields.
+- Cell monitor U8 under J4's body (left of its pins) with its input network (filter caps 3.8-7 mm from U8, see 5.3);
+  INA239 U7 under RS4 with its input filter; the power-switch gate network (R1, D10, C13, R32, D4, R14) near
+  Q7/Q8/U13; the interlock U6 and the ARM circuit in the free block right of RS4, beside the pack path (x ~25-37,
+  y ~3-17), out of the gate corridor.
+- Drive bulk caps (4 x 10 uF each) and the unused-buck R/C toward U3/U4, outside their thermal-via fields (distances: 5.3).
+- The motor-NTC clamps D7/D8 at the MCU's ADC pins (the protected side of the 2.2k series resistors).
 - J3 and the right sensor channel at the rear edge (supply switch U12 ~19 mm from U4).
 - Phase-divider top resistors beside their wire holes, just outside the solder zones.
 
@@ -101,8 +105,9 @@ critical parts stay on their IC's side; everything else goes on the bottom where
 - The unused-buck R/C of U3/U4 and the power-switch gate network: bottom.
 
 ### 5.2 Heights and the compute board
-Top tallest: C1 10.5 mm, J4 6.1, L1 4.0, D1/D2 2.5. **Bottom tallest: J3 3.35 mm**, then J1 (mates down), 1206
-caps 1.8, U1 1.6; everything else <= 1.3 mm. The board gap is set by J1's mated height (BOOMELE male 5.5 mm +
+Top tallest: C1 10.5 mm, J4 6.1, L1 4.0, J2 3.35, D1/D2 2.5. **Bottom: J1 5.5 mm (the header, it mates down into
+the compute board's socket); the tallest other part is J3 at 3.35 mm**, then 1206 caps 1.8, U1 1.6; everything else
+<= 1.3 mm. The board gap is set by J1's mated height (BOOMELE male 5.5 mm +
 the socket you choose; DESIGN 3.5: 4.9-6.0 mm). The compute board must:
 - mirror J1: **pin 1 at (14.6, 24.92)** in this board's top-view coordinates, pin 2 at (18.6, 24.92), odd pins in
   the x = 14.6 column, rows running toward the front (pin 19 at y 13.48);
@@ -114,29 +119,33 @@ the socket you choose; DESIGN 3.5: 4.9-6.0 mm). The compute board must:
   under a notch here. Same for its USB connector (edge access).
 
 ### 5.3 Relaxations (accepted to stay at 35 x 75)
-From `critical.py` and `facts.py` (the full list is at the end of this file):
-- **Drive 10 uF VM bulk** (C302/C308-C310, C402/C408-C410): 5-12 mm from the VM pins (worst C410 ~20 mm), against
-  DESIGN 6.6's "within 2 mm". The 100 nF HF caps are at the pins (<= 1.8 mm) and the 10 uF are on the filtered side
-  of R302/R402; the extra trace (~5-20 nH) is in series with a 0.1 ohm RC filter, so the VM ripple and the
-  4 V/us dV/dt protection are barely affected. Route them as wide R_VM pours.
-- **Sensor channels:** J2: U9 4.6 mm, U11 8.3, R113 7.8, D7 16.7; J3: U10 7.7, U12 6.7, D8 11.8, R117 13.2 (centre
-  distances), against DESIGN 6.9's "beside". The protection still sits between the cable and the MCU; what grows is
-  the unprotected cable stub on the board. Keep those stubs on an inner layer next to L2.
-- **Filters at the MCU:** most are <= 3 mm; a few (C19, C44, C68, C80-C82, C91) are 4-6 mm. They are slow
-  (RC >= 7 ns) or DC; acceptable.
-- **U2 surroundings:** C20 2.6 mm, R46 2.5 mm (a DC strap; three 0402s cannot all sit within 2 mm of pins 29-31);
-  the buck SW node ~4-5 mm long.
-- **Gate-drive runs** (`measure.py gates`): 10-18 mm (phase B, A low side), 20-27 mm (phase C, phase A high side):
-  one driver serves a 38 mm-wide bridge. IDRIVE is 60/120 mA, so the loops' inductance matters little; route each
-  gate with its source return as a pair, low sides on L1 through the gap between each shunt's pads.
-- **U13:** C14/C12 ~3 mm from VS/VCAP (JBAT2's solder zone takes U13's left side).
+Pad-edge distances from `critical.py`, centre distances from `facts.py` / `placement_v2.csv` (full list at the end):
+- **Drive 10 uF VM bulk** (C302/C308-C310, C402/C408-C410): up to 9.5 mm (U3) and 5-19 mm (U4, worst C410) from
+  the VM pins, against DESIGN 6.6's "within 2 mm". The 100 nF HF caps are at the pins (<= 1.8 mm) and the 10 uF are on
+  the filtered side of R302/R402; the extra trace (~5-20 nH) is in series with a 0.1 ohm RC filter, so the VM ripple
+  and the 4 V/us dV/dt protection are barely affected. Route them as wide R_VM / L_VM pours.
+- **Sensor channels** (centres): J2: U9 4.6 mm, U11 8.3, R113 11.1; J3: U10 7.7, U12 6.7, R117 12.6; against DESIGN
+  6.9's "beside". The series resistors still sit between the cable and the buffers/MCU; what grows is the unprotected
+  cable stub on the board, so keep those stubs on an inner layer next to L2. The NTC clamps D7/D8 moved to the MCU's
+  ADC pins (5.8 / 8.6 mm), on the protected side.
+- **Cell monitor:** the cell-input filter caps C4-C8 are 3.8-7 mm from U8 and the series resistors R6-R11 8-11 mm
+  (DESIGN 6.9: at U8); C9 and C11 are at their pins (1.7 mm). The RC (22 us) is slow; keep the taps short and paired.
+- **Filters and decoupling at the MCU:** most are <= 3 mm; over: C60 (VDD) 3.1, C42 3.6, C82 3.7, C92 3.6, C43 5.5,
+  C44 5.4 (NTC), C68 9.6 (pack divider, DC). The RC corners are slow or DC; acceptable.
+- **U2 surroundings:** C20 2.6 mm, R46 2.5 mm (a DC strap; three 0402s cannot all sit within 2 mm of pins 29-31); the
+  buck SW node runs ~6-7 mm (pin 45 -> D2 / C28 -> L1).
+- **Gate-drive runs** (`measure.py gates`, pin to pin): phase B 10-15 mm, phase A low side 13.5-18, phase C 20-24,
+  phase A high side 27-28: one driver serves a 38 mm-wide bridge. IDRIVE is 60/120 mA, so the loops' inductance matters
+  little; route each gate with its source return as a pair, low sides on L1 through the gap between each shunt's pads.
+- **Other small ones:** U13's C14/C12 2.8/3.1 mm (JBAT2's solder zone takes U13's left side); U4's C404 3.2 mm; C29 2.2
+  mm from D2's anode; U11's C45/C46 3.6/4.4 mm.
 - **Flex rule exceptions:** C26, C31 (bridge 10 uF) and C27 (buck VIN) stand across the board; RS1 runs along it.
   On a 75 x 35 board held at its corners the bending strain runs mostly along x, which a part standing across the
   board sees least (the review agreed); they are 12-28 mm from the holes. RS1 is a metal-element shunt.
 
 ## 6. JLCPCB assembly
 - Standard PCBA, double-sided, 4 layers. The board is under 70 x 70 mm, so JLC adds rails: rails on all four edges,
-  **mouse-bite tabs away from J2/J3/C29/C30/R402 on the rear edge, no V-cut there** (pads are 0.45 mm from it).
+  **mouse-bite tabs away from J2/J3/C29/C30/R402 on the rear edge, no V-cut there** (pads are 0.40 mm from it).
 - Every pad pair passes JLC's minimum SMD spacing (0402 0.18 / 0603 0.25 / 1206 0.35 / SOT 0.4 / QFN-QFN 1.0 mm);
   Q7-Q8 was the one QFN pair below 1.0 mm and is now 1.1 mm.
 - Wire holes, test pads, net ties, solder jumpers and mounting holes are out of the BOM; JLC adds fiducials.
@@ -160,3 +169,9 @@ the wrong shunt; buck input loop open; C305/TP8 in U3's output fan; JR phase ord
 were not true on the board. Confirmed good by the review: commutation loop ~4 nH; pack-return offset at the MCU,
 CSA filters and J1 1-4 mV (2-D solve of L2) against DESIGN 6.2's 20-45 mV concern; JLC spacing. Declined: changing
 C20 to 0402 (a part change). Accepted as relaxations: section 5.3.
+
+Round 2 (verification, two reviewers): all 11 round-1 fixes confirmed on the board (e.g. 24-25 free via sites under
+each thermal pad, gate vias fit 0.75 mm from each high-side gate pin, no pad in a washer circle). Two new must-fixes
+found and fixed: NT2 blocked U2's front pin strip (turned onto RS2's GND corner); U3's rear logic pins had no escape
+(C305/R301 moved, a bottom via band reserved). The claims audit's corrections are in the text and the table;
+C44/C68 and D7/D8 were moved to their MCU pins; the cell-filter distances were added to 5.3.

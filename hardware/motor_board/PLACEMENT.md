@@ -45,23 +45,25 @@ a 5.2 mm washer/standoff circle clear on both sides.
 **Top side (hot, tall, high-current, BAT_IN):**
 - **Pack path along the front-left:** JBAT1 -> Q7 (drain tab by JBAT1) -> Q7/Q8 sources toward each other (common
   source PSW_S; the gates end up at opposite corners of the pair, so PSW_G reaches Q8 through a via) -> Q8's drain
-  tab -> RS4 -> VBAT. D1 in the front strip with its cathode in front of RS4's VBAT pad. C1 behind RS4 (VBAT pad 5.8
-  mm from RS4's VBAT pad, toward the bridge). U13 in the front strip above the pair, ~2 mm from Q7's gate.
+  tab -> RS4 -> VBAT. D1 in the front strip with its cathode in front of RS4's VBAT pad. C1 behind RS4 (VBAT pads
+  5.8 mm apart edge to edge, 9.0 mm centre to centre; C1's VBAT pad toward the bridge). U13 in the front strip above the pair, ~2 mm from Q7's gate.
 - **Weapon bridge (front right):** three identical U-cells, left to right phase C, B, A. Low side (drain tab
   forward) and high side (source pins forward) side by side, the phase strip across their front edges with the
   wire hole in front of it; the low side's source feeds its shunt directly behind; the local 10 uF stands behind the
   high side's drain tab, its GND pad 0.75 mm from the shunt's GND pad. Loop ~32 mm through the pad centres,
   ~53 mm2; **estimated ~4 nH** (review: JLC 7628 stack, L1-L2 0.21 mm; ~70 % of it is the parts' own inductance)
   against DESIGN 6.1's <= 6 nH (target 3 nH). Kelvin ties NT1-NT3 just behind the inner edge of each shunt's GND
-  pad; TH1 in the gap behind phase B's high-side drain.
+  pad (NT2 is turned to stand on the inner corner of RS2's GND pad, same net, so it stays out of the strip in front of
+  U2's phase-C pins); TH1 in the gap behind phase B's high-side drain.
 - **U2 (behind the bridge centre):** rotated 180: phase B/C gate+sense pins on its front edge, phase A pins on its
   right side, straps/DVDD/VREF on its left, buck pins at its rear-right corner. The buck is built round the pulsed
-  input loop of a non-synchronous buck (C27 -> VIN -> SW -> D2 -> GND): D2's cathode 1.9 mm below SW pin 45, C27's
-  VIN pad 2.4 mm from VIN pin 47 and its GND pad beside D2's anode; C28 between L1 and D2; L1 to the left with the
+  input loop of a non-synchronous buck (C27 -> VIN -> SW -> D2 -> GND): D2's cathode 0.7 mm (pad edges) below SW pin
+  45, C27's VIN pad 1.7 mm from VIN pin 47 and its GND pad 2.0 mm from D2's anode; C28 between L1 and D2; L1 to the left with the
   output caps C29/C30 on the rear edge.
 - **Drive left (rear left):** R302 left of C1 (L_VM end toward U3), U3 behind C1 with its VM pins facing forward
   and its phase outputs facing the JL holes; the 100 nF VM caps and CP caps at the pins, the AVDD cap and nFAULT
-  pull-up behind its rear pins (out of the output fan, AGND return, DESIGN 3.3).
+  pull-up behind its AVDD/nFAULT pins (out of the output fan, AGND return, DESIGN 3.3), leaving the INH/DRV_OFF pins
+  behind U3 free to escape into a reserved via band on the bottom.
 - **Drive right (rear right):** U4 rotated 90, outputs facing the JR holes (phase order matches, no crossing),
   VM/CP caps in the row behind it, R402 on the rear edge behind that row.
 - **Centre rear:** J2 and the left sensor channel (supply switch U11 ~16 mm from U3), the test pads (all on top,
@@ -70,10 +72,12 @@ a 5.2 mm washer/standoff circle clear on both sides.
 **Bottom side (cool, low):**
 - MCU U1 centre-rear with its decoupling and the SOx / divider / nFAULT filters around it; J1 at the left beside
   J4's pin column.
-- Cell monitor U8 under J4's body (left of its pins) with its input network; INA239 U7 under RS4; the power-switch
-  gate network (R1, D10, C13, R32, D4, R14) under Q7/Q8/U13; the interlock U6 and the ARM circuit in the block behind
-  the battery entry (x 27-34, y 5-13).
-- Drive bulk caps (4 x 10 uF each) and the unused-buck R/C near U3/U4, outside their thermal-via fields.
+- Cell monitor U8 under J4's body (left of its pins) with its input network (filter caps 3.8-7 mm from U8, see 5.3);
+  INA239 U7 under RS4 with its input filter; the power-switch gate network (R1, D10, C13, R32, D4, R14) near
+  Q7/Q8/U13; the interlock U6 and the ARM circuit in the free block right of RS4, beside the pack path (x ~25-37,
+  y ~3-17), out of the gate corridor.
+- Drive bulk caps (4 x 10 uF each) and the unused-buck R/C toward U3/U4, outside their thermal-via fields (distances: 5.3).
+- The motor-NTC clamps D7/D8 at the MCU's ADC pins (the protected side of the 2.2k series resistors).
 - J3 and the right sensor channel at the rear edge (supply switch U12 ~19 mm from U4).
 - Phase-divider top resistors beside their wire holes, just outside the solder zones.
 
@@ -101,8 +105,9 @@ critical parts stay on their IC's side; everything else goes on the bottom where
 - The unused-buck R/C of U3/U4 and the power-switch gate network: bottom.
 
 ### 5.2 Heights and the compute board
-Top tallest: C1 10.5 mm, J4 6.1, L1 4.0, D1/D2 2.5. **Bottom tallest: J3 3.35 mm**, then J1 (mates down), 1206
-caps 1.8, U1 1.6; everything else <= 1.3 mm. The board gap is set by J1's mated height (BOOMELE male 5.5 mm +
+Top tallest: C1 10.5 mm, J4 6.1, L1 4.0, J2 3.35, D1/D2 2.5. **Bottom: J1 5.5 mm (the header, it mates down into
+the compute board's socket); the tallest other part is J3 at 3.35 mm**, then 1206 caps 1.8, U1 1.6; everything else
+<= 1.3 mm. The board gap is set by J1's mated height (BOOMELE male 5.5 mm +
 the socket you choose; DESIGN 3.5: 4.9-6.0 mm). The compute board must:
 - mirror J1: **pin 1 at (14.6, 24.92)** in this board's top-view coordinates, pin 2 at (18.6, 24.92), odd pins in
   the x = 14.6 column, rows running toward the front (pin 19 at y 13.48);
@@ -114,29 +119,33 @@ the socket you choose; DESIGN 3.5: 4.9-6.0 mm). The compute board must:
   under a notch here. Same for its USB connector (edge access).
 
 ### 5.3 Relaxations (accepted to stay at 35 x 75)
-From `critical.py` and `facts.py` (the full list is at the end of this file):
-- **Drive 10 uF VM bulk** (C302/C308-C310, C402/C408-C410): 5-12 mm from the VM pins (worst C410 ~20 mm), against
-  DESIGN 6.6's "within 2 mm". The 100 nF HF caps are at the pins (<= 1.8 mm) and the 10 uF are on the filtered side
-  of R302/R402; the extra trace (~5-20 nH) is in series with a 0.1 ohm RC filter, so the VM ripple and the
-  4 V/us dV/dt protection are barely affected. Route them as wide R_VM pours.
-- **Sensor channels:** J2: U9 4.6 mm, U11 8.3, R113 7.8, D7 16.7; J3: U10 7.7, U12 6.7, D8 11.8, R117 13.2 (centre
-  distances), against DESIGN 6.9's "beside". The protection still sits between the cable and the MCU; what grows is
-  the unprotected cable stub on the board. Keep those stubs on an inner layer next to L2.
-- **Filters at the MCU:** most are <= 3 mm; a few (C19, C44, C68, C80-C82, C91) are 4-6 mm. They are slow
-  (RC >= 7 ns) or DC; acceptable.
-- **U2 surroundings:** C20 2.6 mm, R46 2.5 mm (a DC strap; three 0402s cannot all sit within 2 mm of pins 29-31);
-  the buck SW node ~4-5 mm long.
-- **Gate-drive runs** (`measure.py gates`): 10-18 mm (phase B, A low side), 20-27 mm (phase C, phase A high side):
-  one driver serves a 38 mm-wide bridge. IDRIVE is 60/120 mA, so the loops' inductance matters little; route each
-  gate with its source return as a pair, low sides on L1 through the gap between each shunt's pads.
-- **U13:** C14/C12 ~3 mm from VS/VCAP (JBAT2's solder zone takes U13's left side).
+Pad-edge distances from `critical.py`, centre distances from `facts.py` / `placement_v2.csv` (full list at the end):
+- **Drive 10 uF VM bulk** (C302/C308-C310, C402/C408-C410): up to 9.5 mm (U3) and 5-19 mm (U4, worst C410) from
+  the VM pins, against DESIGN 6.6's "within 2 mm". The 100 nF HF caps are at the pins (<= 1.8 mm) and the 10 uF are on
+  the filtered side of R302/R402; the extra trace (~5-20 nH) is in series with a 0.1 ohm RC filter, so the VM ripple
+  and the 4 V/us dV/dt protection are barely affected. Route them as wide R_VM / L_VM pours.
+- **Sensor channels** (centres): J2: U9 4.6 mm, U11 8.3, R113 11.1; J3: U10 7.7, U12 6.7, R117 12.6; against DESIGN
+  6.9's "beside". The series resistors still sit between the cable and the buffers/MCU; what grows is the unprotected
+  cable stub on the board, so keep those stubs on an inner layer next to L2. The NTC clamps D7/D8 moved to the MCU's
+  ADC pins (5.8 / 8.6 mm), on the protected side.
+- **Cell monitor:** the cell-input filter caps C4-C8 are 3.8-7 mm from U8 and the series resistors R6-R11 8-11 mm
+  (DESIGN 6.9: at U8); C9 and C11 are at their pins (1.7 mm). The RC (22 us) is slow; keep the taps short and paired.
+- **Filters and decoupling at the MCU:** most are <= 3 mm; over: C60 (VDD) 3.1, C42 3.6, C82 3.7, C92 3.6, C43 5.5,
+  C44 5.4 (NTC), C68 9.6 (pack divider, DC). The RC corners are slow or DC; acceptable.
+- **U2 surroundings:** C20 2.6 mm, R46 2.5 mm (a DC strap; three 0402s cannot all sit within 2 mm of pins 29-31); the
+  buck SW node runs ~6-7 mm (pin 45 -> D2 / C28 -> L1).
+- **Gate-drive runs** (`measure.py gates`, pin to pin): phase B 10-15 mm, phase A low side 13.5-18, phase C 20-24,
+  phase A high side 27-28: one driver serves a 38 mm-wide bridge. IDRIVE is 60/120 mA, so the loops' inductance matters
+  little; route each gate with its source return as a pair, low sides on L1 through the gap between each shunt's pads.
+- **Other small ones:** U13's C14/C12 2.8/3.1 mm (JBAT2's solder zone takes U13's left side); U4's C404 3.2 mm; C29 2.2
+  mm from D2's anode; U11's C45/C46 3.6/4.4 mm.
 - **Flex rule exceptions:** C26, C31 (bridge 10 uF) and C27 (buck VIN) stand across the board; RS1 runs along it.
   On a 75 x 35 board held at its corners the bending strain runs mostly along x, which a part standing across the
   board sees least (the review agreed); they are 12-28 mm from the holes. RS1 is a metal-element shunt.
 
 ## 6. JLCPCB assembly
 - Standard PCBA, double-sided, 4 layers. The board is under 70 x 70 mm, so JLC adds rails: rails on all four edges,
-  **mouse-bite tabs away from J2/J3/C29/C30/R402 on the rear edge, no V-cut there** (pads are 0.45 mm from it).
+  **mouse-bite tabs away from J2/J3/C29/C30/R402 on the rear edge, no V-cut there** (pads are 0.40 mm from it).
 - Every pad pair passes JLC's minimum SMD spacing (0402 0.18 / 0603 0.25 / 1206 0.35 / SOT 0.4 / QFN-QFN 1.0 mm);
   Q7-Q8 was the one QFN pair below 1.0 mm and is now 1.1 mm.
 - Wire holes, test pads, net ties, solder jumpers and mounting holes are out of the BOM; JLC adds fiducials.
@@ -161,6 +170,12 @@ were not true on the board. Confirmed good by the review: commutation loop ~4 nH
 CSA filters and J1 1-4 mV (2-D solve of L2) against DESIGN 6.2's 20-45 mV concern; JLC spacing. Declined: changing
 C20 to 0402 (a part change). Accepted as relaxations: section 5.3.
 
+Round 2 (verification, two reviewers): all 11 round-1 fixes confirmed on the board (e.g. 24-25 free via sites under
+each thermal pad, gate vias fit 0.75 mm from each high-side gate pin, no pad in a washer circle). Two new must-fixes
+found and fixed: NT2 blocked U2's front pin strip (turned onto RS2's GND corner); U3's rear logic pins had no escape
+(C305/R301 moved, a bottom via band reserved). The claims audit's corrections are in the text and the table;
+C44/C68 and D7/D8 were moved to their MCU pins; the cell-filter distances were added to 5.3.
+
 
 ## Per-part placement
 
@@ -178,7 +193,7 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | JW2 | Weapon B | top | 54.10, 2.75 | 0 | phase B motor wire: at the front edge (drum side), directly in front of the phase strip joining Q3 source and Q4 drain | placed explicitly |
 | JW3 | Weapon C | top | 41.60, 2.75 | 0 | phase C motor wire: at the front edge (drum side), directly in front of the phase strip joining Q5 source and Q6 drain | placed explicitly |
 | NT1 | NetTie | top | 64.80, 18.30 | 0 | Kelvin tie SNA: directly behind the inner edge of RS1's GND pad, so the sense return starts at the shunt, not in the cap's return copper (DESIGN 6.3) | placed explicitly |
-| NT2 | NetTie | top | 52.30, 18.30 | 0 | Kelvin tie SNB: directly behind the inner edge of RS2's GND pad, so the sense return starts at the shunt, not in the cap's return copper (DESIGN 6.3) | placed explicitly |
+| NT2 | NetTie | top | 52.10, 17.60 | 90 | Kelvin tie SNB: standing on the inner-rear corner of RS2's GND pad (same net), so it stays out of the strip in front of U2's phase-C pins (verification review) | placed explicitly |
 | NT3 | NetTie | top | 39.80, 18.30 | 0 | Kelvin tie SNC: directly behind the inner edge of RS3's GND pad, so the sense return starts at the shunt, not in the cap's return copper (DESIGN 6.3) | placed explicitly |
 | Q1 | HYG015N04LS1C2 | top | 69.70, 9.15 | -90 | phase A high side: source pins face the phase strip at the front, drain tab (VBAT) faces its 10 uF C25 behind; hot part, top | placed explicitly |
 | Q2 | HYG015N04LS1C2 | top | 63.50, 9.15 | 90 | phase A low side: drain tab faces the phase strip at the front, source pins face its shunt RS1 directly behind; hot part, top | placed explicitly |
@@ -197,21 +212,21 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 |---|---|---|---|---|---|---|
 | C1 | EEHZK1V331P | top | 24.30, 18.00 | 180 | 330 uF bulk: VBAT pad (right) 5.8 mm from RS4's VBAT pad and toward the bridge, GND pad (left) into the L2 plane: next to both the switch output and the bridge (DESIGN 6.6); 10.5 mm tall, top; stake by hand | placed explicitly |
 | C12 | 220nF 25V | top | 16.90, 2.30 | -90 | VCAP-VS cap: beside U13, off the FET copper (LM74502 p19: heat shifts its capacitance) | 3.8 mm to U13.4 |
-| C13 | 22nF 50V | bottom | 17.80, 5.15 | 90 | Cdvdt network on PSW_G (bottom, under U13's GATE pin) | 4.1 mm to U13.6 |
+| C13 | 22nF 50V | bottom | 14.80, 1.90 | 180 | Cdvdt network on PSW_G (bottom, near U13's GATE pin; not BAT_IN) | 3.3 mm to U13.6 |
 | C14 | 100nF 100V | top | 17.60, 4.90 | 0 | U13 VS cap across the unswitched pack (BAT_IN, so top): on U13's right because JBAT2's solder zone takes its left; 0805 parallel to the front edge | 3.5 mm to U13.5 |
 | C18 | 100nF 16V | top | 14.60, 1.05 | 180 | EN/UVLO filter at U13 pin 1 (DESIGN 6.6) | 1.5 mm to U13.1 |
 | D1 | SMBJ20A | top | 27.00, 3.00 | 180 | bus TVS: front strip, cathode (VBAT) straight in front of RS4's VBAT pad, anode to GND vias; across VBAT/GND before the bridge | placed explicitly |
-| D4 | MMSZ5242B | bottom | 14.10, 8.35 | 0 | Q7/Q8 gate-source clamp (bottom, under the gates; not BAT_IN) | 1.3 mm to Q7.4 |
-| D10 | 1N4148W | bottom | 15.55, 4.65 | 90 | Cdvdt network on PSW_G (bottom, under U13's GATE pin) | 2.1 mm to U13.6 |
+| D4 | MMSZ5242B | bottom | 12.85, 9.60 | -90 | Q7/Q8 gate-source clamp (bottom, under the gates; not BAT_IN) | 0.9 mm to Q7.4 |
+| D10 | 1N4148W | bottom | 15.55, 5.15 | 90 | Cdvdt network on PSW_G (bottom, near U13's GATE pin; not BAT_IN) | 2.4 mm to U13.6 |
 | JBAT1 | BAT+ wire | top | 3.20, 8.70 | 0 | BAT+ wire: left edge (battery beside the board's left end), first in the pack path, next to Q7's drain | placed explicitly |
 | JBAT2 | BAT- wire | top | 9.20, 3.00 | 0 | BAT- wire: 8.3 mm from BAT+ (the pair leaves together, twist it); GND joins the L2 plane at the hole | placed explicitly |
 | Q7 | HYG015N04LS1C2 | top | 10.10, 9.00 | 180 | inrush FET: drain tab next to JBAT1, source pins toward Q8's (common source PSW_S; the two gate pins end up at opposite corners of the pair, so PSW_G reaches Q8's through a via); 1.1 mm pad gap to Q8 (JLC QFN-QFN 1.0 mm); 16 W peak at switch-on, top | placed explicitly |
 | Q8 | HYG015N04LS1C2 | top | 17.80, 9.00 | 0 | reverse FET: source pins toward Q7's, drain tab (VBAT_SW) against RS4 pad 1; ~1 W at 22 A, top | placed explicitly |
-| R1 | 4.7k | bottom | 13.80, 4.65 | 90 | Cdvdt network on PSW_G (bottom, under U13's GATE pin) | 0.0 mm to U13.6 |
+| R1 | 4.7k | bottom | 13.80, 4.65 | 90 | Cdvdt network on PSW_G (bottom, near U13's GATE pin; not BAT_IN) | 0.0 mm to U13.6 |
 | R13 | 100k | top | 18.35, 2.80 | 90 | EN/UVLO top resistor from BAT_IN: top (BAT_IN never on the bottom face) | 3.3 mm to U13.1 |
-| R14 | 15k 1% | bottom | 15.60, 1.55 | 0 | EN/UVLO bottom resistor (bottom, under pin 1) | 1.0 mm to U13.1 |
-| R15 | 6.8k 0805 | bottom | 23.00, 14.00 | 180 | bus bleeder (bottom, under C1): 41 mW | 6.1 mm to C1.1 |
-| R32 | 1M | bottom | 13.80, 2.65 | 90 | Cdvdt network on PSW_G (bottom, under U13's GATE pin) | 2.0 mm to U13.6 |
+| R14 | 15k 1% | bottom | 17.35, 2.05 | 0 | EN/UVLO bottom resistor (bottom, under pin 1) | 1.8 mm to U13.1 |
+| R15 | 6.8k 0805 | bottom | 29.25, 3.50 | 0 | bus bleeder (bottom, under C1): 41 mW | 14.5 mm to C1.1 |
+| R32 | 1M | bottom | 15.30, 8.15 | 180 | Cdvdt network on PSW_G (bottom, near U13's GATE pin; not BAT_IN) | 3.2 mm to U13.6 |
 | RS4 | RE2512F3R001 | top | 26.10, 9.00 | 0 | pack shunt: pad 1 on Q8's drain tab, pad 2 (VBAT) toward C1/D1; INA239 Kelvin taps from the pad inner edges | placed explicitly |
 | U13 | LM74502DDFR | top | 14.10, 3.85 | -90 | LM74502: front strip above the Q7/Q8 pair, ~2 mm from Q7's gate, GATE/SRC short (DESIGN 6.6); BAT_IN pin, so top | 2.0 mm to Q7.4 |
 
@@ -230,21 +245,21 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
-| C4 | 220nF 25V | bottom | 6.30, 14.75 | 90 | cell-input filter caps at U8 | 6.4 mm to U8.3 |
-| C5 | 220nF 25V | bottom | 8.80, 12.50 | 180 | cell-input filter caps at U8 | 9.8 mm to U8.3 |
-| C6 | 220nF 25V | bottom | 8.80, 10.75 | 0 | cell-input filter caps at U8 | 11.3 mm to U8.3 |
-| C7 | 220nF 25V | bottom | 13.30, 27.50 | 90 | cell-input filter caps at U8 | 12.6 mm to U8.3 |
-| C8 | 220nF 25V | bottom | 8.80, 9.00 | 0 | cell-input filter caps at U8 | 12.8 mm to U8.3 |
+| C4 | 220nF 25V | bottom | 4.30, 16.50 | 90 | cell-input filter caps, placed first round U8 | 3.8 mm to U8.3 |
+| C5 | 220nF 25V | bottom | 6.05, 16.50 | -90 | cell-input filter caps, placed first round U8 | 4.9 mm to U8.3 |
+| C6 | 220nF 25V | bottom | 4.80, 25.50 | 180 | cell-input filter caps, placed first round U8 | 5.3 mm to U8.3 |
+| C7 | 220nF 25V | bottom | 4.80, 27.25 | 0 | cell-input filter caps, placed first round U8 | 7.0 mm to U8.3 |
+| C8 | 220nF 25V | bottom | 5.05, 14.00 | 0 | cell-input filter caps, placed first round U8 | 6.8 mm to U8.3 |
 | C9 | 4.7uF 50V X7R | bottom | 2.00, 25.45 | -90 | BAT decoupling at U8 pin 17 | 3.1 mm to U8.17 |
 | C11 | 4.7uF 16V | bottom | 4.95, 23.75 | 180 | REGOUT cap at pin 15 (BQ76907: must be at REGOUT) | 2.2 mm to U8.15 |
 | D5 | B5819W | bottom | 2.30, 15.50 | 90 | VC0 clamp at U8 | 2.4 mm to U8.5 |
 | J4 | S5B-XH-A | top | 9.94, 15.90 | -90 | balance lead: left edge beside the battery wires, mating face at the edge; 6.1 mm tall so top (the board gap is ~5 mm) | placed explicitly |
-| R6 | 100R 0603 | bottom | 5.05, 17.25 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 3.8 mm to U8.3 |
-| R7 | 100R | bottom | 4.55, 15.75 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 5.0 mm to U8.3 |
-| R8 | 100R | bottom | 4.30, 25.25 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 5.0 mm to U8.3 |
-| R9 | 100R | bottom | 6.30, 25.25 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 5.9 mm to U8.3 |
-| R10 | 100R | bottom | 4.30, 26.50 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 6.2 mm to U8.3 |
-| R11 | 100R 0603 | bottom | 4.80, 28.00 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 7.7 mm to U8.3 |
+| R6 | 100R 0603 | bottom | 8.80, 12.50 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 9.8 mm to U8.3 |
+| R7 | 100R | bottom | 2.05, 28.50 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 8.0 mm to U8.3 |
+| R8 | 100R | bottom | 4.05, 28.75 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 8.3 mm to U8.3 |
+| R9 | 100R | bottom | 6.05, 28.75 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 8.9 mm to U8.3 |
+| R10 | 100R | bottom | 8.05, 29.00 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 10.0 mm to U8.3 |
+| R11 | 100R 0603 | bottom | 8.80, 10.75 | 180 | cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone | 11.3 mm to U8.3 |
 | U8 | BQ76907RGRR | bottom | 4.00, 20.50 | 0 | BQ76907 (bottom, cool, 1 mm): under J4's body, left of its pin column, so every cell tap is a short run from J4 on the same side | 0.0 mm to 4.0.20.5 |
 
 ### Weapon driver and 5 V buck
@@ -269,7 +284,7 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | R21 | 10k 1% | top | 60.70, 26.50 | 0 | FB divider at pin 1, away from L1 (DESIGN 6.7) | 3.3 mm to U2.1 |
 | R44 | 47k 1% | top | 48.30, 22.25 | 180 | MODE strap within 2 mm of pin 29, returned to AGND (DESIGN 6.4) | 1.2 mm to U2.29 |
 | R45 | 75k 1% | top | 48.30, 23.50 | 180 | IDRIVE strap within 2 mm of pin 30 | 1.5 mm to U2.30 |
-| R46 | 18k 1% | top | 46.30, 23.25 | 180 | VDS strap within 2 mm of pin 31 | 3.2 mm to U2.31 |
+| R46 | 18k 1% | top | 46.30, 23.25 | 180 | VDS strap next to pin 31 (2.5 mm: three 0402s cannot all sit within 2 mm of pins 29-31), AGND return | 3.2 mm to U2.31 |
 | U2 | DRV8323RHRGZR | top | 53.50, 23.00 | 180 | DRV8323RH: behind the bridge centre, rotated 180 so the phase B/C gate+sense pins are on its front edge (facing the middle of the bridge) and the phase A pins on its right side (toward cell A, front-right); straps/DVDD/VREF on its left, buck pins at its rear-right corner; hot (gate drive + 5 V buck), top | placed explicitly |
 
 ### Drive left
@@ -278,20 +293,20 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 |---|---|---|---|---|---|---|
 | C300 | 100nF 50V | top | 22.00, 26.10 | 0 | U3 VM 100 nF at pins 9/11 (serve pin 10 too): within 2 mm, same side as the IC (DESIGN 6.5/6.6) | 1.5 mm to U3.10 |
 | C301 | 100nF 50V | top | 19.50, 25.35 | 90 | U3 VM 100 nF at pins 9/11 (serve pin 10 too): within 2 mm, same side as the IC (DESIGN 6.5/6.6) | 2.3 mm to U3.10 |
-| C302 | 10uF 50V | bottom | 16.75, 27.35 | 180 | U3 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R302); the 100 nF stay on top at the pins | 3.0 mm to U3.10 |
+| C302 | 10uF 50V | bottom | 16.75, 27.35 | 180 | U3 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R302; distance: 5.3); the 100 nF stay on top at the pins | 3.0 mm to U3.10 |
 | C303 | 1uF 50V | top | 24.50, 25.35 | 90 | U3 CP cap at pin 8: at the pin (DRV8316C layout) | 2.7 mm to U3.8 |
 | C304 | 47nF 50V | top | 22.00, 24.35 | 180 | U3 CPH-CPL flying cap at pins 6/7 | 3.2 mm to U3.7 |
-| C305 | 1uF 50V | top | 23.60, 33.95 | 0 | U3 AVDD cap: behind AVDD pin 25 / AGND pin 26 on U3's rear side, outside the phase-output fan | placed explicitly |
+| C305 | 1uF 50V | top | 21.65, 33.95 | 180 | U3 AVDD cap: AVDD pad behind pin 25, GND pad behind pins 22-23 (AGND side), leaving the INH/DRV_OFF pins behind U3 free to escape (verification review) | placed explicitly |
 | C306 | 100nF 16V | top | 27.65, 29.25 | 90 | U3 VREF cap at pin 37 | 1.2 mm to U3.37 |
 | C307 | 22uF 25V | bottom | 24.00, 23.60 | 180 | U3 buck resistor-mode parts (bottom, beside its thermal-via field at the SW_BK/FB_BK pins, placed before the bulk caps so the SW_BK node stays short while the buck runs at boot): ~0.05 W only until firmware sets BUCK_DIS | 4.1 mm to U3.5 |
-| C308 | 10uF 50V | bottom | 22.75, 21.35 | 0 | U3 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R302); the 100 nF stay on top at the pins | 6.2 mm to U3.10 |
-| C309 | 10uF 50V | bottom | 22.75, 18.85 | 0 | U3 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R302); the 100 nF stay on top at the pins | 8.8 mm to U3.10 |
-| C310 | 10uF 50V | bottom | 22.75, 16.35 | 0 | U3 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R302); the 100 nF stay on top at the pins | 11.2 mm to U3.10 |
+| C308 | 10uF 50V | bottom | 22.75, 21.35 | 0 | U3 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R302; distance: 5.3); the 100 nF stay on top at the pins | 6.2 mm to U3.10 |
+| C309 | 10uF 50V | bottom | 22.75, 18.85 | 0 | U3 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R302; distance: 5.3); the 100 nF stay on top at the pins | 8.8 mm to U3.10 |
+| C310 | 10uF 50V | bottom | 27.50, 17.85 | 0 | U3 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R302; distance: 5.3); the 100 nF stay on top at the pins | 10.9 mm to U3.10 |
 | JL1 | Drive L A | top | 7.80, 32.40 | 0 | drive L phase A wire: rear edge, left end (left motor behind) | placed explicitly |
 | JL2 | Drive L B | top | 12.00, 32.40 | 0 | drive L phase B wire: rear edge | placed explicitly |
 | JL3 | Drive L C | top | 16.20, 32.40 | 0 | drive L phase C wire: rear edge, next to U3's outputs | placed explicitly |
 | R300 | 22R 1206 | bottom | 25.00, 25.85 | 0 | U3 buck resistor-mode parts (bottom, beside its thermal-via field at the SW_BK/FB_BK pins, placed before the bulk caps so the SW_BK node stays short while the buck runs at boot): ~0.05 W only until firmware sets BUCK_DIS | 1.8 mm to U3.5 |
-| R301 | 10k 1% | top | 19.90, 33.70 | 0 | U3 nFAULT pull-up to AVDD: behind nFAULT pin 22 | placed explicitly |
+| R301 | 10k 1% | top | 19.10, 33.55 | 0 | U3 nFAULT pull-up to AVDD: behind nFAULT pin 22, 1 mm from JL3's ring on the top (outside its bottom solder zone) | placed explicitly |
 | R302 | 25121WF100LT4E | top | 15.50, 18.50 | -90 | drive L VM feed 0.1R: L_VM pad (rear) toward U3's VM pins, VBAT pad (front) fed on its own L3 branch from C1 (not through the bridge copper, DESIGN 6.6); up to 1 W, top, 7 mm from U3's thermal pad | placed explicitly |
 | U3 | DRV8316CRRGFR | top | 23.00, 30.00 | -90 | drive L DRV8316: VM pins face C1/R302 (front), phase outputs face the JL wire holes (left), logic toward the rear/MCU vias; ~1-2 W, top | placed explicitly |
 
@@ -301,34 +316,34 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 |---|---|---|---|---|---|---|
 | C400 | 100nF 50V | top | 69.00, 28.40 | 0 | U4 VM 100 nF at pins 9/11 (serve pin 10 too): within 2 mm, same side as the IC (DESIGN 6.5/6.6) | 1.5 mm to U4.10 |
 | C401 | 100nF 50V | top | 66.50, 29.15 | -90 | U4 VM 100 nF at pins 9/11 (serve pin 10 too): within 2 mm, same side as the IC (DESIGN 6.5/6.6) | 2.3 mm to U4.10 |
-| C402 | 10uF 50V | bottom | 65.75, 33.15 | 180 | U4 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R402); the 100 nF stay on top at the pins | 6.3 mm to U4.10 |
+| C402 | 10uF 50V | bottom | 65.75, 33.15 | 180 | U4 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R402; distance: 5.3); the 100 nF stay on top at the pins | 6.3 mm to U4.10 |
 | C403 | 1uF 50V | top | 64.75, 29.15 | -90 | U4 CP cap at pin 8: at the pin (DRV8316C layout) | 2.9 mm to U4.8 |
 | C404 | 47nF 50V | top | 63.00, 29.15 | -90 | U4 CPH-CPL flying cap at pins 6/7 | 4.0 mm to U4.7 |
 | C405 | 1uF 50V | top | 68.00, 20.60 | 0 | U4 AVDD cap / nFAULT pull-up to AVDD: at pin 25, short return to its AGND pin | 1.5 mm to U4.25 |
 | C406 | 100nF 16V | top | 61.85, 24.25 | 90 | U4 VREF cap at pin 37 | 1.2 mm to U4.37 |
 | C407 | 22uF 25V | bottom | 65.50, 30.90 | 0 | U4 buck resistor-mode parts (bottom, beside its thermal-via field at the SW_BK/FB_BK pins, placed before the bulk caps so the SW_BK node stays short while the buck runs at boot): ~0.05 W only until firmware sets BUCK_DIS | 4.1 mm to U4.5 |
-| C408 | 10uF 50V | bottom | 61.00, 31.15 | 180 | U4 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R402); the 100 nF stay on top at the pins | 7.2 mm to U4.10 |
-| C409 | 10uF 50V | bottom | 71.75, 13.15 | 90 | U4 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R402); the 100 nF stay on top at the pins | 12.8 mm to U4.10 |
-| C410 | 10uF 50V | bottom | 47.00, 31.15 | 180 | U4 VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of R402); the 100 nF stay on top at the pins | 20.2 mm to U4.10 |
+| C408 | 10uF 50V | bottom | 61.00, 31.15 | 180 | U4 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R402; distance: 5.3); the 100 nF stay on top at the pins | 7.2 mm to U4.10 |
+| C409 | 10uF 50V | bottom | 71.75, 13.15 | 90 | U4 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R402; distance: 5.3); the 100 nF stay on top at the pins | 12.8 mm to U4.10 |
+| C410 | 10uF 50V | bottom | 47.00, 31.15 | 180 | U4 VM 10 uF bulk (bottom, toward the VM pins on the filtered side of R402; distance: 5.3); the 100 nF stay on top at the pins | 20.2 mm to U4.10 |
 | JR1 | Drive R A | top | 73.10, 25.80 | 0 | drive R phase A wire: right edge, level with U4's phase-A output pins (no crossing) | placed explicitly |
 | JR2 | Drive R B | top | 73.10, 22.00 | 0 | drive R phase B wire: right edge beside U4's outputs | placed explicitly |
-| JR3 | Drive R C | top | 73.10, 18.20 | 0 | drive R phase C wire: right edge, level with U4's phase-C output pins | placed explicitly |
-| R50 | 10k 1% | bottom | 26.75, 17.10 | 180 | DRV_OFF pull-up: near PC14, trace short (DESIGN 6.6) | 6.4 mm to U1.3 |
+| JR3 | Drive R C | top | 73.10, 18.20 | 0 | drive R phase C wire: right edge next to U4's outputs (phase order A, B, C from the rear, no crossing) | placed explicitly |
+| R50 | 10k 1% | bottom | 23.75, 15.85 | 180 | DRV_OFF pull-up: near PC14, trace short (DESIGN 6.6) | 9.6 mm to U1.3 |
 | R400 | 22R 1206 | bottom | 64.50, 28.65 | 180 | U4 buck resistor-mode parts (bottom, beside its thermal-via field at the SW_BK/FB_BK pins, placed before the bulk caps so the SW_BK node stays short while the buck runs at boot): ~0.05 W only until firmware sets BUCK_DIS | 1.8 mm to U4.5 |
 | R401 | 10k 1% | top | 65.75, 20.35 | -90 | U4 AVDD cap / nFAULT pull-up to AVDD: at pin 25, short return to its AGND pin | 1.9 mm to U4.25 |
 | R402 | 25121WF100LT4E | top | 64.07, 32.90 | 0 | drive R VM feed 0.1R: rear edge behind U4: pad 2 (R_VM, right) below U4's VM pins with the VM/CP caps in the row between, pad 1 (VBAT, left) fed on its own L3 branch from C1 (not through the bridge copper, DESIGN 6.6); up to 1 W, top, clear of U4's thermal pad | placed explicitly |
-| TP8 | DRV_OFF | top | 32.50, 20.35 | 0 | DRV_OFF test pad: above the MCU's PC14 (out of U3's output fan) | 0.2 mm to U1.3 |
+| TP8 | DRV_OFF | top | 32.50, 20.35 | 0 | DRV_OFF test pad: top, in free space on the net (a probe point works anywhere on it), out of U3's output fan | 0.2 mm to U1.3 |
 | U4 | DRV8316CRRGFR | top | 66.50, 24.50 | 90 | drive R DRV8316: rotated 90 so the phase outputs face the JR wire holes on the right edge and the VM pins face R402 behind it; CSA/logic pins via to the MCU below; ~1-2 W, top | placed explicitly |
 
 ### MCU, LDO and header
 
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
-| C19 | 1nF 50V | bottom | 30.25, 18.60 | 180 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 2.3 mm to U1.2 |
-| C41 | 1nF 50V | bottom | 43.45, 22.25 | 0 | phase A divider bottom + filter at the MCU pin | 1.9 mm to U1.18 |
-| C42 | 1nF 50V | bottom | 44.45, 23.50 | 0 | phase B divider bottom + filter at the MCU pin | 2.8 mm to U1.19 |
-| C43 | 1nF 50V | bottom | 44.75, 20.10 | 90 | phase C divider bottom + filter at the MCU pin | 6.5 mm to U1.14 |
-| C44 | 100nF 16V | bottom | 28.20, 19.75 | 90 | weapon NTC pull-up + filter at the MCU pin | 13.4 mm to U1.20 |
+| C19 | 1nF 50V | bottom | 30.75, 18.10 | 90 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 2.3 mm to U1.2 |
+| C41 | 1nF 50V | bottom | 44.95, 21.75 | 90 | phase A divider bottom + filter at the MCU pin | 3.8 mm to U1.18 |
+| C42 | 1nF 50V | bottom | 45.20, 20.25 | 0 | phase B divider bottom + filter at the MCU pin | 4.6 mm to U1.19 |
+| C43 | 1nF 50V | bottom | 33.25, 15.60 | 180 | phase C divider bottom + filter at the MCU pin | 6.5 mm to U1.14 |
+| C44 | 100nF 16V | bottom | 47.20, 20.25 | 0 | weapon NTC pull-up + filter at the MCU pin | 6.6 mm to U1.20 |
 | C60 | 100nF 16V | bottom | 43.25, 20.35 | 0 | VDD decoupling at U1 pin 16 (ST: as close as possible, may be on the underside) | 3.5 mm to U1.16 |
 | C61 | 100nF 16V | bottom | 42.95, 29.25 | 90 | VDD decoupling at U1 pin 32 (ST: as close as possible, may be on the underside) | 1.8 mm to U1.32 |
 | C62 | 100nF 16V | bottom | 32.25, 33.40 | 0 | VDD decoupling at U1 pin 48 (ST: as close as possible, may be on the underside) | 1.7 mm to U1.48 |
@@ -337,7 +352,7 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | C65 | 100nF 16V | bottom | 42.95, 27.25 | 90 | VDDA cap / VDDA feed at pin 29 | 1.9 mm to U1.29 |
 | C66 | 4.7uF 16V | bottom | 43.95, 25.50 | 0 | VREF+ caps at pin 28 | 3.0 mm to U1.28 |
 | C67 | 100nF 16V | bottom | 33.75, 18.10 | 90 | NRST cap at pin 7 | 2.0 mm to U1.7 |
-| C68 | 100nF 16V | bottom | 26.95, 21.75 | -90 | pack voltage divider + filter at the MCU pin | 14.2 mm to U1.17 |
+| C68 | 100nF 16V | bottom | 33.45, 14.50 | 180 | pack voltage divider + filter at the MCU pin | 10.6 mm to U1.17 |
 | C69 | 1uF 25V | top | 40.85, 33.00 | 90 | U5 input cap | 1.5 mm to U5.1 |
 | C70 | 1uF 25V | top | 41.85, 29.70 | 180 | U5 output cap | 1.5 mm to U5.5 |
 | C71 | 100nF 16V | bottom | 44.45, 27.25 | 0 | VREF+ caps at pin 28 | 2.8 mm to U1.28 |
@@ -347,29 +362,29 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | C82 | 22pF C0G | bottom | 33.25, 16.60 | 180 | drive L CSA C filter at the MCU pin | 4.8 mm to U1.11 |
 | C90 | 22pF C0G | bottom | 39.25, 33.40 | 0 | drive R CSA A filter at the MCU pin | 1.7 mm to U1.34 |
 | C91 | 22pF C0G | bottom | 41.25, 33.40 | 0 | drive R CSA B filter at the MCU pin | 3.0 mm to U1.35 |
-| C92 | 22pF C0G | bottom | 42.95, 23.75 | 90 | drive R CSA C filter at the MCU pin | 2.7 mm to U1.25 |
+| C92 | 22pF C0G | bottom | 43.45, 22.25 | 0 | drive R CSA C filter at the MCU pin | 4.4 mm to U1.25 |
 | D3 | KT-0603R | top | 39.50, 33.05 | 90 | power LED: top, rear edge, visible from above/behind (DESIGN 3.1: visible from outside) | 1.0 mm to 40.5.33.8 |
 | J1 | BOOMELE_1.27-2x10P | bottom | 16.60, 19.20 | 0 | header to the compute board (bottom): left of the MCU beside J4's pin column (outside its solder zone), clear of U2/U3's via fields and the gate corridor, behind the pack-return path (which runs from the bridge to JBAT2 along the front); frees the MCU's ring | placed explicitly |
 | R16 | 10k 1% | bottom | 20.85, 23.60 | -90 | NRST pull-up near J1/U1 | 3.0 mm to J1.8 |
 | R17 | 10k 1% | bottom | 20.85, 25.60 | -90 | MB_RX pull-up near J1 | 3.5 mm to J1.6 |
-| R23 | 10k 1% | bottom | 32.70, 15.00 | 90 | phase A divider bottom + filter at the MCU pin | 11.2 mm to U1.18 |
-| R25 | 10k 1% | bottom | 48.45, 34.00 | 0 | phase B divider bottom + filter at the MCU pin | 12.7 mm to U1.19 |
-| R27 | 10k 1% | bottom | 28.75, 17.35 | 180 | phase C divider bottom + filter at the MCU pin | 9.5 mm to U1.14 |
-| R33 | 100k | bottom | 12.35, 12.30 | -90 | header branch of the pack divider: at J1 pin 11 | 6.2 mm to J1.11 |
-| R40 | 100k | bottom | 26.25, 33.40 | 180 | W_EN pull-down near the MCU pin | 6.2 mm to U1.46 |
-| R42 | 10k 1% | bottom | 27.00, 18.60 | 90 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 5.4 mm to U1.2 |
-| R43 | 10k 1% | bottom | 28.20, 26.25 | 90 | weapon NTC pull-up + filter at the MCU pin | 13.1 mm to U1.20 |
+| R23 | 10k 1% | bottom | 26.95, 22.25 | 90 | phase A divider bottom + filter at the MCU pin | 14.2 mm to U1.18 |
+| R25 | 10k 1% | bottom | 26.20, 20.25 | 90 | phase B divider bottom + filter at the MCU pin | 15.2 mm to U1.19 |
+| R27 | 10k 1% | bottom | 38.25, 7.85 | 0 | phase C divider bottom + filter at the MCU pin | 12.5 mm to U1.14 |
+| R33 | 100k | bottom | 21.35, 17.05 | 180 | header branch of the pack divider: near J1 | 6.4 mm to J1.11 |
+| R40 | 100k | bottom | 22.00, 25.90 | 90 | W_EN pull-down near the MCU pin | 12.0 mm to U1.46 |
+| R42 | 10k 1% | bottom | 23.75, 17.10 | 180 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 8.6 mm to U1.2 |
+| R43 | 10k 1% | bottom | 46.45, 34.00 | 180 | weapon NTC pull-up + filter at the MCU pin | 11.3 mm to U1.20 |
 | R60 | 0R | bottom | 44.20, 28.75 | 90 | VDDA cap / VDDA feed at pin 29 | 3.0 mm to U1.29 |
 | R61 | 10k 1% | bottom | 28.05, 24.25 | -90 | BOOT0 pull-down at pin 60 | 1.9 mm to U1.60 |
-| R62 | 1k | bottom | 24.25, 33.50 | 0 | power LED resistor: bottom, anywhere on the +5V-LED line (3 mA) | 14.8 mm to D3.2 |
-| R63 | 68k 1% | bottom | 28.45, 15.75 | -90 | pack voltage divider + filter at the MCU pin | 14.1 mm to U1.17 |
-| R64 | 10k 1% | bottom | 26.70, 20.25 | 180 | pack voltage divider + filter at the MCU pin | 14.1 mm to U1.17 |
+| R62 | 1k | bottom | 59.50, 21.75 | -90 | power LED resistor: bottom, anywhere on the +5V-LED line (3 mA) | 22.4 mm to D3.2 |
+| R63 | 68k 1% | bottom | 33.95, 13.00 | -90 | pack voltage divider + filter at the MCU pin | 11.3 mm to U1.17 |
+| R64 | 10k 1% | bottom | 33.95, 11.00 | 90 | pack voltage divider + filter at the MCU pin | 12.9 mm to U1.17 |
 | R70 | 330R | bottom | 30.25, 33.40 | 0 | drive L CSA A filter at the MCU pin (DESIGN 6.8) | 4.3 mm to U1.42 |
-| R71 | 330R | bottom | 28.25, 33.40 | 0 | drive L CSA B filter at the MCU pin | 5.8 mm to U1.43 |
-| R72 | 330R | bottom | 33.75, 15.10 | -90 | drive L CSA C filter at the MCU pin | 5.6 mm to U1.11 |
-| R80 | 330R | bottom | 28.00, 31.15 | -90 | drive R CSA A filter at the MCU pin | 10.8 mm to U1.34 |
-| R81 | 330R | bottom | 28.00, 29.15 | -90 | drive R CSA B filter at the MCU pin | 10.4 mm to U1.35 |
-| R82 | 330R | bottom | 46.45, 34.00 | 180 | drive R CSA C filter at the MCU pin | 9.1 mm to U1.25 |
+| R71 | 330R | bottom | 28.00, 30.90 | -90 | drive L CSA B filter at the MCU pin | 6.3 mm to U1.43 |
+| R72 | 330R | bottom | 27.75, 20.10 | 0 | drive L CSA C filter at the MCU pin | 8.5 mm to U1.11 |
+| R80 | 330R | bottom | 28.00, 28.90 | -90 | drive R CSA A filter at the MCU pin | 11.0 mm to U1.34 |
+| R81 | 330R | bottom | 28.00, 26.90 | -90 | drive R CSA B filter at the MCU pin | 11.1 mm to U1.35 |
+| R82 | 330R | bottom | 48.45, 34.00 | 180 | drive R CSA C filter at the MCU pin | 10.3 mm to U1.25 |
 | U1 | STM32G474RET6 | bottom | 35.50, 26.00 | -90 | STM32G474 (bottom): cool (~0.26 W); central rear, between the drive ICs and the weapon driver, away from the pack current (DESIGN 6.2); vias to U2/U3/U4 logic | 5.7 mm to 35.5.26.0 |
 | U5 | AP2112K-3.3TRG1 | top | 43.30, 32.35 | 90 | 3.3 V LDO: fed from the buck's +5V; 0.2 W (+38 C), top | 5.3 mm to C29.1 |
 
@@ -378,71 +393,71 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
 | R22 | 68k 1% | bottom | 61.60, 3.00 | 180 | phase A divider top: beside JW1, just outside its solder zone, so the phase voltage stays local and only the divided node runs to the MCU | 4.5 mm to JW1.1 |
-| R24 | 68k 1% | bottom | 53.85, 7.50 | 180 | phase B divider top: beside JW2, just outside its solder zone | 4.8 mm to JW2.1 |
-| R26 | 68k 1% | bottom | 41.35, 7.50 | 180 | phase C divider top: beside JW3, just outside its solder zone | 4.8 mm to JW3.1 |
+| R24 | 68k 1% | bottom | 53.85, 7.50 | 180 | phase B divider top: just behind JW2's solder zone | 4.8 mm to JW2.1 |
+| R26 | 68k 1% | bottom | 41.10, 7.50 | 180 | phase C divider top: just behind JW3's solder zone | 4.8 mm to JW3.1 |
 
 ### Weapon interlock and ARM
 
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
-| C15 | 470nF 25V | bottom | 15.35, 11.50 | 0 | ARM coupling cap / W_ARM_CLK pull-down at J1 pin 19 (keep away from MB_TX) | 2.0 mm to J1.19 |
-| C16 | 2.2uF 16V | bottom | 25.70, 13.60 | 90 | ARM rectifier/hold/bleed at U14's input | 4.1 mm to U14.2 |
-| C17 | 100nF 16V | bottom | 30.90, 17.00 | 180 | U14 decoupling | 1.2 mm to U14.5 |
-| C40 | 100nF 16V | bottom | 34.95, 6.65 | 90 | U6 decoupling at VCC | 1.5 mm to U6.14 |
-| D9 | BAT54S | bottom | 28.95, 4.35 | 180 | ARM rectifier/hold/bleed at U14's input | 9.8 mm to U14.2 |
-| R18 | 100k | bottom | 12.60, 10.75 | 180 | ARM coupling cap / W_ARM_CLK pull-down at J1 pin 19 (keep away from MB_TX) | 3.1 mm to J1.19 |
-| R19 | 10k 1% | bottom | 27.65, 14.20 | 180 | W_ARM_S pull-down at U14's output | 3.2 mm to U14.4 |
-| R41 | 47k 1% | bottom | 26.70, 15.85 | 180 | ARM rectifier/hold/bleed at U14's input | 2.6 mm to U14.2 |
-| R47 | 100k | bottom | 27.70, 12.85 | 180 | CHxN pull-downs at U6's inputs | 5.2 mm to U6.1 |
-| R48 | 100k | bottom | 27.95, 11.10 | 90 | CHxN pull-downs at U6's inputs | 5.6 mm to U6.1 |
-| R49 | 100k | bottom | 36.45, 7.85 | 0 | CHxN pull-downs at U6's inputs | 5.6 mm to U6.1 |
-| U6 | SN74LVC08APWR | bottom | 31.50, 10.00 | 90 | interlock AND gates (bottom): the empty block behind the battery entry, out of the gate-via corridor; near J1's W_ARM_CLK end and the MCU's CHxN pins; LVC logic does not mind the few mV of pack-return offset | 2.4 mm to 32.0.9.5 |
-| U14 | 74LVC1G17SE-7 | bottom | 30.55, 15.10 | 0 | ARM Schmitt buffer: next to U6 (W_ARM_S feeds all three gates) and on the way to J1 pin 19 (W_ARM_CLK) | 2.1 mm to U6.2 |
+| C15 | 470nF 25V | bottom | 15.60, 11.50 | 0 | ARM coupling cap / W_ARM_CLK pull-down at J1 pin 19 (keep away from MB_TX) | 2.0 mm to J1.19 |
+| C16 | 2.2uF 16V | bottom | 22.05, 13.25 | 180 | ARM rectifier/hold/bleed near U14's input (a slow RC node) | 4.8 mm to U14.2 |
+| C17 | 100nF 16V | bottom | 24.15, 13.20 | -90 | U14 decoupling | 1.8 mm to U14.5 |
+| C40 | 100nF 16V | bottom | 33.95, 5.15 | 90 | U6 decoupling at VCC | 1.5 mm to U6.14 |
+| D9 | BAT54S | bottom | 19.30, 10.50 | -90 | ARM rectifier/hold/bleed near U14's input (a slow RC node) | 6.1 mm to U14.2 |
+| R18 | 100k | bottom | 11.85, 12.75 | 180 | ARM coupling cap / W_ARM_CLK pull-down at J1 pin 19 (keep away from MB_TX) | 2.4 mm to J1.19 |
+| R19 | 10k 1% | bottom | 23.70, 14.70 | 180 | W_ARM_S pull-down at U14's output | 4.1 mm to U14.4 |
+| R41 | 47k 1% | bottom | 25.80, 4.25 | 180 | ARM rectifier/hold/bleed near U14's input (a slow RC node) | 5.8 mm to U14.2 |
+| R47 | 100k | bottom | 34.45, 7.85 | 0 | CHxN pull-downs at U6's inputs | 3.8 mm to U6.1 |
+| R48 | 100k | bottom | 36.20, 7.35 | 90 | CHxN pull-downs at U6's inputs | 5.1 mm to U6.1 |
+| R49 | 100k | bottom | 35.45, 5.60 | 0 | CHxN pull-downs at U6's inputs | 6.3 mm to U6.1 |
+| U6 | SN74LVC08APWR | bottom | 30.50, 8.50 | 90 | interlock AND gates (bottom): the free block right of RS4, beside the pack path, out of the gate-via corridor; CHxN in from the MCU, INLx out to U2; LVC logic does not mind the few mV of pack-return offset | 1.9 mm to 32.0.9.5 |
+| U14 | 74LVC1G17SE-7 | bottom | 26.30, 10.85 | -90 | ARM Schmitt buffer: next to U6 (W_ARM_S feeds all three gates) and on the way to J1 pin 19 (W_ARM_CLK) | 4.9 mm to U6.2 |
 
 ### Sensor channels
 
 | Ref | Value | Side | x, y (mm) | Rot | Why it is here | Measured |
 |---|---|---|---|---|---|---|
-| C45 | 4.7uF 16V | top | 43.35, 24.35 | 0 | U11 input/output caps at the switch | 3.8 mm to U11.5 |
-| C46 | 1uF 25V | top | 38.85, 20.10 | 0 | U11 input/output caps at the switch | 4.0 mm to U11.5 |
-| C47 | 100nF 16V | top | 32.45, 22.40 | 180 | U9 decoupling | 4.2 mm to U9.8 |
+| C45 | 4.7uF 16V | top | 38.35, 19.85 | 180 | U11 input/output caps at the switch | 4.3 mm to U11.5 |
+| C46 | 1uF 25V | top | 42.85, 24.10 | 0 | U11 input/output caps at the switch | 3.5 mm to U11.5 |
+| C47 | 100nF 16V | top | 30.70, 24.15 | 180 | U9 decoupling | 3.1 mm to U9.8 |
 | C48 | 4.7uF 16V | bottom | 47.65, 26.60 | 0 | U12 input/output caps at the switch | 1.5 mm to U12.5 |
 | C49 | 1uF 25V | bottom | 45.90, 28.85 | -90 | U12 input/output caps at the switch | 1.3 mm to U12.5 |
 | C50 | 100nF 16V | bottom | 60.75, 24.55 | 180 | U10 decoupling | 1.5 mm to U10.8 |
-| C72 | 100nF 16V | top | 32.55, 23.90 | 90 | motor L NTC pull-up / series R / filter near J2 pin 6 | 6.4 mm to J2.6 |
+| C72 | 100nF 16V | top | 32.30, 23.90 | 90 | motor L NTC pull-up / series R / filter near J2 pin 6 | 6.5 mm to J2.6 |
 | C73 | 100nF 16V | bottom | 43.25, 33.95 | 180 | motor R NTC pull-up / series R / filter near J3 pin 6 | 8.7 mm to J3.6 |
-| C110 | 1nF 50V | top | 27.15, 26.40 | 180 | sensor L line filter caps (DNP) at U9's inputs | 2.8 mm to U9.3 |
-| C111 | 1nF 50V | top | 32.65, 25.40 | 0 | sensor L line filter caps (DNP) at U9's inputs | 3.0 mm to U9.3 |
-| C112 | 1nF 50V | top | 30.65, 24.15 | 0 | sensor L line filter caps (DNP) at U9's inputs | 3.5 mm to U9.3 |
-| C114 | 1nF 50V | bottom | 59.25, 33.35 | -90 | sensor R line filter caps (DNP) at U10's inputs | 4.1 mm to U10.3 |
-| C115 | 1nF 50V | bottom | 62.25, 33.35 | -90 | sensor R line filter caps (DNP) at U10's inputs | 4.5 mm to U10.3 |
-| C116 | 1nF 50V | bottom | 54.00, 28.10 | 180 | sensor R line filter caps (DNP) at U10's inputs | 5.8 mm to U10.3 |
-| D7 | BAV99 | top | 32.80, 14.90 | 90 | motor L NTC clamp: after the 2.2k series R, toward J2 pin 6 (see 5.3) | 14.2 mm to J2.6 |
-| D8 | BAV99 | bottom | 60.75, 21.95 | 90 | motor R NTC clamp: after the 2.2k series R, toward J3 pin 6 (see 5.3) | 10.9 mm to J3.6 |
+| C110 | 1nF 50V | top | 28.65, 27.15 | -90 | sensor L line filter caps (DNP) at U9's inputs | 1.5 mm to U9.3 |
+| C111 | 1nF 50V | top | 29.65, 25.40 | 180 | sensor L line filter caps (DNP) at U9's inputs | 2.2 mm to U9.3 |
+| C112 | 1nF 50V | top | 28.15, 25.15 | 90 | sensor L line filter caps (DNP) at U9's inputs | 2.8 mm to U9.3 |
+| C114 | 1nF 50V | bottom | 58.00, 28.10 | 0 | sensor R line filter caps (DNP) at U10's inputs | 1.9 mm to U10.3 |
+| C115 | 1nF 50V | bottom | 60.25, 33.35 | -90 | sensor R line filter caps (DNP) at U10's inputs | 4.0 mm to U10.3 |
+| C116 | 1nF 50V | bottom | 61.75, 33.10 | 0 | sensor R line filter caps (DNP) at U10's inputs | 4.4 mm to U10.3 |
+| D7 | BAV99 | bottom | 30.50, 14.60 | -90 | motor L NTC clamp: at the MCU's ADC pin (PF0), on the protected side of the 2.2k series R | 5.8 mm to U1.5 |
+| D8 | BAV99 | bottom | 26.75, 14.85 | 0 | motor R NTC clamp: at the MCU's ADC pin (PF1), on the protected side of the 2.2k series R | 8.6 mm to U1.6 |
 | J2 | WAFER-SH1.0-6PWB | top | 33.30, 31.60 | 0 | drive L sensor connector: TOP side at the rear edge (moved off the bottom, where it sat under U3's thermal-via field), mating face at the edge, the left motor behind; 3.35 mm tall | placed explicitly |
-| J3 | WAFER-SH1.0-6PWB | bottom | 54.00, 31.65 | 180 | drive R sensor connector (bottom): rear edge under the buck output caps, not under R402 (1 W) or U4's via field, mating face at the edge; 3.35 mm tall | placed explicitly |
+| J3 | WAFER-SH1.0-6PWB | bottom | 54.00, 31.65 | 180 | drive R sensor connector (bottom): rear edge under the buck (D2/C27/C28), not under R402 (1 W) or U4's via field, mating face at the edge; 3.35 mm tall | placed explicitly |
 | JP1 | SolderJumper_3 | top | 40.60, 22.10 | 0 | sensor L supply select jumper at the switch input (top) | 2.0 mm to U11.5 |
 | JP2 | SolderJumper_3 | bottom | 47.15, 23.35 | 90 | sensor R supply select jumper at the switch input (bottom, reachable with the stack apart) | 3.5 mm to U12.5 |
-| R52 | 10k 1% | top | 40.80, 28.65 | 180 | motor L NTC pull-up / series R / filter near J2 pin 6 | 4.7 mm to J2.6 |
+| R52 | 10k 1% | top | 40.80, 28.65 | 0 | motor L NTC pull-up / series R / filter near J2 pin 6 | 4.7 mm to J2.6 |
 | R53 | 10k 1% | bottom | 44.75, 33.45 | 90 | motor R NTC pull-up / series R / filter near J3 pin 6 | 7.4 mm to J3.6 |
-| R54 | 4.7k | top | 36.80, 27.65 | 90 | sensor L pull-ups at J2 | 3.5 mm to J2.4 |
-| R55 | 4.7k | top | 34.80, 25.40 | 0 | sensor L pull-ups at J2 | 4.5 mm to J2.4 |
-| R56 | 4.7k | top | 38.80, 28.65 | 0 | sensor L pull-ups at J2 | 4.7 mm to J2.4 |
-| R57 | 4.7k | bottom | 52.00, 28.20 | 180 | sensor R pull-ups at J3 | 2.0 mm to J3.4 |
-| R58 | 4.7k | bottom | 48.50, 32.95 | 180 | sensor R pull-ups at J3 | 5.4 mm to J3.4 |
-| R59 | 4.7k | bottom | 46.50, 32.95 | 180 | sensor R pull-ups at J3 | 7.2 mm to J3.4 |
-| R110 | 1k | top | 30.65, 25.40 | 180 | sensor L line series R between J2 and U9 | 1.2 mm to U9.1 |
-| R111 | 1k | top | 28.65, 26.90 | 90 | sensor L line series R between J2 and U9 | 1.5 mm to U9.1 |
-| R112 | 1k | top | 28.65, 25.15 | 0 | sensor L line series R between J2 and U9 | 1.8 mm to U9.1 |
-| R113 | 2.2k 0603 | top | 34.80, 23.90 | 180 | motor L NTC pull-up / series R / filter near J2 pin 6 | 6.0 mm to J2.6 |
-| R114 | 1k | bottom | 58.00, 28.10 | 0 | sensor R line series R between J3 and U10 | 2.8 mm to U10.1 |
-| R115 | 1k | bottom | 60.75, 33.10 | 0 | sensor R line series R between J3 and U10 | 4.2 mm to U10.1 |
-| R116 | 1k | bottom | 56.00, 28.10 | 0 | sensor R line series R between J3 and U10 | 4.8 mm to U10.1 |
-| R117 | 2.2k 0603 | bottom | 47.50, 20.20 | 180 | motor R NTC pull-up / series R / filter near J3 pin 6 | 10.2 mm to J3.6 |
+| R54 | 4.7k | top | 34.05, 25.40 | 0 | sensor L pull-ups at J2 | 4.5 mm to J2.4 |
+| R55 | 4.7k | top | 35.55, 24.90 | 90 | sensor L pull-ups at J2 | 4.8 mm to J2.4 |
+| R56 | 4.7k | top | 33.80, 24.15 | 180 | sensor L pull-ups at J2 | 5.8 mm to J2.4 |
+| R57 | 4.7k | bottom | 48.50, 32.95 | 180 | sensor R pull-ups at J3 | 5.4 mm to J3.4 |
+| R58 | 4.7k | bottom | 46.50, 32.95 | 180 | sensor R pull-ups at J3 | 7.2 mm to J3.4 |
+| R59 | 4.7k | bottom | 60.00, 23.45 | 0 | sensor R pull-ups at J3 | 8.8 mm to J3.4 |
+| R110 | 1k | top | 32.05, 25.40 | 180 | sensor L line series R at J2 pin 3 (keeps the three channels in order) | 4.5 mm to J2.3 |
+| R111 | 1k | top | 36.80, 27.65 | 90 | sensor L line series R at J2 pin 4 (keeps the three channels in order) | 3.5 mm to J2.4 |
+| R112 | 1k | top | 38.80, 28.65 | 0 | sensor L line series R at J2 pin 5 (keeps the three channels in order) | 3.7 mm to J2.5 |
+| R113 | 2.2k 0603 | top | 43.05, 26.40 | 90 | motor L NTC pull-up / series R / filter near J2 pin 6 | 7.7 mm to J2.6 |
+| R114 | 1k | bottom | 55.00, 28.20 | 0 | sensor R line series R at J3 pin 3 (keeps the three channels in order) | 1.8 mm to J3.3 |
+| R115 | 1k | bottom | 53.00, 28.20 | 180 | sensor R line series R at J3 pin 4 (keeps the three channels in order) | 1.8 mm to J3.4 |
+| R116 | 1k | bottom | 51.00, 28.20 | 180 | sensor R line series R at J3 pin 5 (keeps the three channels in order) | 2.0 mm to J3.5 |
+| R117 | 2.2k 0603 | bottom | 44.25, 23.70 | 180 | motor R NTC pull-up / series R / filter near J3 pin 6 | 9.0 mm to J3.6 |
 | U9 | SN74LVC3G17DCUR | top | 31.55, 27.40 | 0 | sensor L Schmitt buffer: toward J2 (distance in the table; see 5.3) | 1.9 mm to J2.4 |
 | U10 | SN74LVC3G17DCUR | bottom | 60.50, 27.45 | 90 | sensor R Schmitt buffer: toward J3 (distance in the table; see 5.3) | 6.3 mm to J3.4 |
-| U11 | TPS22945DCKR | top | 38.00, 24.75 | 0 | sensor L supply switch: toward J2 pin 1 (VS) but ~10 mm from the drive IC (85 C part, DESIGN 6.5) | 3.6 mm to 38.5.29.0 |
-| U12 | TPS22945DCKR | bottom | 48.00, 28.75 | 180 | sensor R supply switch: toward J3 pin 1 (VS) but ~10 mm from the drive IC (85 C part, DESIGN 6.5) | 1.2 mm to 50.0.29.5 |
+| U11 | TPS22945DCKR | top | 38.00, 24.75 | 0 | sensor L supply switch: near J2, 16-19 mm from the drive IC (85 C part, DESIGN 6.5) | 3.6 mm to 38.5.29.0 |
+| U12 | TPS22945DCKR | bottom | 48.00, 28.75 | 180 | sensor R supply switch: near J3, 16-19 mm from the drive IC (85 C part, DESIGN 6.5) | 1.2 mm to 50.0.29.5 |
 
 ### Test pads
 
@@ -491,7 +506,7 @@ C300  -> U3.9   L_VM       centre  1.59  pad gap  0.72     (limit 2.0)  VM 100 n
 C301  -> U3.11  L_VM       centre  1.93  pad gap  0.97     (limit 2.0)  VM 100 nF within 2 mm
 C303  -> U3.8   L_CP       centre  2.69  pad gap  1.80     (limit 2.5)  CP cap
 C304  -> U3.7   L_CPH      centre  3.25  pad gap  2.48     (limit 2.5)  CPH/CPL cap
-C305  -> U3.25  L_AVDD     centre  1.65  pad gap  0.78     (limit 2.5)  AVDD cap
+C305  -> U3.25  L_AVDD     centre  1.56  pad gap  0.78     (limit 2.5)  AVDD cap
 C306  -> U3.37  L_AVDD     centre  1.25  pad gap  0.64     (limit 2.5)  VREF cap
 C400  -> U4.9   R_VM       centre  1.57  pad gap  0.72     (limit 2.0)  VM 100 nF within 2 mm
 C401  -> U4.11  R_VM       centre  2.69  pad gap  1.80     (limit 2.0)  VM 100 nF within 2 mm
@@ -502,7 +517,7 @@ C406  -> U4.37  R_AVDD     centre  1.25  pad gap  0.64     (limit 2.5)  VREF cap
 C302  -> U3.10  L_VM       centre  3.04  pad gap  2.33 via (limit 4.0)  VM 10 uF (bottom, via)
 C308  -> U3.10  L_VM       centre  6.25  pad gap  5.05 via (limit 4.0)  <-- over  
 C309  -> U3.10  L_VM       centre  8.75  pad gap  7.55 via (limit 4.0)  <-- over  
-C310  -> U3.10  L_VM       centre 11.25  pad gap 10.05 via (limit 4.0)  <-- over  
+C310  -> U3.10  L_VM       centre 10.86  pad gap  9.47 via (limit 4.0)  <-- over  
 C402  -> U4.10  R_VM       centre  6.33  pad gap  5.06 via (limit 4.0)  <-- over  VM 10 uF (bottom, via)
 C408  -> U4.10  R_VM       centre  7.17  pad gap  5.92 via (limit 4.0)  <-- over  
 C409  -> U4.10  R_VM       centre 12.76  pad gap 11.67 via (limit 4.0)  <-- over  
@@ -520,13 +535,13 @@ C81   -> U1.43  L_SOB_F    centre  3.05  pad gap  2.19     (limit 3.0)
 C82   -> U1.11  L_SOC_F    centre  4.80  pad gap  3.70     (limit 3.0)  <-- over  
 C90   -> U1.34  R_SOA_F    centre  1.73  pad gap  0.64     (limit 3.0)  
 C91   -> U1.35  R_SOB_F    centre  3.05  pad gap  2.19     (limit 3.0)  
-C92   -> U1.25  R_SOC_F    centre  2.69  pad gap  1.73     (limit 3.0)  
-C41   -> U1.18  W_VA       centre  1.86  pad gap  0.74     (limit 3.0)  divider filter at the MCU
-C42   -> U1.19  W_VB       centre  2.81  pad gap  1.74     (limit 3.0)  
-C43   -> U1.14  W_VC       centre  6.50  pad gap  6.04     (limit 3.0)  <-- over  
-C19   -> U1.2   W_nFAULT   centre  2.30  pad gap  1.26     (limit 3.0)  nFAULT filter at PC13
-C44   -> U1.20  W_NTC      centre 13.44  pad gap 12.28     (limit 4.0)  <-- over  NTC filter
-C68   -> U1.17  VBAT_SNS   centre 14.26  pad gap 13.15     (limit 4.0)  <-- over  pack divider filter
+C92   -> U1.25  R_SOC_F    centre  4.38  pad gap  3.62     (limit 3.0)  <-- over  
+C41   -> U1.18  W_VA       centre  3.81  pad gap  2.69     (limit 3.0)  divider filter at the MCU
+C42   -> U1.19  W_VB       centre  4.64  pad gap  3.56     (limit 3.0)  <-- over  
+C43   -> U1.14  W_VC       centre  6.54  pad gap  5.48     (limit 3.0)  <-- over  
+C19   -> U1.2   W_nFAULT   centre  2.30  pad gap  1.25     (limit 3.0)  nFAULT filter at PC13
+C44   -> U1.20  W_NTC      centre  6.56  pad gap  5.42     (limit 4.0)  <-- over  NTC filter
+C68   -> U1.17  VBAT_SNS   centre 10.61  pad gap  9.56     (limit 4.0)  <-- over  pack divider filter
 C14   -> U13.5   BAT_IN     centre  3.53  pad gap  2.80     (limit 2.5)  <-- over  VS cap
 C12   -> U13.4   PSW_CAP    centre  3.91  pad gap  3.08     (limit 3.0)  <-- over  VCAP cap
 C18   -> U13.1   PSW_EN     centre  1.50  pad gap  0.67     (limit 2.5)  EN filter at pin 1
@@ -535,15 +550,15 @@ C2    -> U7.10  INA_INP    centre  1.77  pad gap  1.10     (limit 3.0)  input fi
 C11   -> U8.15  BMS_REG    centre  2.25  pad gap  1.65     (limit 2.5)  REGOUT cap 'at the pin'
 C9    -> U8.17  BMS_BAT    centre  3.07  pad gap  1.67     (limit 3.0)  BAT cap
 C40   -> U6.14  +3V3       centre  1.50  pad gap  0.99     (limit 2.5)  decoupling
-C17   -> U14.5   +3V3       centre  1.25  pad gap  0.77     (limit 2.5)  
-C47   -> U9.8   +3V3       centre  4.25  pad gap  3.77     (limit 2.5)  <-- over  
+C17   -> U14.5   +3V3       centre  1.82  pad gap  1.04     (limit 2.5)  
+C47   -> U9.8   +3V3       centre  3.06  pad gap  2.19     (limit 2.5)  
 C50   -> U10.8   +3V3       centre  1.50  pad gap  0.56     (limit 2.5)  
-C45   -> U11.5   L_VSRC     centre  3.75  pad gap  2.77     (limit 3.0)  switch CIN
-C46   -> U11.1   L_VS       centre  4.18  pad gap  3.54     (limit 3.0)  <-- over  switch COUT
+C45   -> U11.5   L_VSRC     centre  4.26  pad gap  3.60     (limit 3.0)  <-- over  switch CIN
+C46   -> U11.1   L_VS       centre  5.21  pad gap  4.42     (limit 3.0)  <-- over  switch COUT
 C48   -> U12.5   R_VSRC     centre  1.53  pad gap  0.85     (limit 3.0)  
 C49   -> U12.1   R_VS       centre  2.95  pad gap  2.12     (limit 3.0)  
 C69   -> U5.1   +5V        centre  1.50  pad gap  0.89     (limit 3.0)  LDO in
 C70   -> U5.5   +3V3       centre  1.51  pad gap  0.54     (limit 3.0)  LDO out
-22 over the limit
+24 over the limit
 ```
 

@@ -180,6 +180,8 @@ for ref, (x, y, rot, side, text) in S.EXPLICIT.items():
     for (a0, b0, a1, b1), w in occ[B if side == B else T]:
         if not (r[0] < a1 and a0 < r[2] and r[1] < b1 and b0 < r[3]):
             continue
+        if (ref, w) in getattr(S, "OVERLAP_OK", set()):
+            continue
         if w.endswith("solder zone"):
             hole = fps[w.split()[0]]
             if is_tht(fp):

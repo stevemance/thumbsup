@@ -15,7 +15,8 @@ BW, BH = 75.0, 35.0
 CORNER_R = 1.5
 EDGE = 0.4          # anchored parts: courtyard to board edge (JLC adds rails on a board this size)
 GAP = 0.1           # anchored parts: extra gap between courtyards (courtyards already carry 0.25 mm)
-EDGE_OK = {"J4", "J2", "J3"}   # edge connectors may touch the edge (mating face flush with the edge)
+EDGE_OK = {"J4", "J2", "J3"}
+OVERLAP_OK = {("NT2", "RS2")}   # net tie GND pad on the shunt's GND pad corner (same net)   # edge connectors may touch the edge (mating face flush with the edge)
 T, B = "T", "B"
 # soldering clearance around hand-soldered through-holes, both sides (review: iron tip + fillet; a bridge at J4 shorts a cell)
 THT_CLEAR = {"JBAT": 2.0, "JW": 2.0, "JL": 1.5, "JR": 1.5, "J4": 1.5}
@@ -23,7 +24,8 @@ THT_CLEAR = {"JBAT": 2.0, "JW": 2.0, "JL": 1.5, "JR": 1.5, "J4": 1.5}
 EP_KEEPOUT = [("U2", "B", 1.0, "DRV8323 thermal pad"), ("U3", "B", 1.0, "DRV8316 thermal pad"), ("U4", "B", 1.0, "DRV8316 thermal pad")]
 # bottom routing corridor: the weapon gate/sense runs leave the FETs through vias and cross to U2 here (DRV8323 p75)
 KEEPOUT = [((34.5, 8.5, 70.5, 19.0), "B", "weapon gate/sense via corridor between the bridge and U2"),
-           ((49.3, 18.0, 58.9, 27.3), "B", "U2 fan-out and via field (U2 outline + the phase-A via strip on its right)")]
+           ((49.3, 18.0, 58.9, 27.3), "B", "U2 fan-out and via field (U2 outline + the phase-A via strip on its right)"),
+           ((20.0, 32.6, 27.5, 35.0), "B", "U3 logic-pin via escape (INHx, DRV_OFF, nFAULT, +3V3 behind U3)")]
 
 # ------------------------------------------------------------------ weapon bridge (top, front right)
 # U-cell per phase, left to right C, B, A (the order U2's pins come out in, U2 rotated 180 deg):
@@ -44,6 +46,8 @@ for ph, x0 in CELL.items():
     EXPLICIT[jw] = (x0 + 6.1, 2.75, 0, T, f"phase {ph} motor wire: at the front edge (drum side), directly in front of the phase strip joining {hs} source and {ls} drain")
     EXPLICIT[rs] = (x0 + 3.2, 15.35, 0, T, f"phase {ph} shunt: directly behind {ls}'s source pins (pad 1), GND pad 2 toward the cell centre next to {cap}'s GND pad; 0.8 W peak, top")
     EXPLICIT[nt] = (x0 + 4.3, 18.3, 0, T, f"Kelvin tie SN{ph}: directly behind the inner edge of {rs}'s GND pad, so the sense return starts at the shunt, not in the cap's return copper (DESIGN 6.3)")
+    if ph == "B":
+        EXPLICIT[nt] = (x0 + 4.1, 17.6, 90, T, "Kelvin tie SNB: standing on the inner-rear corner of RS2's GND pad (same net), so it stays out of the strip in front of U2's phase-C pins (verification review)")
     EXPLICIT[cap] = (x0 + 8.6, 15.5, 270, T, f"phase {ph} bridge 10 uF: VBAT pad on {hs}'s drain tab, GND pad beside {rs}'s GND pad: closes the commutation loop on L1 (DESIGN 6.1)")
 
 EXPLICIT.update({
@@ -78,19 +82,19 @@ EXPLICIT.update({
     "C27": (58.0, 29.0, 270, T, "buck VIN cap: VIN pad (top) 2.4 mm from U2 pin 47, GND pad (bottom) beside D2's anode: the input loop is the one that must be small (LMR16006 p17)"),
     "C28": (52.1, 28.8, 270, T, "bootstrap cap: in the gap between L1 and D2, CB pad (top) 2.7 mm from pin 44, SW pad (bottom) on the SW copper"),
     # U3's AVDD cap and nFAULT pull-up behind its rear pins (out of the phase-output fan, DESIGN 3.3 AGND return)
-    "C305": (23.6, 33.95, 0, T, "U3 AVDD cap: behind AVDD pin 25 / AGND pin 26 on U3's rear side, outside the phase-output fan"),
-    "R301": (19.9, 33.7, 0, T, "U3 nFAULT pull-up to AVDD: behind nFAULT pin 22"),
+    "C305": (21.65, 33.95, 180, T, "U3 AVDD cap: AVDD pad behind pin 25, GND pad behind pins 22-23 (AGND side), leaving the INH/DRV_OFF pins behind U3 free to escape (verification review)"),
+    "R301": (19.1, 33.55, 0, T, "U3 nFAULT pull-up to AVDD: behind nFAULT pin 22, 1 mm from JL3's ring on the top (outside its bottom solder zone)"),
     # drive right (rear-right, the right motor is behind this corner)
     "U4": (66.5, 24.5, 90, T, "drive R DRV8316: rotated 90 so the phase outputs face the JR wire holes on the right edge and the VM pins face R402 behind it; CSA/logic pins via to the MCU below; ~1-2 W, top"),
     "R402": (64.07, 32.9, 0, T, "drive R VM feed 0.1R: rear edge behind U4: pad 2 (R_VM, right) below U4's VM pins with the VM/CP caps in the row between, pad 1 (VBAT, left) fed on its own L3 branch from C1 (not through the bridge copper, DESIGN 6.6); up to 1 W, top, clear of U4's thermal pad"),
     "JR1": (73.10, 25.8, 0, T, "drive R phase A wire: right edge, level with U4's phase-A output pins (no crossing)"),
     "JR2": (73.10, 22.0, 0, T, "drive R phase B wire: right edge beside U4's outputs"),
-    "JR3": (73.10, 18.2, 0, T, "drive R phase C wire: right edge, level with U4's phase-C output pins"),
+    "JR3": (73.10, 18.2, 0, T, "drive R phase C wire: right edge next to U4's outputs (phase order A, B, C from the rear, no crossing)"),
     "TH1": (58.73, 15.35, 90, T, "weapon FET NTC: in the gap behind phase B's high-side drain tab (the hottest copper), between C26 and RS1 (DESIGN 3.2)"),
     # bottom: header and sensor connectors
     "J1": (16.6, 19.2, 0, B, "header to the compute board (bottom): left of the MCU beside J4's pin column (outside its solder zone), clear of U2/U3's via fields and the gate corridor, behind the pack-return path (which runs from the bridge to JBAT2 along the front); frees the MCU's ring"),
     "J2": (33.3, 31.85, 0, T, "drive L sensor connector: TOP side at the rear edge (moved off the bottom, where it sat under U3's thermal-via field), mating face at the edge, the left motor behind; 3.35 mm tall"),
-    "J3": (54.0, 31.9, 180, B, "drive R sensor connector (bottom): rear edge under the buck output caps, not under R402 (1 W) or U4's via field, mating face at the edge; 3.35 mm tall"),
+    "J3": (54.0, 31.9, 180, B, "drive R sensor connector (bottom): rear edge under the buck (D2/C27/C28), not under R402 (1 W) or U4's via field, mating face at the edge; 3.35 mm tall"),
 })
 
 A = []   # ANCHORED: (ref, side, anchor, rotations, why)
@@ -127,7 +131,7 @@ add("C22", T, ("U2", "36"), "DVDD cap at pin 36, short path to AGND")
 add("C23", T, ("U2", "26"), "VREF cap at pin 26")
 add("R44", T, ("U2", "29"), "MODE strap within 2 mm of pin 29, returned to AGND (DESIGN 6.4)")
 add("R45", T, ("U2", "30"), "IDRIVE strap within 2 mm of pin 30")
-add("R46", T, ("U2", "31"), "VDS strap within 2 mm of pin 31")
+add("R46", T, ("U2", "31"), "VDS strap next to pin 31 (2.5 mm: three 0402s cannot all sit within 2 mm of pins 29-31), AGND return")
 add("R20 R21", T, ("U2", "1"), "FB divider at pin 1, away from L1 (DESIGN 6.7)")
 add("R4 R5 C10", T, ("U2", "48"), "buck nSHDN/UVLO divider + filter at pin 48, away from the SW node")
 add("U5", T, ("C29", "1"), "3.3 V LDO: fed from the buck's +5V; 0.2 W (+38 C), top")
@@ -143,7 +147,7 @@ add("TP2 TP3 TP4", T, (41.0, 27.0), "SWD/NRST pads (top, reachable with the comp
 add("TP6", T, (35.0, 27.0), "W_ARM test pad: top, with the other probe pads (reachable with the compute board mounted)")
 add("TP7", T, ("U2", "33"), "W_EN test pad: at U2 ENABLE")
 add("TP9", T, (44.5, 21.0), "W_nFAULT test pad: left of U2, clear of the gate/sense strip in front of it")
-add("TP8", T, ("U1", "3"), "DRV_OFF test pad: above the MCU's PC14 (out of U3's output fan)")
+add("TP8", T, ("U1", "3"), "DRV_OFF test pad: top, in free space on the net (a probe point works anywhere on it), out of U3's output fan")
 
 # ---------------------------------------------------------------- bottom: MCU and its parts
 add("U1", B, (35.5, 26.0), "STM32G474 (bottom): cool (~0.26 W); central rear, between the drive ICs and the weapon driver, away from the pack current (DESIGN 6.2); vias to U2/U3/U4 logic")
@@ -166,33 +170,33 @@ add("R25 C42", B, ("U1", "19"), "phase B divider bottom + filter at the MCU pin"
 add("R27 C43", B, ("U1", "14"), "phase C divider bottom + filter at the MCU pin")
 add("R43 C44", B, ("U1", "20"), "weapon NTC pull-up + filter at the MCU pin")
 add("R63 R64 C68", B, ("U1", "17"), "pack voltage divider + filter at the MCU pin")
-add("R33", B, ("J1", "11"), "header branch of the pack divider: at J1 pin 11")
+add("R33", B, ("J1", "11"), "header branch of the pack divider: near J1")
 add("R16", B, ("J1", "8"), "NRST pull-up near J1/U1")
 add("R17", B, ("J1", "6"), "MB_RX pull-up near J1")
 add("R40", B, ("U1", "46"), "W_EN pull-down near the MCU pin")
 add("R42 C19", B, ("U1", "2"), "W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin)")
 add("R50", B, ("U1", "3"), "DRV_OFF pull-up: near PC14, trace short (DESIGN 6.6)")
-add("R62", B, ("D3", "2"), "power LED resistor: bottom, anywhere on the +5V-LED line (3 mA)")
+add("R62", B, ("D3", "2"), "power LED resistor: bottom, anywhere on the +5V-LED line (3 mA)", rots=(0, 90, 180, 270))
 # ---------------------------------------------------------------- bottom: phase dividers (top resistor at the phase)
 add("R22", B, ("JW1", "1"), "phase A divider top: beside JW1, just outside its solder zone, so the phase voltage stays local and only the divided node runs to the MCU")
-add("R24", B, ("JW2", "1"), "phase B divider top: beside JW2, just outside its solder zone")
-add("R26", B, ("JW3", "1"), "phase C divider top: beside JW3, just outside its solder zone")
+add("R24", B, ("JW2", "1"), "phase B divider top: just behind JW2's solder zone")
+add("R26", B, ("JW3", "1"), "phase C divider top: just behind JW3's solder zone")
 # ---------------------------------------------------------------- bottom: weapon interlock and ARM
-add("U6", B, (32.0, 9.5), "interlock AND gates (bottom): the empty block behind the battery entry, out of the gate-via corridor; near J1's W_ARM_CLK end and the MCU's CHxN pins; LVC logic does not mind the few mV of pack-return offset")
+add("U6", B, (32.0, 9.5), "interlock AND gates (bottom): the free block right of RS4, beside the pack path, out of the gate-via corridor; CHxN in from the MCU, INLx out to U2; LVC logic does not mind the few mV of pack-return offset")
 add("C40", B, ("U6", "14"), "U6 decoupling at VCC")
 add("R47 R48 R49", B, ("U6", "1"), "CHxN pull-downs at U6's inputs")
 add("U14", B, ("U6", "2"), "ARM Schmitt buffer: next to U6 (W_ARM_S feeds all three gates) and on the way to J1 pin 19 (W_ARM_CLK)")
 add("C17", B, ("U14", "5"), "U14 decoupling")
 add("R19", B, ("U14", "4"), "W_ARM_S pull-down at U14's output")
-add("D9 C16 R41", B, ("U14", "2"), "ARM rectifier/hold/bleed at U14's input")
+add("D9 C16 R41", B, ("U14", "2"), "ARM rectifier/hold/bleed near U14's input (a slow RC node)")
 add("C15 R18", B, ("J1", "19"), "ARM coupling cap / W_ARM_CLK pull-down at J1 pin 19 (keep away from MB_TX)")
 # ---------------------------------------------------------------- bottom: drive L/R parts that need not be on top
 for s, u, r in (("30", "U3", "R302"), ("40", "U4", "R402")):
-    add(f"C{s}2 C{s}8 C{s}9 C{s[0]}10", B, (u, "10"), f"{u} VM 10 uF bulk (bottom, directly under the VM pins, on the filtered side of {r}); the 100 nF stay on top at the pins")
+    add(f"C{s}2 C{s}8 C{s}9 C{s[0]}10", B, (u, "10"), f"{u} VM 10 uF bulk (bottom, toward the VM pins on the filtered side of {r}; distance: 5.3); the 100 nF stay on top at the pins")
     add(f"R{s}0 C{s}7", B, (u, "5"), f"{u} buck resistor-mode parts (bottom, beside its thermal-via field at the SW_BK/FB_BK pins, placed before the bulk caps so the SW_BK node stays short while the buck runs at boot): ~0.05 W only until firmware sets BUCK_DIS")
 # ---------------------------------------------------------------- bottom: power-switch gate network, pack monitor
 add("D4", B, ("Q7", "4"), "Q7/Q8 gate-source clamp (bottom, under the gates; not BAT_IN)")
-add("R1 D10 C13 R32", B, ("U13", "6"), "Cdvdt network on PSW_G (bottom, under U13's GATE pin)")
+add("R1 D10 C13 R32", B, ("U13", "6"), "Cdvdt network on PSW_G (bottom, near U13's GATE pin; not BAT_IN)")
 add("R14", B, ("U13", "1"), "EN/UVLO bottom resistor (bottom, under pin 1)")
 add("R15", B, ("C1", "1"), "bus bleeder (bottom, under C1): 41 mW")
 add("U7", B, ("RS4", "1"), "INA239 (bottom): under RS4, Kelvin taps from the pad inner edges through vias")
@@ -201,7 +205,7 @@ add("C3 R12", B, ("U7", "6"), "INA239 VS cap / CS pull-up")
 # ---------------------------------------------------------------- bottom: cell monitor at J4
 add("U8", B, (4.0, 20.5), "BQ76907 (bottom, cool, 1 mm): under J4's body, left of its pin column, so every cell tap is a short run from J4 on the same side")
 add("R6 R7 R8 R9 R10 R11", B, ("U8", "3"), "cell-input series R: at U8 (DESIGN 6.9), on U8's side of J4's solder zone")
-add("C4 C5 C6 C7 C8", B, ("U8", "3"), "cell-input filter caps at U8")
+add("C4 C5 C6 C7 C8", B, ("U8", "3"), "cell-input filter caps, placed first round U8")
 add("C9", B, ("U8", "17"), "BAT decoupling at U8 pin 17")
 add("C11", B, ("U8", "15"), "REGOUT cap at pin 15 (BQ76907: must be at REGOUT)")
 add("D5", B, ("U8", "5"), "VC0 clamp at U8")
@@ -209,15 +213,16 @@ add("D5", B, ("U8", "5"), "VC0 clamp at U8")
 SW_AT = {"L": (38.5, 29.0), "R": (50.0, 29.5)}
 SIDE = {"L": T, "R": B}
 for s, j, u, v, jp, d, n0 in (("L", "J2", "U9", "U11", "JP1", "D7", 0), ("R", "J3", "U10", "U12", "JP2", "D8", 1)):
-    add(v, SIDE[s], SW_AT[s], f"sensor {s} supply switch: toward {j} pin 1 (VS) but ~10 mm from the drive IC (85 C part, DESIGN 6.5)")
+    add(v, SIDE[s], SW_AT[s], f"sensor {s} supply switch: near {j}, 16-19 mm from the drive IC (85 C part, DESIGN 6.5)")
     add(jp, SIDE[s], (v, "5"), f"sensor {s} supply select jumper at the switch input ({'top' if SIDE[s] == T else 'bottom, reachable with the stack apart'})")
     add(u, SIDE[s], (j, "4"), f"sensor {s} Schmitt buffer: toward {j} (distance in the table; see 5.3)")
-    add(d, SIDE[s], (j, "6"), f"motor {s} NTC clamp: after the 2.2k series R, toward {j} pin 6 (see 5.3)")
+    add(d, B, ("U1", "5" if s == "L" else "6"), f"motor {s} NTC clamp: at the MCU's ADC pin (P{'F0' if s == 'L' else 'F1'}), on the protected side of the 2.2k series R")
 hr = {"L": ("R54 R55 R56", "R110 R111 R112", "C110 C111 C112", "R52 R113 C72", "C45 C46", "C47"),
       "R": ("R57 R58 R59", "R114 R115 R116", "C114 C115 C116", "R53 R117 C73", "C48 C49", "C50")}
 for s, (pu, ser, flt, ntc, sw, dec) in hr.items():
     j, u, v = ("J2", "U9", "U11") if s == "L" else ("J3", "U10", "U12")
-    add(ser, SIDE[s], (u, "1"), f"sensor {s} line series R between {j} and {u}")
+    for rr, jp_ in zip(ser.split(), ("3", "4", "5")):
+        add(rr, SIDE[s], (j, jp_), f"sensor {s} line series R at {j} pin {jp_} (keeps the three channels in order)")
     add(flt, SIDE[s], (u, "3"), f"sensor {s} line filter caps (DNP) at {u}'s inputs")
     add(pu, SIDE[s], (j, "4"), f"sensor {s} pull-ups at {j}")
     add(ntc, SIDE[s], (j, "6"), f"motor {s} NTC pull-up / series R / filter near {j} pin 6")
@@ -225,10 +230,15 @@ for s, (pu, ser, flt, ntc, sw, dec) in hr.items():
     add(dec, SIDE[s], (u, "8"), f"{u} decoupling")
 # placement order on the bottom: the MCU and its decoupling first, then the parts that must sit at a given
 # connector or IC (drive bulk caps, sensor channels), then the rest in the order above
-FIRST = ("U1 C60 C61 C62 C63 C64 C65 R60 C66 C71 C74 C67 C80 C81 C82 C90 C91 C92 C41 C42 C43 C19 "
-         "R300 C307 R400 C407 C302 C308 C309 C310 C402 C408 C409 C410 "
-         "U8 C11 D5 C9 U7 C3 C2 U6 C40 U14 C17 U12 C48 C49 JP2 U10 C50 D8 R114 R115 R116 C114 C115 C116 R57 R58 R59 R53 R117 C73 C48 C49 C50 "
-         "U11 C45 C46 JP1 U9 C47 D7 R110 R111 R112 C110 C111 C112 R54 R55 R56 R52 R113 C72 C45 C46 C47").split()
+FIRST = ("U1 C60 C61 C62 C63 C64 C65 R60 C66 C71 C74 C67 "           # MCU + decoupling first (it needs a ring)
+         "R300 C307 C302 C308 C309 C310 "                       # drive L bulk (rear left)
+         "D4 R1 D10 C13 R32 R14 "                                    # power-switch gate network (front left)
+         "U7 C3 C2 R2 R3 R12 "                                       # pack monitor under RS4
+         "U8 C11 C9 D5 C4 C5 C6 C7 C8 R6 R7 R8 R9 R10 R11 "          # cell monitor under J4
+         "R400 C407 C402 C408 C409 C410 "                            # drive R bulk (rear right)
+         "U12 C48 C49 JP2 U10 C50 R114 R115 R116 C114 C115 C116 R57 R58 R59 R53 R117 C73 "
+         "C80 C81 C82 C90 C91 C92 C41 C42 C43 C19 C44 C68 D7 D8 R43 R63 R64 "
+         "U6 C40 U14 C17").split()
 CRIT = ("C24 C21 C20 C22 C23 R44 R45 R46 C28 R20 R21 C300 C301 C303 C304 C305 C306 R301 C400 C401 C403 C404 C405 C406 R401 "
         "U13 C14 C12 C18 R13 U5 C69 C70").split()
 top = [e for e in A if e[1] == T]
