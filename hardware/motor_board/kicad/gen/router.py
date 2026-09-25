@@ -295,13 +295,20 @@ def fixed(req):
 
 
 results = []
+done = set()
 for req in REQ:
-    r = fixed(req) if "fixed" in req else route(req)
     tag = req.get("tag") or req["net"]
+    if req.get("retry"):                      # second pass: only for requests that failed the first time
+        if tag in done:
+            continue
+    r = fixed(req) if "fixed" in req else route(req)
+    if r is not None:
+        done.add(tag)
     if r is None:
-        print(f"FAIL  {tag}")
+        if req.get("retry") or not any(q.get("retry") and (q.get("tag") or q["net"]) == tag for q in REQ):
+            print(f"FAIL  {tag}")             # final: no retry left for it
         results.append(dict(tag=tag, ok=False))
     else:
-        print(f"ok    {tag}: {r['length']} mm, {len(r['vias'])} vias, layers {sorted({t['layer'] for t in r['tracks']})}")
+        print(f"{'ok2 ' if req.get('retry') else 'ok  '}  {tag}: {r['length']} mm, {len(r['vias'])} vias, layers {sorted({t['layer'] for t in r['tracks']})}")
         results.append(dict(tag=tag, ok=True, **r))
 json.dump(results, open(sys.argv[3], "w"), indent=0)

@@ -167,6 +167,40 @@ b2 = [
 ]
 BLOCKS["2 U2 local"] = b2
 
+
+# ---------------------------------------------------------------- auto blocks: frozen pair lists (make_pairs.py)
+def auto(name, first=(), **kw):
+    """Requests from pairs/<name>.json: the listed nets first (in that order), then shortest first."""
+    here = __import__("pathlib").Path(__file__).resolve().parent
+    pairs = json.load(open(here / "pairs" / f"{name}.json"))
+    rank = {n: k for k, n in enumerate(first)}
+    pairs.sort(key=lambda p: (rank.get(p["net"], len(rank)), p["dist"]))
+    q = dict(layers=[F, B], layer_cost={F: 1.0, B: 1.2}, via_cost=1.5, margin=3.0)
+    q.update(kw)
+    out = []
+    for p in pairs:
+        r = dict(tag=f"{p['net']} {p['a'][1]}-{p['b'][1]}", net=p["net"], a=tuple(p["a"]), b=tuple(p["b"]), **q)
+        if p["net"] in NARROW and "w" not in r:
+            r["w"] = NARROW[p["net"]]
+        out.append(r)
+    for r in list(out):                       # retry pass for the failures: wider window, cheaper vias, L3 allowed
+        out.append(dict(r, retry=True, margin=7.0, via_cost=0.8, layers=[F, L3, B], layer_cost={F: 1.0, B: 1.2, L3: 1.5}))
+    return out
+
+
+# logic rails and pack-voltage taps in the auto blocks: fine-pitch pins, < 0.5 A per branch
+NARROW = {"+3V3": 0.25, "+5V": 0.3, "VBAT": 0.3}
+
+
+# block 3: pack entry / power switch / current monitor / ARM / BMS corner (front-left)
+BLOCKS["3 power switch corner"] = auto("b3_power_switch", first=(
+    "/power/PSW_G", "/power/PSW_S", "/power/BAT_IN", "/power/PSW_CAP", "/power/PSW_EN", "/power/PSW_DV",
+    "/power/PSW_RG", "/power/VBAT_SW", "/power/INA_INP", "/power/INA_INN"))
+
+# survey (not kept): auto("b9_rest") over everything still open after block 3 routed ~165 of 272 pairs greedily,
+# failed ~110 (MCU fan-out, +3V3, weapon logic, drives) and left clearance errors: the greedy one-net-at-a-time
+# router has hit its limit in the dense logic areas; the rest needs planned blocks or rip-up-and-reroute.
+
 if __name__ == "__main__":
     upto = sys.argv[2] if len(sys.argv) > 2 else None
     out = []
