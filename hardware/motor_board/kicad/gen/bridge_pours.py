@@ -81,6 +81,9 @@ for f in board.GetFootprints():
         pads.append((t(r.GetLeft()) - OX, t(r.GetTop()) - OY, t(r.GetRight()) - OX, t(r.GetBottom()) - OY,
                      p.GetNetname().split("/")[-1]))
 vias = [(t(v.GetPosition().x) - OX, t(v.GetPosition().y) - OY) for v in board.GetTracks() if v.GetClass() == "PCB_VIA"]
+# reserved: the weapon gate escape vias (placed by vias_and_pack.py); the via fields keep clear of them
+for x0 in CELLS.values():
+    vias += [(x0 + 6.54, 6.42), (x0 + 5.95, 11.9)]
 keep = []
 for z in board.Zones():
     if z.GetIsRuleArea() and z.GetDoNotAllowVias():
