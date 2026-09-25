@@ -20,8 +20,9 @@ t = pcbnew.ToMM
 OX, OY = 100.0, 70.0
 fps = {fp.GetReference(): fp for fp in b.GetFootprints()}
 bb = b.GetBoardEdgesBoundingBox()
-BW, BH = t(bb.GetWidth()), t(bb.GetHeight())
-OX, OY = t(bb.GetLeft()), t(bb.GetTop())
+EW = 0.1   # Edge.Cuts line width: the bbox includes half of it on each side
+BW, BH = t(bb.GetWidth()) - EW, t(bb.GetHeight()) - EW
+OX, OY = t(bb.GetLeft()) + EW / 2, t(bb.GetTop()) + EW / 2
 
 
 def side(fp):
@@ -198,10 +199,27 @@ def cmd_orient():
               f"{edge[0]:4.1f} mm -> {'parallel' if ok else 'PERPENDICULAR'}; courtyard to nearest hole {d:4.1f} mm; nets {'/'.join(nets)}")
 
 
+GATES = [("A", "Q1", "8", "9", "Q2", "10", "11"), ("B", "Q3", "17", "16", "Q4", "15", "14"), ("C", "Q5", "18", "19", "Q6", "20", "21")]
+
+
+def cmd_gates():
+    """gate-drive loop lengths, pin to pin (Manhattan, pad centres): U2 GHx->HS gate, SHx->HS source,
+    GLx->LS gate, SLx->LS source (DRV8323 p75: short, low side most critical)."""
+    u = {p["num"]: p for p in pads(fps["U2"])}
+    for ph, hs, gh, sh, ls, gl, sl in GATES:
+        H = {p["num"]: p for p in pads(fps[hs])}
+        L = {p["num"]: p for p in pads(fps[ls])}
+        man = lambda a, b: abs(a["x"] - b["x"]) + abs(a["y"] - b["y"])
+        hsrc = min((H[n] for n in ("1", "2", "3")), key=lambda q: man(u[sh], q))
+        lsrc = min((L[n] for n in ("1", "2", "3")), key=lambda q: man(u[sl], q))
+        print(f"  phase {ph}: GH{ph}->{hs}.4 {man(u[gh], H['4']):5.1f} mm, SH{ph}->{hs} source {man(u[sh], hsrc):5.1f} mm, "
+              f"GL{ph}->{ls}.4 {man(u[gl], L['4']):5.1f} mm, SL{ph}->{ls} source {man(u[sl], lsrc):5.1f} mm")
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
     if not a:
         print(__doc__); sys.exit(0)
     {"gaps": lambda: cmd_gaps(int(a[1]) if len(a) > 1 else 40), "near": lambda: cmd_near(a[1], float(a[2]) if len(a) > 2 else 3.0),
      "dist": lambda: cmd_dist(a[1], a[2]), "net": lambda: cmd_net(a[1]), "part": lambda: cmd_part(a[1]),
-     "loop": lambda: cmd_loop(a[1]), "orient": cmd_orient}[a[0]]()
+     "loop": lambda: cmd_loop(a[1]), "orient": cmd_orient, "gates": cmd_gates}[a[0]]()

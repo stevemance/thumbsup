@@ -54,12 +54,12 @@ EXPLICIT.update({
     "MH4": (BW - 2.8, 32.0, 0, T, "M2 stack/chassis hole, rear-right corner (same x as MH2: the four holes form a rectangle)"),
     # battery entry (left end): pack path BAT+ -> Q7 -> Q8 -> RS4 -> VBAT runs left-to-right along the front
     "JBAT1": (3.2, 8.7, 0, T, "BAT+ wire: left edge (battery beside the board's left end), first in the pack path, next to Q7's drain"),
-    "JBAT2": (9.2, 3.0, 0, T, "BAT- wire: next to BAT+ (the pair leaves together, twist them); GND joins the L2 plane at the hole"),
-    "Q7": (10.0, 9.0, 180, T, "inrush FET: drain tab next to JBAT1, source pins toward Q8's (common source PSW_S); 1.1 mm pad gap to Q8 (JLC QFN-QFN 1.0 mm); 16 W peak at switch-on, top"),
+    "JBAT2": (9.2, 3.0, 0, T, "BAT- wire: 8.3 mm from BAT+ (the pair leaves together, twist it); GND joins the L2 plane at the hole"),
+    "Q7": (10.0, 9.0, 180, T, "inrush FET: drain tab next to JBAT1, source pins toward Q8's (common source PSW_S; the two gate pins end up at opposite corners of the pair, so PSW_G reaches Q8's through a via); 1.1 mm pad gap to Q8 (JLC QFN-QFN 1.0 mm); 16 W peak at switch-on, top"),
     "Q8": (17.9, 9.0, 0, T, "reverse FET: source pins toward Q7's, drain tab (VBAT_SW) against RS4 pad 1; ~1 W at 22 A, top"),
     "RS4": (26.1, 9.0, 0, T, "pack shunt: pad 1 on Q8's drain tab, pad 2 (VBAT) toward C1/D1; INA239 Kelvin taps from the pad inner edges"),
     "D1": (27.0, 3.0, 180, T, "bus TVS: front strip, cathode (VBAT) straight in front of RS4's VBAT pad, anode to GND vias; across VBAT/GND before the bridge"),
-    "C1": (24.3, 18.0, 180, T, "330 uF bulk: VBAT pad (right) a few mm from RS4's VBAT pad and the bridge's left end, GND pad (left) straight into the L2 plane: next to both the switch output and the bridge (DESIGN 6.6); 10.5 mm tall, top; stake by hand"),
+    "C1": (24.3, 18.0, 180, T, "330 uF bulk: VBAT pad (right) 5.8 mm from RS4's VBAT pad and toward the bridge, GND pad (left) into the L2 plane: next to both the switch output and the bridge (DESIGN 6.6); 10.5 mm tall, top; stake by hand"),
     "J4": (6.5, 20.9, 270, T, "balance lead: left edge beside the battery wires, mating face at the edge; 6.1 mm tall so top (the board gap is ~5 mm)"),
     # drive left (rear-left, the left motor is behind this corner)
     "U3": (23.0, 30.0, 270, T, "drive L DRV8316: VM pins face C1/R302 (front), phase outputs face the JL wire holes (left), logic toward the rear/MCU vias; ~1-2 W, top"),
@@ -68,7 +68,7 @@ EXPLICIT.update({
     "JL2": (12.0, 32.4, 0, T, "drive L phase B wire: rear edge"),
     "JL3": (16.2, 32.4, 0, T, "drive L phase C wire: rear edge, next to U3's outputs"),
     # weapon driver: behind the bridge, gate/sense pins face the cells
-    "U2": (53.50, 23.0, 180, T, "DRV8323RH: rotated 180 so phase C/B gate+sense pins face the cells in front and phase A pins face cell A on the right; straps on the left, buck pins rear-right; hot (gate drive + 5 V buck), top"),
+    "U2": (53.50, 23.0, 180, T, "DRV8323RH: behind the bridge centre, rotated 180 so the phase B/C gate+sense pins are on its front edge (facing the middle of the bridge) and the phase A pins on its right side (toward cell A, front-right); straps/DVDD/VREF on its left, buck pins at its rear-right corner; hot (gate drive + 5 V buck), top"),
     # U2's 5 V buck as one compact block right behind its SW pin (DESIGN 6.7 / LMR16006 layout):
     # L1 SW pad under pin 45, D2's cathode beside it, both output caps bridging D2's anode and L1's +5V pad
     "L1": (48.4, 30.0, 180, T, "buck inductor: SW pad (right) 2 mm from C28/D2's SW end, +5V pad (left) over the output caps; 4 mm tall, warm, top"),
@@ -106,10 +106,10 @@ def add(refs, side, anchor, why, rots=(0, 90, 180, 270)):
 #add( ("RS2", "2"), "Kelvin tie SNB: at RS2's GND pad inner edge")
 #add( ("RS3", "2"), "Kelvin tie SNC: at RS3's GND pad inner edge")
 # ---------------------------------------------------------------- top: power switch (hot/BAT_IN parts)
-add("U13", T, ("Q7", "4"), "LM74502: between the Q7/Q8 gates, GATE/SRC traces short (DESIGN 6.6); BAT_IN pin, so top")
-add("C14", T, ("U13", "5"), "U13 VS cap across the unswitched pack (BAT_IN): top, at VS; 0805 parallel to the front edge")
+add("U13", T, ("Q7", "4"), "LM74502: front strip above the Q7/Q8 pair, ~2 mm from Q7's gate, GATE/SRC short (DESIGN 6.6); BAT_IN pin, so top")
+add("C14", T, ("U13", "5"), "U13 VS cap across the unswitched pack (BAT_IN, so top): on U13's right because JBAT2's solder zone takes its left; 0805 parallel to the front edge")
 add("R13", T, ("U13", "1"), "EN/UVLO top resistor from BAT_IN: top (BAT_IN never on the bottom face)")
-add("C12", T, ("U13", "4"), "VCAP-VS cap: at U13, on the side away from the FETs (LM74502 p19: heat shifts its capacitance)")
+add("C12", T, ("U13", "4"), "VCAP-VS cap: beside U13, off the FET copper (LM74502 p19: heat shifts its capacitance)")
 add("C18", T, ("U13", "1"), "EN/UVLO filter at U13 pin 1 (DESIGN 6.6)")
 # ---------------------------------------------------------------- top: drive L / R decoupling at the pins
 for s, u in (("30", "U3"), ("40", "U4")):
@@ -134,13 +134,13 @@ add("U5", T, ("C29", "1"), "3.3 V LDO: fed from the buck's +5V; 0.2 W (+38 C), t
 add("C69", T, ("U5", "1"), "U5 input cap")
 add("C70", T, ("U5", "5"), "U5 output cap")
 # ---------------------------------------------------------------- top: user-facing
-add("D3", T, (40.5, 33.8), "power LED: rear edge, visible from above/behind (DESIGN 3.1: visible from outside)")
+add("D3", T, (40.5, 33.8), "power LED: top, rear edge, visible from above/behind (DESIGN 3.1: visible from outside)")
 add("TP10", T, ("C1", "1"), "VBAT test pad: at C1's VBAT")
 add("TP11", T, ("C29", "1"), "+5V test pad: at the buck output")
 add("TP1", T, ("U5", "5"), "+3V3 test pad: at the LDO output")
 add("TP5 TP12", T, (37.0, 22.0), "GND test pads: probe ground near the logic, away from the bridge return")
 add("TP2 TP3 TP4", T, (41.0, 27.0), "SWD/NRST pads (top, reachable with the compute board mounted): above the MCU")
-add("TP6", T, (35.0, 27.0), "W_ARM test pad: above the ARM circuit")
+add("TP6", T, (35.0, 27.0), "W_ARM test pad: top, with the other probe pads (reachable with the compute board mounted)")
 add("TP7", T, ("U2", "33"), "W_EN test pad: at U2 ENABLE")
 add("TP9", T, (44.5, 21.0), "W_nFAULT test pad: left of U2, clear of the gate/sense strip in front of it")
 add("TP8", T, ("U1", "3"), "DRV_OFF test pad: above the MCU's PC14 (out of U3's output fan)")
@@ -172,11 +172,11 @@ add("R17", B, ("J1", "6"), "MB_RX pull-up near J1")
 add("R40", B, ("U1", "46"), "W_EN pull-down near the MCU pin")
 add("R42 C19", B, ("U1", "2"), "W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin)")
 add("R50", B, ("U1", "3"), "DRV_OFF pull-up: near PC14, trace short (DESIGN 6.6)")
-add("R62", B, ("D3", "2"), "power LED resistor under the LED")
+add("R62", B, ("D3", "2"), "power LED resistor: bottom, anywhere on the +5V-LED line (3 mA)")
 # ---------------------------------------------------------------- bottom: phase dividers (top resistor at the phase)
-add("R22", B, ("JW1", "1"), "phase A divider top: under phase A's wire hole, so only a low-impedance node runs to the MCU")
-add("R24", B, ("JW2", "1"), "phase B divider top: under phase B's wire hole")
-add("R26", B, ("JW3", "1"), "phase C divider top: under phase C's wire hole")
+add("R22", B, ("JW1", "1"), "phase A divider top: beside JW1, just outside its solder zone, so the phase voltage stays local and only the divided node runs to the MCU")
+add("R24", B, ("JW2", "1"), "phase B divider top: beside JW2, just outside its solder zone")
+add("R26", B, ("JW3", "1"), "phase C divider top: beside JW3, just outside its solder zone")
 # ---------------------------------------------------------------- bottom: weapon interlock and ARM
 add("U6", B, (32.0, 9.5), "interlock AND gates (bottom): the empty block behind the battery entry, out of the gate-via corridor; near J1's W_ARM_CLK end and the MCU's CHxN pins; LVC logic does not mind the few mV of pack-return offset")
 add("C40", B, ("U6", "14"), "U6 decoupling at VCC")
@@ -210,9 +210,9 @@ SW_AT = {"L": (38.5, 29.0), "R": (50.0, 29.5)}
 SIDE = {"L": T, "R": B}
 for s, j, u, v, jp, d, n0 in (("L", "J2", "U9", "U11", "JP1", "D7", 0), ("R", "J3", "U10", "U12", "JP2", "D8", 1)):
     add(v, SIDE[s], SW_AT[s], f"sensor {s} supply switch: toward {j} pin 1 (VS) but ~10 mm from the drive IC (85 C part, DESIGN 6.5)")
-    add(jp, SIDE[s], (v, "5"), f"sensor {s} supply select jumper at the switch input (bottom: reachable with the stack apart)")
-    add(u, SIDE[s], (j, "4"), f"sensor {s} Schmitt buffer: next to {j}")
-    add(d, SIDE[s], (j, "6"), f"motor {s} NTC clamp at {j} pin 6")
+    add(jp, SIDE[s], (v, "5"), f"sensor {s} supply select jumper at the switch input ({'top' if SIDE[s] == T else 'bottom, reachable with the stack apart'})")
+    add(u, SIDE[s], (j, "4"), f"sensor {s} Schmitt buffer: toward {j} (distance in the table; see 5.3)")
+    add(d, SIDE[s], (j, "6"), f"motor {s} NTC clamp: after the 2.2k series R, toward {j} pin 6 (see 5.3)")
 hr = {"L": ("R54 R55 R56", "R110 R111 R112", "C110 C111 C112", "R52 R113 C72", "C45 C46", "C47"),
       "R": ("R57 R58 R59", "R114 R115 R116", "C114 C115 C116", "R53 R117 C73", "C48 C49", "C50")}
 for s, (pu, ser, flt, ntc, sw, dec) in hr.items():
