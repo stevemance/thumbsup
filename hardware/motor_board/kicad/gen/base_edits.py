@@ -42,13 +42,23 @@ for r3, (p1, p2) in U3CAPS.items():
     PADPOS[U4OF[r3]] = ((round(89.5 - p1[0], 3), round(54.5 - p1[1], 3)), (round(89.5 - p2[0], 3), round(54.5 - p2[1], 3)))
 # C23 (U2 VREF cap) 0.35 mm rearward: opens U2 pin 25 (W_SOA)'s only exit, between it and the SHC stair via
 PADPOS["C23"] = ((48.78, 21.1), (47.82, 21.1))
+# U4 escape (route_blocks block 7c): C405 (AVDD) stands in front of pin 25 with its GND pad in cell A's GND pour,
+# R401 (nFAULT pull-up) stands in front of pin 22, C406 (second AVDD cap) goes on the bottom under C405: the front
+# row and the left side are then clear for the logic pins' vias
+PADPOS["C405"] = ((67.25, 20.45), (67.25, 18.9))
+PADPOS["R401"] = ((68.75, 19.85), (68.75, 18.83))
+PADPOS["C406"] = ((67.25, 20.45), (67.25, 19.49))
+# C28 (buck bootstrap) 1.5 mm further back, between L1 and D2: frees the band behind U2's rear pins 37-42
+# (INH/INL) for their escape vias; the CB trace runs down west of D2 and turns into C28 below that band
+PADPOS["C28"] = ((52.1, 29.05), (52.1, 30.6))
 # except C400: its mirror spot touches MH4's courtyard, so it goes on the bottom right under U4's VM caps, standing
 # (VM pad nearest the pins, GND pad clear of MH4's washer keep-out), reached by one via from C403's VM pad
-FLIP = {"C400"}
+FLIP = {"C400", "C406"}
 PADPOS["C400"] = ((68.9, 29.9), (68.9, 31.45))
 DROP_VIAS = [("GND", 55.4, 15.9), ("GND", 45.5, 16.7), ("GND", 46.7, 16.5),   # channels for GLB / SNC's lane
              ("VBAT", 68.15, 13.05), ("GND", 67.9, 15.9),                      # and for GHA/SHA through cell A
              ("GND", 33.905, 22.0), ("GND", 36.155, 22.0)]    # old TP12/TP5 GND vias, stranded in U1's fan-out field
+DROP_VIAS += [("GND", 61.85, 23.145), ("GND", 62.225, 26.5)]   # C406/R21 GND vias in U4's left escape
 DROP_VIAS += [("GND", 46.7, 17.9), ("GND", 46.03, 19.195), ("GND", 37.225, 19.03)]  # + a cap GND via over U1 pin 12 (W_SOA exit)   # room for SNC's stair via and W_SOB's via (U2 front-left)
 DROP_VIAS += [("GND", 18.555, 29.25), ("GND", 18.555, 30.75), ("GND", 70.945, 23.75), ("GND", 70.945, 25.25)]  # U3/U4 GND pins 15/18: tied to the EP instead (the motor-output lanes run there)
 # (a dropped via's stub tracks go with it)

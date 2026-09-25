@@ -188,7 +188,9 @@ def pp(tag, net, a, b, **kw):
 
 
 # charge pump: pins 5/4/3 fan out as parallel 0.2 lanes (0.5 pitch kept through the 45-degree jog under C24)
-CP = [trk("+3V3", F, [(50.06, 20.835), (48.85, 20.835)], 0.15),     # VREF: straight, between W_SOA and pin 27   # VREF: pin 26 -> C23
+CP = [trk("/weapon/BUCK_CB", F, [(54.25, 26.9), (54.25, 27.05), (53.85, 27.45), (53.85, 28.85), (53.65, 29.05),
+                                  (52.5, 29.05)], 0.15),       # bootstrap: down west of D2, into C28 below U2's rear escape band
+      trk("+3V3", F, [(50.06, 20.835), (48.85, 20.835)], 0.15),     # VREF: straight, between W_SOA and pin 27   # VREF: pin 26 -> C23
       trk("/weapon/U2_VCP", F, [(57.2, 23.75), (57.7, 23.75), (57.95, 24.0), (60.45, 24.0), (60.45, 23.4)], 0.2),
       trk("/weapon/U2_CPH", F, [(57.2, 24.25), (57.7, 24.25), (57.95, 24.5), (60.22, 24.5), (60.22, 25.0)], 0.2),
       trk("/weapon/U2_CPL", F, [(57.2, 24.75), (57.7, 24.75), (57.95, 25.0), (58.5, 25.0)], 0.2)]
@@ -197,7 +199,6 @@ b2 = [
     pp("SW U2-D2", "/weapon/BUCK_SW", "U2.45", "D2.1", w=0.3, layers=[F]),        # 0.3: leaves a 0.5-pitch pin
     pp("SW D2-L1", "/weapon/BUCK_SW", "D2.1", "L1.1", w=0.6, layers=[F]),
     pp("SW C28", "/weapon/BUCK_SW", "C28.2", "D2.1", w=0.4, layers=[F]),
-    pp("CB", "/weapon/BUCK_CB", "U2.44", "C28.1", w=0.3),
     pp("VIN C27", "VBAT", "C27.1", "U2.47", w=0.3, layers=[F]),
     pp("VM C24", "VBAT", "C24.1", "U2.6", w=0.4, layers=[F]),
     pp("VM 6-7", "VBAT", "U2.6", "U2.7", w=0.25, layers=[F]),
@@ -461,7 +462,65 @@ def ic_fanout(ref, pairs_name, skip=("GND",), side_layer=None, depths=(0.5, 0.95
 
 
 # block 7: fan-out of the drive / gate ICs' logic pins (the buses then run via-to-via, mostly on L3)
-BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open", skip=("GND", "W_SOA", "W_SOB", "W_SOC")) + ic_fanout("U3", "b7_open") + ic_fanout("U4", "b7_open")
+BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open", skip=("GND", "W_SOA", "W_SOB", "W_SOC", "W_INHA", "W_INHB", "W_INHC",
+                                                         "/weapon/W_INLA", "/weapon/W_INLB", "/weapon/W_INLC")) + ic_fanout("U3", "b7_open")
+
+
+# block 7c: U4's escape, planned by hand (the generic fan-out found spots for 5 of 16 pins).
+# Front row (y 21.8-22.4): INHC/INHB/INHA and DRV_OFF drop to vias just in front (y ~21.25); the three +3V3 pins between
+# them drop between those vias to a second row (y 20.55) tied on the bottom; pin 23 (+3V3) to its own via; AVDD (25)
+# straight into C405 (now standing in front of it); nFAULT (22) through a via into R401 (standing in front of it),
+# whose other end joins C405.  Left side (x 62.8-63.4): two staggered via columns (x 62.55 / 62.0) for SPI, nCS and
+# the current-sense outputs; AVDD (37) runs on top west, north along x 61.2 and east along y 19.9 into C405, where a
+# via also takes it down to C406 on the bottom.
+def u4_escape():
+    tr, vi = [], []
+    for pin_x, via_c, net, w in ((64.25, (64.25, 21.25), "R_INHC", 0.15), (65.25, (65.25, 21.25), "R_INHB", 0.15),
+                                 (68.25, (68.25, 21.25), "+3V3", 0.2)):
+        tr.append(trk(net, F, [(pin_x, 22.1), via_c], w))
+        vi.append(via(net, via_c))
+    tr += [trk("R_INHA", F, [(66.25, 22.1), (66.25, 21.55), (66.5, 21.3)], 0.15),
+           trk("DRV_OFF", F, [(69.25, 22.1), (69.25, 21.55), (69.5, 21.3)], 0.15)]
+    vi += [via("R_INHA", (66.5, 21.3)), via("DRV_OFF", (69.5, 21.3))]
+    for x in (63.75, 64.75, 65.75):
+        tr.append(trk("+3V3", F, [(x, 22.1), (x, 20.55)], 0.2))
+        vi.append(via("+3V3", (x, 20.55)))
+    tr.append(trk("+3V3", B, [(63.75, 20.55), (65.75, 20.55)], 0.3))
+    A = "/drive_right/R_AVDD"
+    tr += [trk(A, F, [(67.25, 22.1), (67.25, 20.45)], 0.25),
+           trk("R_nFAULT", F, [(68.75, 22.1), (68.75, 20.0)], 0.15),
+           trk(A, F, [(68.75, 18.83), (68.35, 18.83), (68.05, 19.13), (68.05, 20.2), (67.8, 20.45)], 0.2),
+           trk(A, F, [(66.6, 20.45), (66.9, 20.45)], 0.25),
+           trk(A, B, [(66.6, 20.45), (67.25, 20.45)], 0.25),
+           trk(A, F, [(63.1, 24.75), (61.2, 24.75), (61.2, 20.2), (61.5, 19.9), (66.6, 19.9), (66.6, 20.45)], 0.2)]
+    vi += [via("R_nFAULT", (68.75, 20.8)), via(A, (66.6, 20.45))]
+    left = {33: ("SPI_MISO", 62.55), 34: ("SPI_MOSI", 62.0), 35: ("SPI_SCK", 62.55), 36: ("R_nCS", 62.0),
+            38: ("R_SOC", 62.0), 39: ("R_SOB", 62.55), 40: ("R_SOA", 62.0)}
+    for pin, (net, x) in left.items():
+        y = 22.75 + 0.5 * (pin - 33)
+        tr.append(trk(net, F, [(63.1, y), (x, y)], 0.15))
+        vi.append(via(net, (x, y)))
+    return [dict(tag="U4 escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["7c U4 escape"] = u4_escape()
+
+
+# block 7d: U2's rear pins 37-42 (INH/INL A-C) drop into one row of six vias at 0.55 pitch just behind them (y 27.3):
+# the bottom band there is only 1.1 mm deep (U2's thermal keep-out in front, the hall filter resistors R114-R116
+# behind), so the row is spread slightly wider than the pins instead of staggered.  C28 moved back to make room.
+def u2_rear_escape():
+    tr, vi = [], []
+    for k, (pin, net) in enumerate(((37, "W_INHA"), (38, "/weapon/W_INLA"), (39, "W_INHB"), (40, "/weapon/W_INLB"),
+                                    (41, "W_INHC"), (42, "/weapon/W_INLC"))):
+        x = 50.75 + 0.5 * k
+        c = (round(52.0 + 0.55 * (k - 2.5), 3), 27.3)
+        tr.append(trk(net, F, [(x, 26.6), (x, 26.95), c], 0.15))
+        vi.append(via(net, c))
+    return [dict(tag="U2 rear escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["7d U2 rear escape"] = u2_rear_escape()
 
 # block 8: logic and rails, via to via: L3 is the main layer in the rear half (outer layers cost more), fan-out vias
 # are free layer changes, shortest first
