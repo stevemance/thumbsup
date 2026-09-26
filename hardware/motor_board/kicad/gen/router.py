@@ -435,7 +435,9 @@ if os.environ.get("RRR", "1") == "1":
         if not res["ok"] and res["tag"] not in done:
             final_fail[res["tag"]] = k
     won = 0
-    for tag, kf in final_fail.items():
+    for tag, kf in list(final_fail.items()) * int(os.environ.get("RRR_PASSES", "2")):
+        if tag in done:
+            continue
         freq = results[kf]["_req"]
         if "fixed" in freq:
             continue
@@ -445,7 +447,7 @@ if os.environ.get("RRR", "1") == "1":
         if probe is None:
             continue
         blockers = [k for k in soft if clash(probe, results[k])]
-        if not blockers or len(blockers) > 4:
+        if not blockers or len(blockers) > int(os.environ.get("RRR_MAX", "6")):
             continue
         keep = [r_ for k, r_ in enumerate(results) if r_["ok"] and k not in blockers]
         rebuild(keep)
