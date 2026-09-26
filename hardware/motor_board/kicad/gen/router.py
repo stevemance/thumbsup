@@ -162,6 +162,8 @@ def route(req):
     layers = req.get("layers", RL)
     lcost = req.get("layer_cost", {})
     via_cost = req.get("via_cost", 1.5)
+    tol = req.get("tol", MARGIN)          # extra clearance over the rules (rasterisation allowance); lower next to
+                                          # hand-placed lanes that sit at exactly the minimum pitch
     starts, pa = endpoint(req["a"])
     drop = req["b"][0] == "drop"             # ("drop",): end at the nearest legal via spot (e.g. a GND pad to the plane)
     goals, pb = ([], pa) if drop else endpoint(req["b"])
@@ -180,10 +182,10 @@ def route(req):
         dist, idx = ndimage.distance_transform_edt(~other, sampling=RES, return_indices=True)
         near = o[idx[0], idx[1]]
         cn = np.where(near >= 0, CLR[np.clip(near, 0, len(CLR) - 1)], 0.15)
-        need_t = w / 2 + np.maximum(clr, cn) + MARGIN
-        need_v = vd / 2 + np.maximum(clr, cn) + MARGIN
+        need_t = w / 2 + np.maximum(clr, cn) + tol
+        need_v = vd / 2 + np.maximum(clr, cn) + tol
         sl = (slice(i0 - gi0, i1 - gi0), slice(j0 - gj0, j1 - gj0))
-        ok_t = (dist[sl] >= need_t[sl]) & (nt_dist[l][i0:i1, j0:j1] >= w / 2 + MARGIN) & (edge_dist[i0:i1, j0:j1] >= w / 2 + EDGE_CLR)
+        ok_t = (dist[sl] >= need_t[sl]) & (nt_dist[l][i0:i1, j0:j1] >= w / 2 + tol) & (edge_dist[i0:i1, j0:j1] >= w / 2 + EDGE_CLR)
         free_t[l] = ok_t if l in layers else np.zeros_like(ok_t)
         s = smd[l][i0:i1, j0:j1]
         sd = ndimage.distance_transform_edt(s < 0, sampling=RES)

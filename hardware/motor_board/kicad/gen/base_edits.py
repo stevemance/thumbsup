@@ -55,9 +55,24 @@ PADPOS["C28"] = ((52.1, 29.05), (52.1, 30.6))
 # (VM pad nearest the pins, GND pad clear of MH4's washer keep-out), reached by one via from C403's VM pad
 FLIP = {"C400", "C406"}
 PADPOS["C400"] = ((68.9, 29.9), (68.9, 31.45))
+# Current-sense filters of the right drive: R80/R81 (CSA A/B) were on the bottom west of U1, the wrong side of U1 for
+# both their input (from U4) and their output (U1.34/35, C90/C91 at U1's rear edge).  They go up to the top at U4's
+# lower-left corner, in line from its SOA/SOB pins, so the filtered nets ride the east bus straight to their caps;
+# C90/C91 swap places so the bus's two outer lanes drop into them without crossing (U1.35 -> C91 west, U1.34 -> C90
+# east).  R82 (CSA C) goes up over U1's right column beside U1.25, its output pin.
+PADPOS["R81"] = ((62.55, 28.17), (62.55, 29.19))
+PADPOS["R80"] = ((63.62, 28.17), (63.62, 29.19))
+PADPOS["R82"] = ((41.7, 25.09), (41.7, 26.11))
+PADPOS["C91"] = ((38.77, 33.4), (39.73, 33.4))
+PADPOS["C90"] = ((40.77, 33.4), (41.73, 33.4))
+TO_TOP = {"R80", "R81", "R82"}
 DROP_VIAS = [("GND", 55.4, 15.9), ("GND", 45.5, 16.7), ("GND", 46.7, 16.5),   # channels for GLB / SNC's lane
              ("VBAT", 68.15, 13.05), ("GND", 67.9, 15.9),                      # and for GHA/SHA through cell A
              ("GND", 33.905, 22.0), ("GND", 36.155, 22.0)]    # old TP12/TP5 GND vias, stranded in U1's fan-out field
+DROP_VIAS += [("GND", 40.74, 30.4), ("GND", 40.85, 31.89)]   # in the east bus's south rows under U1
+DROP_VIAS += [("GND", 38.68, 34.1875), ("GND", 28.75, 32.6), ("GND", 28.75, 33.3)]   # C91's lane via; the SCK row
+DROP_VIAS += [("GND", 59.05, 20.13), ("GND", 61.15, 30.11), ("GND", 69.72, 26.9), ("GND", 58.83, 29.16), ("GND", 58.35, 30.8),
+              ("GND", 59.05, 29.82)]   # passive GND vias in the east bus lanes (re-dropped at close-out)
 DROP_VIAS += [("GND", 61.85, 23.145), ("GND", 62.225, 26.5)]   # C406/R21 GND vias in U4's left escape
 DROP_VIAS += [("GND", 46.7, 17.9), ("GND", 46.03, 19.195), ("GND", 37.225, 19.03)]  # + a cap GND via over U1 pin 12 (W_SOA exit)   # room for SNC's stair via and W_SOB's via (U2 front-left)
 DROP_VIAS += [("GND", 18.555, 29.25), ("GND", 18.555, 30.75), ("GND", 70.945, 23.75), ("GND", 70.945, 25.25)]  # U3/U4 GND pins 15/18: tied to the EP instead (the motor-output lanes run there)
@@ -85,6 +100,8 @@ for f in b.GetFootprints():
 for f in b.GetFootprints():
     if f.GetReference() in PADPOS:
         if f.GetReference() in FLIP and not f.IsFlipped():
+            f.Flip(f.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
+        if f.GetReference() in TO_TOP and f.IsFlipped():
             f.Flip(f.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
         (x1, y1), (x2, y2) = PADPOS[f.GetReference()]
         f.SetOrientationDegrees(0)

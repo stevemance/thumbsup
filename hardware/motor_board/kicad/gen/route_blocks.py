@@ -188,7 +188,15 @@ def pp(tag, net, a, b, **kw):
 
 
 # charge pump: pins 5/4/3 fan out as parallel 0.2 lanes (0.5 pitch kept through the 45-degree jog under C24)
-CP = [trk("/weapon/BUCK_CB", F, [(54.25, 26.9), (54.25, 27.05), (53.85, 27.45), (53.85, 28.85), (53.65, 29.05),
+CP = [trk("VBAT", F, [(55.75, 26.6), (55.75, 27.0), (56.5, 27.75), (57.5, 27.75)], 0.2),      # VIN: pin 47 -> C27
+      trk("/weapon/BUCK_EN", F, [(56.25, 26.6), (56.25, 27.0), (56.5, 27.25), (59.3, 27.25), (59.7, 27.6)], 0.15),  # EN
+      trk("VBAT", F, [(60.0, 29.6), (60.0, 30.6), (60.7, 31.3), (61.1, 31.3)], 0.25),     # R4 top -> R402's VBAT pad
+      trk("/weapon/BUCK_EN", F, [(60.3, 27.72), (61.4, 27.72)], 0.15),                    # R4 -> C10
+      trk("/weapon/BUCK_EN", F, [(59.6, 28.1), (59.12, 28.58), (59.12, 30.6), (58.92, 30.8), (57.6, 30.8),
+                                 (57.49, 31.2)], 0.15),                                       # R4 -> R5, down the C27/R4 gap
+      trk("/weapon/BUCK_FB", F, [(57.2, 25.75), (57.55, 25.75), (58.19, 26.4)], 0.15),       # FB pin -> R20
+      trk("/weapon/BUCK_FB", F, [(58.19, 26.4), (58.19, 26.0), (60.19, 26.0), (60.19, 26.4)], 0.15),  # R20 -> R21, north
+      trk("/weapon/BUCK_CB", F, [(54.25, 26.9), (54.25, 27.05), (53.85, 27.45), (53.85, 28.85), (53.65, 29.05),
                                   (52.5, 29.05)], 0.15),       # bootstrap: down west of D2, into C28 below U2's rear escape band
       trk("+3V3", F, [(50.06, 20.835), (48.85, 20.835)], 0.15),     # VREF: straight, between W_SOA and pin 27   # VREF: pin 26 -> C23
       trk("/weapon/U2_VCP", F, [(57.2, 23.75), (57.7, 23.75), (57.95, 24.0), (60.45, 24.0), (60.45, 23.4)], 0.2),
@@ -199,7 +207,6 @@ b2 = [
     pp("SW U2-D2", "/weapon/BUCK_SW", "U2.45", "D2.1", w=0.3, layers=[F]),        # 0.3: leaves a 0.5-pitch pin
     pp("SW D2-L1", "/weapon/BUCK_SW", "D2.1", "L1.1", w=0.6, layers=[F]),
     pp("SW C28", "/weapon/BUCK_SW", "C28.2", "D2.1", w=0.4, layers=[F]),
-    pp("VIN C27", "VBAT", "C27.1", "U2.47", w=0.3, layers=[F]),
     pp("VM C24", "VBAT", "C24.1", "U2.6", w=0.4, layers=[F]),
     pp("VM 6-7", "VBAT", "U2.6", "U2.7", w=0.25, layers=[F]),
     pp("VCP cap VM", "VBAT", "C21.2", "C24.1", w=0.3),
@@ -207,12 +214,6 @@ b2 = [
     pp("MODE", "/weapon/U2_MODE", "R44.1", "U2.29"),
     pp("IDRIVE", "/weapon/U2_IDRIVE", "R45.1", "U2.30"),
     pp("VDS", "/weapon/U2_VDS", "R46.1", "U2.31"),
-    pp("FB", "/weapon/BUCK_FB", "U2.1", "R20.2"),
-    pp("FB R21", "/weapon/BUCK_FB", "R20.2", "R21.1"),
-    pp("EN", "/weapon/BUCK_EN", "U2.48", "R4.2"),
-    pp("EN C10", "/weapon/BUCK_EN", "C10.1", "R4.2"),
-    pp("EN R5", "/weapon/BUCK_EN", "R4.2", "R5.1", margin=4.0),
-    pp("EN top", "VBAT", "R4.1", "C27.1", w=0.25),
 ]
 BLOCKS["2 U2 local"] = b2
 
@@ -223,7 +224,7 @@ BLOCKS["2 U2 local"] = b2
 # depths step through 0.45/1.15/1.85/2.55 mm past the pad end so neighbouring vias never touch (at 0.5 pitch a
 # neighbour's via can never reach a stub: 0.2 + 0.075 + 0.15 < 0.5).  The vias then carry the pin on L3 (or F).
 # Pins whose only partners are bottom-side parts within 3 mm stay on the bottom (hooked up outward later).
-def u1_fanout():
+def u1_fanout(skip=()):
     here = __import__("pathlib").Path(__file__).resolve().parent
     sys.path.insert(0, str(here))
     from geo import Space
@@ -238,6 +239,8 @@ def u1_fanout():
     order = sorted(u1, key=lambda p: -max(abs(p["c"][0] - 35.5), abs(p["c"][1] - 26.0)) - 0.001 * min(
         abs(p["c"][0] - 35.5), abs(p["c"][1] - 26.0)))
     for p in order:
+        if p["num"] in skip:
+            continue
         x0_, y0_, x1_, y1_ = p["box"]
         cx, cy = p["c"]
         net = p["net"]
@@ -278,7 +281,7 @@ def u1_fanout():
     return [dict(tag=tag, fixed=dict(tracks=tracks, vias=vias))]
 
 
-BLOCKS["5 U1 fan-out"] = u1_fanout()
+BLOCKS["5 U1 fan-out"] = u1_fanout(skip=("57", "47"))   # nCS: via placed with the east bus's west end (8b); GND 47: its via sat in nCS's J2 gap (block 4 re-drops it)
 
 
 # ---------------------------------------------------------------- auto blocks: frozen pair lists (make_pairs.py)
@@ -346,9 +349,9 @@ def drive_caps():
             if side == "R":
                 c = (round(89.5 - c[0], 3), round(54.5 - c[1], 3))
             vi.append(via(net, c))
-    tr += [trk("/drive_right/R_VM", F, [(69.15, 28.45), (68.9, 28.7), (68.9, 29.4)], 0.4),      # C403 VM -> C400 (bottom)
-           trk("/drive_right/R_VM", B, [(68.9, 29.4), (68.9, 29.9)], 0.4)]
-    vi.append(via("/drive_right/R_VM", (68.9, 29.4), 0.45, 0.25))
+    tr += [trk("/drive_right/R_VM", F, [(69.15, 28.45), (68.9, 28.9), (68.3, 29.5), (68.3, 29.9)], 0.4),  # C403 VM -> C400
+           trk("/drive_right/R_VM", B, [(68.3, 29.9), (68.9, 29.9)], 0.4)]                              # (bottom), via clear
+    vi.append(via("/drive_right/R_VM", (68.3, 29.9), 0.45, 0.25))                                      # of the DRV_OFF lane
     return [dict(tag="U3/U4 charge pump + VM caps (fixed)", fixed=dict(tracks=tr, vias=vi))]
 
 
@@ -394,7 +397,8 @@ def vm_trunks():
     tr = [trk("/drive_left/L_VM", F, [(16.8, 21.8), (18.3, 23.3), (18.3, 25.9)], 0.7),
           trk("/drive_left/L_VM", F, [(17.0, 21.5), (vl[0] - 0.7, 21.5), vl], 0.6),
           trk("/drive_left/L_VM", B, [vl, (21.3, 22.1)], 0.6),
-          trk("/drive_right/R_VM", F, [(67.2, 31.5), (68.9, 29.8), (68.9, 29.4)], 0.7)]
+          trk("/drive_right/R_VM", F, [(67.2, 31.5), (68.3, 30.4), (68.3, 29.9)], 0.7),
+          trk("/drive_right/R_VM", B, [(62.5, 31.4), (62.5, 31.93), (66.3, 31.93), (66.8, 32.43), (67.0, 32.6)], 0.3)]   # C408 -> C402
     vi = [via("/drive_left/L_VM", vl, 0.6, 0.3), via("/drive_right/R_VM", vr, 0.6, 0.3)]
     return [dict(tag="VM trunks (fixed)", fixed=dict(tracks=tr, vias=vi))]
 
@@ -484,8 +488,8 @@ def u4_escape():
     vi += [via("R_INHA", (66.5, 21.3)), via("DRV_OFF", (69.5, 21.3))]
     for x in (63.75, 64.75, 65.75):
         tr.append(trk("+3V3", F, [(x, 22.1), (x, 20.55)], 0.2))
-        vi.append(via("+3V3", (x, 20.55)))
-    tr.append(trk("+3V3", B, [(63.75, 20.55), (65.75, 20.55)], 0.3))
+    tr.append(trk("+3V3", F, [(63.75, 20.55), (65.75, 20.55)], 0.3))      # tie bar on top, one via at its east end
+    vi.append(via("+3V3", (65.75, 20.55)))
     A = "/drive_right/R_AVDD"
     tr += [trk(A, F, [(67.25, 22.1), (67.25, 20.45)], 0.25),
            trk("R_nFAULT", F, [(68.75, 22.1), (68.75, 20.0)], 0.15),
@@ -495,11 +499,14 @@ def u4_escape():
            trk(A, F, [(63.1, 24.75), (61.2, 24.75), (61.2, 20.2), (61.5, 19.9), (66.6, 19.9), (66.6, 20.45)], 0.2)]
     vi += [via("R_nFAULT", (68.75, 20.8)), via(A, (66.6, 20.45))]
     left = {33: ("SPI_MISO", 62.55), 34: ("SPI_MOSI", 62.0), 35: ("SPI_SCK", 62.55), 36: ("R_nCS", 62.0),
-            38: ("R_SOC", 62.0), 39: ("R_SOB", 62.55), 40: ("R_SOA", 62.0)}
+            38: ("R_SOC", 62.0)}
     for pin, (net, x) in left.items():
         y = 22.75 + 0.5 * (pin - 33)
         tr.append(trk(net, F, [(63.1, y), (x, y)], 0.15))
         vi.append(via(net, (x, y)))
+    # SOB (39) outside SOA (40): down the left of U4's corner into R81 / R80 standing below it
+    tr += [trk("R_SOB", F, [(63.1, 25.75), (62.55, 25.75), (62.3, 26.0), (62.3, 27.92), (62.55, 28.17)], 0.15),
+           trk("R_SOA", F, [(63.1, 26.25), (62.85, 26.5), (62.85, 27.55), (63.2, 27.9), (63.35, 27.9), (63.62, 28.17)], 0.15)]
     return [dict(tag="U4 escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
 
 
@@ -521,6 +528,145 @@ def u2_rear_escape():
 
 
 BLOCKS["7d U2 rear escape"] = u2_rear_escape()
+
+
+# ---------------------------------------------------------------- block 8: east bus (L3), planned lanes
+# Behind U2 (x 44 east) twelve 0.15 lanes at 0.3 pitch, y 27.8-31.1.  North: the U4-front group (DRV_OFF, nFAULT, INHA,
+# INHB, INHC), whose ends at U1 are its top row / right column; south: the U4-left group (MISO, MOSI, SCK, nCS, SOC,
+# SOB, SOA), whose west ends go round U1's south side.  At the east end, in order, so nothing crosses:
+#   U4-front: north in columns x 58.45-59.65 (just east of U2 and phase A's vias), east in rows y 18.65-19.85 (just
+#   behind the VBAT feed's rear edge), then down into U4's front-row vias between the +3V3 vias (INHA at 0.127 to pass
+#   the +3V3 / AVDD vias).
+#   U4-left: on east, north in columns x 60.0-61.8, east in rows at the via heights into U4's left via columns.
+EAST_X0 = 44.0
+EAST_FRONT = [("DRV_OFF", (69.5, 21.3)), ("R_nFAULT", (68.75, 20.8)), ("R_INHB", (65.25, 21.25)),
+              ("R_INHA", (66.5, 21.3)), ("R_INHC", (64.25, 21.25))]
+EAST_FRONT_ROW = {"DRV_OFF": 18.65, "R_nFAULT": 18.95, "R_INHB": 19.4, "R_INHA": 19.9, "R_INHC": 20.25}
+EAST_LEFT = [("SPI_MISO", 22.95, (62.55, 22.75)), ("SPI_MOSI", 23.25, (62.0, 23.25)), ("SPI_SCK", 23.75, (62.55, 23.75)),
+             ("R_nCS", 24.25, (62.0, 24.25))]
+SOB_F, SOA_F = "/mcu/R_SOB_F", "/mcu/R_SOA_F"
+EAST_CSA = [(SOB_F, (62.55, 29.19), (62.55, 29.8)), (SOA_F, (63.62, 29.19), (63.62, 29.8))]   # R81 / R80 pad 2, via near
+
+
+def east_lane_y():
+    ys = {}
+    for k, (net, _) in enumerate(EAST_FRONT):
+        ys[net] = 27.8 + 0.3 * k
+    for k, (net, _, _) in enumerate(EAST_LEFT):
+        ys[net] = 27.8 + 0.3 * (len(EAST_FRONT) + k)
+    for k, (net, _, _) in enumerate(EAST_CSA):
+        ys[net] = 27.8 + 0.3 * (len(EAST_FRONT) + len(EAST_LEFT) + k)
+    return {n: round(y, 3) for n, y in ys.items()}
+
+
+def east_bus():
+    ys = east_lane_y()
+    tr, vi = [], []
+    for k, (net, v) in enumerate(EAST_FRONT):
+        cx = round(58.45 + 0.3 * k, 3)
+        row = EAST_FRONT_ROW[net]                             # (clear of cell A's GND vias; room for INHB's hop via)
+        pts = [(EAST_X0, ys[net]), (cx, ys[net]), (cx, row)]
+        if net == "R_INHA":
+            tr.append(trk(net, L3, pts + [(66.17, row), (66.17, 20.9), v], 0.127))
+            continue
+        if net == "R_INHB":                                    # hop under INHA's row on the bottom, into its via
+            tr.append(trk(net, L3, pts + [(65.25, row)], 0.15))
+            tr.append(trk(net, B, [(65.25, row), v], 0.15))
+            vi.append(via(net, (65.25, row)))
+            continue
+        pts += [(v[0], row), v]
+        tr.append(trk(net, L3, pts, 0.15))
+    for k, (net, row_y, v) in enumerate(EAST_LEFT):
+        cx = round(60.0 + 0.3 * k, 3)
+        pts = [(EAST_X0, ys[net]), (cx, ys[net]), (cx, row_y)]
+        if net == "SPI_MISO":                                   # over the MOSI via to the MISO via
+            pts += [(61.5, row_y), (61.8, 22.65), (62.35, 22.65), v]
+        else:
+            pts += [v]
+        tr.append(trk(net, L3, pts, 0.15))
+    for net, pad, near in EAST_CSA:                             # outer lanes: straight on east, up into the via
+        v = pick_via(net, near)
+        tr.append(trk(net, F, [pad, v], 0.15))
+        tr.append(trk(net, L3, [(EAST_X0, ys[net]), (v[0], ys[net]), v], 0.15))
+        vi.append(via(net, v))
+    return [dict(tag="east bus lanes (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["8a east bus lanes"] = east_bus()
+
+# block 8b: the lanes' west ends, planned like the east end.
+#   North group (DRV_OFF, nFAULT, INHB): north in columns x 42.7 / 42.4 / 42.1 up U1's east side, west in rows y 20.5 /
+#   20.8 / 21.1 above U1's top-row vias (INHB innermost: it ends first, at x 36.0), down into their vias.
+#   INHA / INHC: into U1's field through the gap under its +3V3A vias (y 28.25 / 28.6); INHA up just inside the right
+#   via column to its via, INHC west past the north of the R_S3 via to its via.
+#   South group: south in columns x 41.9-43.4, west in rows under U1 (y 31.3-33.4).  The two CSA lanes are outermost and
+#   drop first, into vias beside their caps C90 / C91 at U1's rear edge.  MISO turns in first, north into U1's
+#   field to its fan-out via.  U1's west-side pins run the other way round (SCK south of MISO and MOSI, nCS north), so
+#   nCS -- the southmost row -- leaves on the top layer just behind U1's rear pins and runs north under J2's body,
+#   between two of its pins, to a via in the field that pin 57 reaches on the bottom; SCK and MOSI go on west and
+#   north in columns x 29.7 / 30.0 over U1's west pins and peel off west to vias beside pins 52 / 54 (where R80/R81
+#   used to be).
+EAST_SOUTH_ROW = {"SPI_MISO": 31.3, "SPI_MOSI": 32.05, "SPI_SCK": 32.35, "R_nCS": 32.8, SOB_F: 33.1, SOA_F: 33.4}
+
+
+def east_west_ends():
+    ys = east_lane_y()
+    tr, vi = [], []
+    x0 = EAST_X0
+    tr += [trk("DRV_OFF", L3, [(x0, ys["DRV_OFF"]), (42.7, ys["DRV_OFF"]), (42.7, 20.5), (29.45, 20.5), (29.45, 21.25)], 0.15),
+           trk("R_nFAULT", L3, [(x0, ys["R_nFAULT"]), (42.4, ys["R_nFAULT"]), (42.4, 20.8), (33.25, 20.8), (33.25, 21.55)], 0.15),
+           trk("R_INHB", L3, [(x0, ys["R_INHB"]), (42.1, ys["R_INHB"]), (42.1, 21.1), (36.0, 21.1), (36.0, 21.55)], 0.15),
+           trk("R_INHA", L3, [(x0, ys["R_INHA"]), (40.5, ys["R_INHA"]), (40.05, 28.25), (39.45, 28.25), (39.45, 26.7),
+                              (39.65, 26.5), (39.95, 26.5)], 0.15),
+           trk("R_INHC", L3, [(x0, ys["R_INHC"]), (40.35, ys["R_INHC"]), (39.95, 28.6), (38.2, 28.6), (37.85, 28.25),
+                              (35.95, 28.25), (35.75, 28.35)], 0.15)]
+    south = [n for n, _, _ in EAST_LEFT] + [n for n, _, _ in EAST_CSA]
+    head = {}
+    for k, net in enumerate(south):                     # lane -> column south -> row west (to its first bend)
+        cx = round(41.9 + 0.3 * k, 3)
+        head[net] = [(x0, ys[net]), (cx, ys[net]), (cx, EAST_SOUTH_ROW[net])]
+    row = EAST_SOUTH_ROW
+    # CSA lanes: down beside their caps, bottom stubs up into the caps' pads; U1.34/35 down into the same pads
+    vA = pick_via(SOA_F, (40.77, 34.15))
+    vB = pick_via(SOB_F, (38.6, 34.25))
+    tr += [trk(SOA_F, L3, head[SOA_F] + [(vA[0], row[SOA_F]), vA], 0.15), trk(SOA_F, B, [vA, (40.77, 33.4)], 0.15),
+           trk(SOB_F, L3, head[SOB_F] + [(vB[0], row[SOB_F]), vB], 0.15), trk(SOB_F, B, [vB, (38.77, 33.4)], 0.15),
+           trk(SOA_F, B, [(38.75, 31.68), (38.75, 32.77), (40.4, 32.77), (40.77, 33.14), (40.77, 33.4)], 0.15),
+           trk(SOB_F, B, [(38.25, 31.68), (38.25, 33.4), (38.77, 33.4)], 0.15)]
+    vi += [via(SOA_F, vA), via(SOB_F, vB)]
+    # MISO: north into the field between the W_EN / W_INHC vias, west to its fan-out via
+    tr.append(trk("SPI_MISO", L3, head["SPI_MISO"] + [(33.75, row["SPI_MISO"]), (33.75, 27.8), (33.45, 27.5),
+                                                      (31.4, 27.5)], 0.15))
+    # SCK / MOSI: columns over U1's west pins, west into vias beside pins 52 / 54
+    v_sck = pick_via("SPI_SCK", (28.25, 28.25))
+    v_mosi = pick_via("SPI_MOSI", (27.6, 27.2))
+    tr += [trk("SPI_SCK", L3, head["SPI_SCK"] + [(29.7, row["SPI_SCK"]), (29.7, v_sck[1]), v_sck], 0.15),
+           trk("SPI_SCK", B, [(29.82, 28.25), (v_sck[0] + 0.3, 28.25), v_sck], 0.15),
+           trk("SPI_MOSI", L3, head["SPI_MOSI"] + [(30.0, row["SPI_MOSI"]), (30.0, v_mosi[1]), v_mosi], 0.15),
+           trk("SPI_MOSI", B, [(29.82, 27.25), (v_mosi[0] + 0.3, 27.25), v_mosi], 0.15)]
+    vi += [via("SPI_SCK", v_sck), via("SPI_MOSI", v_mosi)]
+    # nCS: up to the top just behind U1's rear pins (between caps C62 / C80), north under J2's body through the gap
+    # between its pins 2 and 3 to a via just past them; pin 57 reaches it on the bottom, round the inside of its
+    # neighbours' fan-out vias
+    h1 = (33.75, row["R_nCS"])
+    v_ncs = pick_via("R_nCS", (32.45, 28.7))
+    tr += [trk("R_nCS", L3, head["R_nCS"] + [h1], 0.15),
+           trk("R_nCS", F, [h1, (32.3, 31.35), (32.3, 28.85), v_ncs], 0.15),
+           trk("R_nCS", B, [(29.82, 25.75), (v_ncs[0], 25.75), v_ncs], 0.15)]
+    vi += [via("R_nCS", h1), via("R_nCS", v_ncs)]
+    reqs = [dict(tag="east bus west ends (fixed)", fixed=dict(tracks=tr, vias=vi))]
+    # CSA C: R_SOC from U4's via to R82 (over U1's right column), R82's output to U1.25 and its cap C92
+    q = dict(via_cost=1.0, margin=4.0, w=0.15)
+    reqs += [dict(tag="R_SOC U4 to R82", net="R_SOC", a=("via", 62.0, 25.25), b=("pad", "R82", "1"),
+                  layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 2.0}, **q),
+             dict(tag="R_SOC_F R82 to U1", net="/mcu/R_SOC_F", a=("pad", "R82", "2"), b=("pad", "U1", "25"),
+                  layers=[B, F], layer_cost={B: 1.0, F: 1.3}, **q),
+             dict(tag="R_SOC_F U1 to C92", net="/mcu/R_SOC_F", a=("pad", "U1", "25"), b=("pad", "C92", "1"),
+                  layers=[B, F], layer_cost={B: 1.0, F: 1.3}, **q)]
+    return reqs + [dict(r, retry=True, margin=8.0, via_cost=0.6) for r in reqs if "fixed" not in r]
+
+
+BLOCKS["8b east bus west ends"] = east_west_ends()
 
 # block 8: logic and rails, via to via: L3 is the main layer in the rear half (outer layers cost more), fan-out vias
 # are free layer changes, shortest first
