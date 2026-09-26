@@ -444,7 +444,8 @@ if os.environ.get("RRR", "1") == "1":
         soft = [k for k, r_ in enumerate(results) if r_["ok"] and r_["_req"].get("soft")]
         rebuild([r_ for k, r_ in enumerate(results) if r_["ok"] and k not in soft])
         probe = route(dict(freq, retry=False))
-        if probe is None and not os.environ.get("RRR_WHY"):
+        why_on = [w for w in os.environ.get("RRR_WHY", "").split(",") if w]
+        if probe is None and not any(w in tag for w in why_on):
             continue
         if probe is None:
             # (RRR_WHY=1, slow) blocked by protected copper: find which, by probing with only the base board and naming what the
