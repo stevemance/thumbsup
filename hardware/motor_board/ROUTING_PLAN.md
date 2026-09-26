@@ -56,6 +56,14 @@ routed, every long U1-hub net failed):
   U1's fan-out via row with U9 right behind it; J3's filters R114-R116 sit in a one-part band under the bus).
   None of these can simply move: a free-spot search finds no room near any of them on either side.
 
+Feasibility check (TRIAL=hard in route_blocks.py: the hub crossers alone, routed first, any layer, cheap vias):
+MB_TX/MB_RX, R_S3, INA_nCS and W_EN's U1 leg route (long, 1-4 vias); **no path exists** for the whole U2 rear
+group (W_INHA/B/C, W_INLA/B/C), U2's own W_EN / W_nFAULT pins (U2's west side is sealed on F and has no via
+spot), R_S1/R_S2, L_S3, W_INLA/B/C_M.  U2's region is enclosed: the bus south, its north group west, U4's
+columns east, the VBAT feed north.  So the board does not complete on 4 layers with this placement and pinout;
+it needs one of: two more layers, a re-placement of U6/U10 and the sensor clusters (needs board area), or
+MCU pin swaps (firmware).  Trials kept behind `TRIAL=` in route_blocks.py (west, nw, hard) for re-measuring.
+
 Tools added: `spot.py` (free spots for re-placing a part, on the routed board), router `avoid` boxes
 (reserve planned corridors in a router request).
 

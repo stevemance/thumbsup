@@ -711,6 +711,15 @@ if os.environ.get("TRIAL") == "1":         # measurement only: every remaining s
 # north of U1): local pairs only, shortest first, bottom then top.  The long legs (U2 <-> U6, U1's south pins -> U6,
 # INA_nCS, the west runs to J1/R33) are planned separately.
 BLOCKS["11a NW logic local"] = auto("b11a_nw_local", layers=[B, F], layer_cost={B: 1.0, F: 2.0}, via_cost=1.5)
+FIELD_L3 = ["In2.Cu", 30.9, 21.9, 39.8, 30.3]        # U1's L3 via field: kept for the nets that must cross U1
+if os.environ.get("TRIAL") == "west":
+    BLOCKS["10 trial west"] = auto("b10_west", first=() and (
+        "L_INHC", "L_nFAULT", "L_INHA", "/mcu/BOOT0", "L_INHB", "L_nCS", "SPI_SCK", "SPI_MOSI", "SPI_MISO",
+        "/mcu/SWDIO", "/mcu/SWCLK", "L_SOA", "L_SOB", "L_SOC", "/mcu/L_SOA_F", "/mcu/L_SOB_F"),
+        layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.2}, via_cost=1.0, avoid=[FIELD_L3])
+if os.environ.get("TRIAL") == "hard":       # feasibility: the U1 crossers alone, longest first, any layer
+    _h = auto("b12_hard", layers=[F, B, L3], layer_cost={F: 1.0, B: 1.0, L3: 1.0}, via_cost=0.8, margin=10.0)
+    BLOCKS["12 trial hard"] = sorted([r for r in _h if not r.get("retry")], key=lambda r: 0) + [r for r in _h if r.get("retry")]
 if os.environ.get("TRIAL") == "nw":
     BLOCKS["11 trial nw"] = auto("b11_nw", first=("INA_nCS", "W_INLB_M", "W_INLC_M", "W_INLA_M", "/mcu/VBAT_SNS",
                                                  "R_MTEMP", "W_ARM_S", "/mcu/NRST", "W_nFAULT", "DRV_OFF"),
