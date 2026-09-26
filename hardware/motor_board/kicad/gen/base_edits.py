@@ -200,6 +200,32 @@ if not [z for z in b.Zones() if not z.GetIsRuleArea() and z.GetLayer() == pcbnew
         ol.Append(p.x, p.y)
     b.Add(z)
     print("added the L5 GND plane")
+# outer-layer GND fills (close-out): the free area of F and B poured with GND at the lowest priority (every power pour
+# is priority 1 and wins), solid to SMD pads, islands removed; they reach the L2/L5 planes through the GND vias.
+# The router ignores them (they fill last, around whatever is routed).
+for lay, name in ((pcbnew.F_Cu, "F GND fill"), (pcbnew.B_Cu, "B GND fill")):
+    if [z for z in b.Zones() if z.GetZoneName() == name]:
+        continue
+    src = [z for z in b.Zones() if z.GetZoneName() == "L2 GND plane"][0]
+    z = pcbnew.ZONE(b)
+    z.SetLayer(lay)
+    z.SetNetCode(src.GetNetCode())
+    z.SetZoneName(name)
+    z.SetAssignedPriority(0)
+    z.SetLocalClearance(pcbnew.FromMM(0.2))
+    z.SetMinThickness(pcbnew.FromMM(0.2))
+    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+    z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+    so, ol = src.Outline(), z.Outline()
+    ol.NewOutline()
+    for i in range(so.Outline(0).PointCount()):
+        p = so.Outline(0).CPoint(i)
+        ol.Append(p.x, p.y)
+    b.Add(z)
+    print("added", name)
+for z in b.Zones():             # the pack's GND pours sit above the fill (same net, same priority would intersect)
+    if z.GetZoneName().startswith("pack: GND"):
+        z.SetAssignedPriority(1)
 for z in b.Zones():             # keep-outs that cover both old inner layers cover the new ones too
     if z.GetIsRuleArea():
         ls = z.GetLayerSet()

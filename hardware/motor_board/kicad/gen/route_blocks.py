@@ -862,8 +862,8 @@ def gnd_drops(name):
             if e[0] == "pad" and tuple(e) not in seen:
                 seen.add(tuple(e))
                 out.append(dict(tag=f"GND via {e[1]}.{e[2]}", net="GND", a=tuple(e), b=("drop",), w=0.3,
-                                via=0.45, drill=0.25, layers=[F, B], margin=1.5))
-    return out
+                                via=0.45, drill=0.25, layers=[F, B], margin=1.5, via_through_pours=True))
+    return out + [dict(r, retry=True, margin=3.0, w=0.2) for r in out]     # dense spots: look further, thinner stub
 
 
 BLOCKS["4 GND pad vias"] = gnd_drops("b4_gnd")
