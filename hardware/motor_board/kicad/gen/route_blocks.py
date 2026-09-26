@@ -912,6 +912,9 @@ for _k, _v in BLOCKS.items():
         _order["12d NW leftovers"] = BLOCKS["12d NW leftovers"]
         _order["12e rest"] = auto("b12e_rest", layers=[B, F, L4, L3], layer_cost={B: 1.0, F: 1.2, L4: 1.0, L3: 1.6},
                                   via_cost=0.8, margin=8.0, via_through_pours=True)
+        _order["12f rails"] = auto("b13_rails", first=("+5V", "VBAT", "/drive_right/R_VM", "/drive_left/L_VM"),
+                                    layers=[B, F, L3, L4], layer_cost={B: 1.0, F: 1.0, L3: 1.2, L4: 1.2}, via_cost=1.0,
+                                    margin=6.0, via_through_pours=True)
 BLOCKS.clear()
 BLOCKS.update(_order)
 
