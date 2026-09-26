@@ -884,6 +884,10 @@ _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape
             "7g U1 pins 8/9 + U2 rear fan-out": _split_fixed("12b0 U2 rear bus"),
             "7h U1 pin 24 escape": _split_fixed("12b1 pad escapes"),
             # W_VA: U1 pin 18 straight east on the bottom under C92 (R_SOC_F's cap) to its filter cap C41
+            # U3's +3V3 pins 28/30/32 (between its INH pins): down between the INH escape vias, tied below them, one via
+            "7j U3 +3V3 tie": [dict(tag="U3 +3V3 tie (fixed)", fixed=dict(tracks=[
+                trk("+3V3", F, [(x, 32.4), (x, 33.95)], 0.15) for x in (23.75, 24.75, 25.75)] + [
+                trk("+3V3", F, [(23.75, 33.95), (26.35, 33.95)], 0.2)], vias=[via("+3V3", (26.35, 33.95))]))],
             "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
                 trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
                     0.15)], vias=[]))]}
@@ -917,6 +921,8 @@ for _k, _v in BLOCKS.items():
                                     margin=6.0, via_through_pours=True)
         _order["12g rails 0.2"] = auto("b13b_rails", layers=[B, F, L4, L3], layer_cost={B: 1.0, F: 1.0, L4: 1.1, L3: 1.3},
                                       via_cost=0.8, margin=8.0, via_through_pours=True, w=0.2)
+        _order["12h rails 0.15"] = auto("b13c_rails", layers=[B, F, L4, L3], layer_cost={B: 1.0, F: 1.0, L4: 1.0, L3: 1.2},
+                                       via_cost=0.5, margin=12.0, via_through_pours=True, w=0.15)
 BLOCKS.clear()
 BLOCKS.update(_order)
 
