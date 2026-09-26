@@ -470,7 +470,7 @@ def ic_fanout(ref, pairs_name, skip=("GND",), side_layer=None, depths=(0.5, 0.95
 
 # block 7: fan-out of the drive / gate ICs' logic pins (the buses then run via-to-via, mostly on L3)
 BLOCKS["7 IC fan-outs"] = ic_fanout("U2", "b7_open", skip=("GND", "W_SOA", "W_SOB", "W_SOC", "W_INHA", "W_INHB", "W_INHC",
-                                                         "/weapon/W_INLA", "/weapon/W_INLB", "/weapon/W_INLC")) + ic_fanout("U3", "b7_open")
+                                                         "/weapon/W_INLA", "/weapon/W_INLB", "/weapon/W_INLC")) + ic_fanout("U3", "b7_open", skip=("GND", "L_SOA", "L_SOB", "L_SOC", "/drive_left/L_AVDD"))   # (hand: 7n)
 
 
 # block 7c: U4's escape, planned by hand (the generic fan-out found spots for 5 of 16 pins).
@@ -898,6 +898,17 @@ _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape
                 trk("L_nFAULT", B, [(29.82, 24.25), (27.35, 24.25)], 0.15),
                 trk("L_INHA", B, [(29.82, 24.75), (28.72, 24.75)], 0.15)],
                 vias=[via("L_nFAULT", (27.35, 24.25)), via("L_INHA", (28.72, 24.75))]))],
+            # L_SOB: U3 pin 39 out east (C306 now on the bottom) and up past pin 40 to a via at U3's corner
+            # and L_SOC: pin 38's via right at its pad end, between C306's pads and pin 37's AVDD via
+            # U3's current-sense pins 40/39/38 and AVDD pin 37 by hand (the auto fan-out's spots drifted build to
+            # build): SOA north of pin 40, SOB out east and up to U3's corner, SOC at its pad end between C306's pads,
+            # AVDD straight into C306
+            "7n U3 right-column escape": [dict(tag="U3 right-column escape (fixed)", fixed=dict(tracks=[
+                trk("L_SOA", F, [(26.4, 28.25), (26.4, 27.3)], 0.15),
+                trk("L_SOB", F, [(26.4, 28.75), (27.05, 28.75), (27.05, 27.9)], 0.15),
+                trk("L_SOC", F, [(26.4, 29.25), (26.98, 29.22)], 0.15),
+                trk("/drive_left/L_AVDD", F, [(26.4, 29.75), (27.65, 29.73)], 0.25)],
+                vias=[via("L_SOA", (26.4, 27.3)), via("L_SOB", (27.05, 27.9)), via("L_SOC", (26.98, 29.22))]))],
             "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
                 trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
                     0.15)], vias=[]))]}

@@ -79,7 +79,8 @@ DROP_VIAS += [("GND", 59.05, 20.13), ("GND", 61.15, 30.11), ("GND", 69.72, 26.9)
 DROP_VIAS += [("GND", 61.85, 23.145), ("GND", 62.225, 26.5)]   # C406/R21 GND vias in U4's left escape
 DROP_VIAS += [("GND", 46.7, 17.9), ("GND", 46.03, 19.195), ("GND", 37.225, 19.03)]  # + a cap GND via over U1 pin 12 (W_SOA exit)   # room for SNC's stair via and W_SOB's via (U2 front-left)
 DROP_VIAS += [("GND", 18.555, 29.25), ("GND", 18.555, 30.75), ("GND", 70.945, 23.75), ("GND", 70.945, 25.25)]  # U3/U4 GND pins 15/18: tied to the EP instead (the motor-output lanes run there)
-DROP_VIAS += [("GND", 48.88, 24.75), ("GND", 43.31, 21.25)]   # + a GND via in the east bus north group's columns (moved east)   # U2 pin 34's outboard GND via (pins 34/35 are tied into the EP): W_EN's exit
+DROP_VIAS += [("GND", 48.88, 24.75), ("GND", 43.31, 21.25)]
+DROP_VIAS += [("GND", 27.2, 27.98)]   # C110's GND via: U3 pin 39 (L_SOB)'s escape via goes there   # + a GND via in the east bus north group's columns (moved east)   # U2 pin 34's outboard GND via (pins 34/35 are tied into the EP): W_EN's exit
 # (a dropped via's stub tracks go with it)
 L3_FEED = [(21.0, 1.5), (34.6, 1.5), (34.6, 6.0), (72.8, 6.0), (72.8, 18.2), (34.6, 18.2), (34.6, 20.8), (21.0, 20.8)]
 
