@@ -915,6 +915,8 @@ for _k, _v in BLOCKS.items():
         _order["12f rails"] = auto("b13_rails", first=("+5V", "VBAT", "/drive_right/R_VM", "/drive_left/L_VM"),
                                     layers=[B, F, L3, L4], layer_cost={B: 1.0, F: 1.0, L3: 1.2, L4: 1.2}, via_cost=1.0,
                                     margin=6.0, via_through_pours=True)
+        _order["12g rails 0.2"] = auto("b13b_rails", layers=[B, F, L4, L3], layer_cost={B: 1.0, F: 1.0, L4: 1.1, L3: 1.3},
+                                      via_cost=0.8, margin=8.0, via_through_pours=True, w=0.2)
 BLOCKS.clear()
 BLOCKS.update(_order)
 
