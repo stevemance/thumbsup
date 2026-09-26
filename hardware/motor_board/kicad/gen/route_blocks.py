@@ -596,7 +596,7 @@ def east_bus():
 BLOCKS["8a east bus lanes"] = east_bus()
 
 # block 8b: the lanes' west ends, planned like the east end.
-#   North group (DRV_OFF, nFAULT, INHB): north in columns x 42.7 / 42.4 / 42.1 up U1's east side, west in rows y 20.5 /
+#   North group (DRV_OFF, nFAULT, INHB): north in columns x 43.35 / 43.05 / 42.75 up U1's east side (clear of U1 pin 24's via), west in rows y 20.5 /
 #   20.8 / 21.1 above U1's top-row vias (INHB innermost: it ends first, at x 36.0), down into their vias.
 #   INHA / INHC: into U1's field through the gap under its +3V3A vias (y 28.25 / 28.6); INHA up just inside the right
 #   via column to its via, INHC west past the north of the R_S3 via to its via.
@@ -614,9 +614,9 @@ def east_west_ends():
     ys = east_lane_y()
     tr, vi = [], []
     x0 = EAST_X0
-    tr += [trk("DRV_OFF", L3, [(x0, ys["DRV_OFF"]), (42.7, ys["DRV_OFF"]), (42.7, 20.5), (29.45, 20.5), (29.45, 21.25)], 0.15),
-           trk("R_nFAULT", L3, [(x0, ys["R_nFAULT"]), (42.4, ys["R_nFAULT"]), (42.4, 20.8), (33.25, 20.8), (33.25, 21.55)], 0.15),
-           trk("R_INHB", L3, [(x0, ys["R_INHB"]), (42.1, ys["R_INHB"]), (42.1, 21.1), (36.0, 21.1), (36.0, 21.55)], 0.15),
+    tr += [trk("DRV_OFF", L3, [(x0, ys["DRV_OFF"]), (43.35, ys["DRV_OFF"]), (43.35, 20.5), (29.45, 20.5), (29.45, 21.25)], 0.15),
+           trk("R_nFAULT", L3, [(x0, ys["R_nFAULT"]), (43.05, ys["R_nFAULT"]), (43.05, 20.8), (33.25, 20.8), (33.25, 21.55)], 0.15),
+           trk("R_INHB", L3, [(x0, ys["R_INHB"]), (42.75, ys["R_INHB"]), (42.75, 21.1), (36.0, 21.1), (36.0, 21.55)], 0.15),
            trk("R_INHA", L3, [(x0, ys["R_INHA"]), (40.5, ys["R_INHA"]), (40.05, 28.25), (39.45, 28.25), (39.45, 26.7),
                               (39.65, 26.5), (39.95, 26.5)], 0.15),
            trk("R_INHC", L3, [(x0, ys["R_INHC"]), (40.35, ys["R_INHC"]), (39.95, 28.6), (38.2, 28.6), (37.85, 28.25),
@@ -659,11 +659,14 @@ def east_west_ends():
     # CSA C: R_SOC from U4's via to R82 (over U1's right column), R82's output to U1.25 and its cap C92
     q = dict(via_cost=1.0, margin=4.0, w=0.15)
     reqs += [dict(tag="R_SOC U4 to R82", net="R_SOC", a=("via", 62.0, 25.25), b=("pad", "R82", "1"),
-                  layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 2.0}, **q),
+                  layers=[B, F, L4], layer_cost={B: 1.0, F: 1.5, L4: 1.6}, avoid=[[B, 54.5, 25.9, 62.3, 31.0]], **q),
+             # (bottom, kept along the top of the channel under U2's rear: U10's outputs nest below it.  Not L4:
+             #  it would cross the U2 rear bus there -- the INL lanes start south of this line and end north of it)
              dict(tag="R_SOC_F R82 to U1", net="/mcu/R_SOC_F", a=("pad", "R82", "2"), b=("pad", "U1", "25"),
                   layers=[B, F], layer_cost={B: 1.0, F: 1.3}, **q),
-             dict(tag="R_SOC_F U1 to C92", net="/mcu/R_SOC_F", a=("pad", "U1", "25"), b=("pad", "C92", "1"),
-                  layers=[B, F], layer_cost={B: 1.0, F: 1.3}, **q)]
+             dict(tag="R_SOC_F R82 to C92", net="/mcu/R_SOC_F", a=("pad", "R82", "2"), b=("pad", "C92", "1"),
+                  layers=[L4, F, B], layer_cost={L4: 1.0, F: 1.3, B: 3.0}, avoid=[[B, 41.9, 23.2, 42.9, 26.7]], **q)]   # over L4: keeps U1's east edge
+                                                                                     # clear on the bottom (pin 24)
     return reqs + [dict(r, retry=True, margin=8.0, via_cost=0.6) for r in reqs if "fixed" not in r]
 
 
@@ -686,7 +689,9 @@ def u2_sense_escape():
           trk("W_SOA", F, [(49.8, 20.25), (49.6, 20.25), (49.4, 20.53), (47.6, 20.53)], 0.127)]
     tr.append(trk("W_SOA", B, [(37.25, 20.32), (37.25, 18.95)], 0.15))    # U1 pin 12 straight out to its via
     vi = [via("W_SOC", (51.25, 18.4)), via("W_SOB", (50.75, 18.7)), via("W_SOA", (37.25, 18.95))]
-    rt = dict(layers=[F, L3, B], layer_cost={L3: 1.0, F: 1.4, B: 1.4}, via_cost=1.0, margin=4.0, w=0.15)
+    rt = dict(layers=[F, L3, B], layer_cost={L3: 1.0, F: 1.4, B: 1.4}, via_cost=1.0, margin=4.0, w=0.15,
+              avoid=[["*", 46.3, 20.95, 50.0, 22.1], ["*", 47.8, 24.0, 50.0, 24.95],   # U2's W_nFAULT / W_EN exits (12a)
+                     ["*", 41.9, 25.1, 42.75, 26.1]])                                      # U1 pin 24's via (12b1)
     return [dict(tag="U2 sense escape (fixed)", fixed=dict(tracks=tr, vias=vi)),
             dict(tag="W_SOC to U1", net="W_SOC", a=("pt", 46.7, 18.5, L3), b=("via", 39.25, 30.45), **rt),
             dict(tag="W_SOB to U1", net="W_SOB", a=("pt", 47.2, 18.6, L3), b=("via", 37.5, 21.55), **rt),
@@ -711,14 +716,17 @@ if os.environ.get("TRIAL") == "1":         # measurement only: every remaining s
 # north of U1): local pairs only, shortest first, bottom then top.  The long legs (U2 <-> U6, U1's south pins -> U6,
 # INA_nCS, the west runs to J1/R33) are planned separately.
 BLOCKS["11a NW logic local"] = auto("b11a_nw_local", layers=[B, F], layer_cost={B: 1.0, F: 2.0}, via_cost=1.5)
+for _r in BLOCKS["11a NW logic local"]:      # R53 -> R117 (10 mm) on L4, not on top past TP7 / U2's W_EN exit
+    if _r["net"] == "R_MTEMP" and "R53-R117" in _r["tag"]:
+        _r.update(layers=[L4, B], layer_cost={L4: 1.0, B: 1.5}, via_cost=1.0)
 # block 12a: U2's west-side logic pins 28 (W_nFAULT) and 33 (W_EN), which the generic fan-out found no spot for:
 # straight west on top between the mode/IDRIVE/VDS resistors to a via each (the router takes them on from there).
 def u2_west_escape():
     # pin 28: the gap between C23 (bottom 21.41) and R44 (top 21.93) is centred on y 21.67, not on the pin
-    v28 = pick_via("W_nFAULT", (47.1, 21.67))
+    v28 = (47.15, 21.2)                                # fixed (a pick drifts with the router routes of block 7b)
     # pin 33: under the VDS trace (y 24.1), clear of pin 34's pad
-    v33 = pick_via("W_EN", (48.3, 24.55))
-    tr = [trk("W_nFAULT", F, [(50.0625, 21.75), (49.7, 21.67), (v28[0], 21.67), v28], 0.15),
+    v33 = (48.3, 24.55)
+    tr = [trk("W_nFAULT", F, [(50.0625, 21.75), (49.7, 21.67), (v28[0] + 0.35, 21.67), v28], 0.15),
           trk("W_EN", F, [(50.0625, 24.25), (49.55, 24.25), (49.35, 24.45), (v33[0], 24.45), v33], 0.15)]
     vi = [via("W_nFAULT", v28), via("W_EN", v33)]
     return [dict(tag="U2 west logic escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
@@ -773,7 +781,7 @@ def u2_rear_bus():
     # which is sealed on L4 by the fan-out via ring as on L3)
     # INHA's lane arrives north of INHB's: INHA's via further out (north of pin 8), INHB's just off pin 9
     v9 = (35.8, 19.3)
-    v8 = pick_via("W_INHA", (35.3, 18.6))
+    v8 = (35.3, 18.6)
     fx = [dict(tag="U1 pins 8/9 escape + U2 rear fan-out (fixed)",
                fixed=dict(tracks=[trk("W_INHB", B, [(35.75, 20.32), v9], 0.15),
                                   trk("W_INHA", B, [(35.25, 20.32), (35.25, 18.9), v8], 0.15)],
@@ -804,9 +812,21 @@ def u2_rear_bus():
 BLOCKS["12b0 U2 rear bus"] = u2_rear_bus()
 
 
+# block 12b1: pads with no reachable via beside them get a short outer-layer stub to the nearest legal via spot
+# ("drop"), so the hub routes can start on L4 from there: U10 pin 5 (R_S2, under the bus's east-end L3 columns),
+# U1 pin 24 (L_S3, east side, no fan-out spot), U9 pin 2 (L_S3, in the sensor island on top).
+ESCAPES = [("L_S3", ("pad", "U9", "2"), [F])]
+BLOCKS["12b1 pad escapes"] = [dict(tag="U1 pin 24 escape (fixed)", fixed=dict(   # between U1's pads and C66, under R82's pad gap
+    tracks=[trk("L_S3", B, [(41.175, 25.75), (42.1, 25.75), (42.32, 25.6)], 0.15)], vias=[via("L_S3", (42.32, 25.6))]))] + [
+    dict(tag=f"{n} {e[1]}.{e[2]} escape", net=n, a=e, b=("drop",), layers=ls, margin=4.0, w=0.15) for n, e, ls in ESCAPES]
+
+
 def hub_nets():
     here = __import__("pathlib").Path(__file__).resolve().parent
-    pairs = sorted(json.load(open(here / "pairs" / "b12_hub.json")), key=lambda p: -p["dist"])
+    # U10's two top-row outputs leave west along U10's south side, nested: R_S2 (westmost pin) outermost, first
+    first = os.environ.get("HUBFIRST", "R_S2,R_S1").split(",")
+    pairs = sorted(json.load(open(here / "pairs" / "b12_hub.json")),
+                   key=lambda p: (first.index(p["net"]) if p["net"] in first else len(first), -p["dist"]))
     pairs = [p for p in pairs if not (p["net"] in U2_REAR and (p["a"][1] == "U2" or p["b"][1] == "U2" or
                                                                 p["net"] == "W_INHC"))]
     q = dict(layers=[L4, B, F, L3], layer_cost={L4: 1.0, B: 1.4, F: 1.5, L3: 1.6}, via_cost=1.0, margin=4.0)
@@ -848,6 +868,35 @@ BLOCKS["4 GND pad vias"] = gnd_drops("b4_gnd")
 # survey (not kept): auto("b9_rest") over everything still open after block 3 routed ~165 of 272 pairs greedily,
 # failed ~110 (MCU fan-out, +3V3, weapon logic, drives) and left clearance errors: the greedy one-net-at-a-time
 # router has hit its limit in the dense logic areas; the rest needs planned blocks or rip-up-and-reroute.
+
+# Hand-placed escapes are reservations: they go in right after block 7d, ahead of every router block, so the router
+# routes around them instead of drifting into them from build to build (they used to be applied late, as block 12).
+def _split_fixed(name):
+    fx = [r for r in BLOCKS[name] if "fixed" in r]
+    BLOCKS[name] = [r for r in BLOCKS[name] if "fixed" not in r]
+    return fx
+
+
+_reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape": BLOCKS.pop("12a2 U6 escape"),
+            "7g U1 pins 8/9 + U2 rear fan-out": _split_fixed("12b0 U2 rear bus"),
+            "7h U1 pin 24 escape": _split_fixed("12b1 pad escapes")}
+_order = {}
+for _k, _v in BLOCKS.items():
+    _order[_k] = _v
+    if _k == "7d U2 rear escape":
+        _order.update(_reserve)
+BLOCKS.clear()
+BLOCKS.update(_order)
+# R_SOC (U4 -> R82 over U1's east side) crosses the U2 rear bus's INL lanes whatever it does: route it after them
+_soc = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") == "R_SOC"]
+BLOCKS["8b east bus west ends"] = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") != "R_SOC"]
+_order = {}
+for _k, _v in BLOCKS.items():
+    _order[_k] = _v
+    if _k == "12b hub nets":
+        _order["12c R_SOC"] = _soc
+BLOCKS.clear()
+BLOCKS.update(_order)
 
 if __name__ == "__main__":
     upto = sys.argv[2] if len(sys.argv) > 2 else None
