@@ -301,7 +301,8 @@ def auto(name, first=(), **kw):
             r["w"] = NARROW[p["net"]]
         out.append(r)
     for r in list(out):                       # retry pass for the failures: wider window, cheaper vias, L3 allowed
-        out.append(dict(r, retry=True, margin=7.0, via_cost=0.8, layers=[F, L3, B], layer_cost={F: 1.0, B: 1.2, L3: 1.5}))
+        out.append(dict(r, retry=True, margin=7.0, via_cost=0.8, layers=[F, L3, L4, B],
+                        layer_cost={F: 1.0, B: 1.2, L3: 1.5, L4: 1.2}))
     return out
 
 
@@ -830,7 +831,8 @@ def hub_nets():
                    key=lambda p: (first.index(p["net"]) if p["net"] in first else len(first), -p["dist"]))
     pairs = [p for p in pairs if not (p["net"] in U2_REAR and (p["a"][1] == "U2" or p["b"][1] == "U2" or
                                                                 p["net"] == "W_INHC"))]
-    q = dict(layers=[L4, B, F, L3], layer_cost={L4: 1.0, B: 1.4, F: 1.5, L3: 1.6}, via_cost=1.0, margin=4.0)
+    q = dict(layers=[L4, B, F, L3], layer_cost={L4: 1.0, B: 1.4, F: 1.5, L3: 1.6}, via_cost=1.0, margin=4.0,
+             via_through_pours=True)
     out = [dict(tag=f"{p['net']} {p['a'][1]}-{p['b'][1]}", net=p["net"], a=tuple(p["a"]), b=tuple(p["b"]), **q)
            for p in pairs]
     return out + [dict(r, retry=True, margin=10.0, via_cost=0.7) for r in out]
@@ -895,7 +897,8 @@ BLOCKS.update(_order)
 # block 12d: what the NW bottom-side block (11a) and the hub block left open north of the east bus, frozen after 12c;
 # L4 allowed now that the U2 rear bus has its lanes (R23/R25, the W_VA/W_VB divider bottoms west of U1, stay put:
 # their runs to the east side go on L4)
-BLOCKS["12d NW leftovers"] = auto("b12d_nw_left", layers=[B, F, L4], layer_cost={B: 1.0, F: 1.4, L4: 1.2}, via_cost=1.0)
+BLOCKS["12d NW leftovers"] = auto("b12d_nw_left", layers=[B, F, L4], layer_cost={B: 1.0, F: 1.4, L4: 1.2}, via_cost=1.0,
+                                 via_through_pours=True)    # hops to L4 through the VBAT pours (the pour clears)
 # R_SOC (U4 -> R82 over U1's east side) crosses the U2 rear bus's INL lanes whatever it does: route it after them
 _soc = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") == "R_SOC"]
 BLOCKS["8b east bus west ends"] = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") != "R_SOC"]

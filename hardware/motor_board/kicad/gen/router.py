@@ -30,6 +30,7 @@ NID = {n: i for i, n in enumerate(NETS)}
 CLR = np.array([G["nets"][n]["clr"] for n in NETS] + [0.15], float)     # last entry: keep-outs / no net
 
 owner = {l: np.full((NY, NX), -1, np.int32) for l in RL}
+zown = {l: np.full((NY, NX), -1, np.int32) for l in RL}          # pours: block other nets' tracks; vias only by request
 notrack = {l: np.zeros((NY, NX), bool) for l in RL}
 novia = np.zeros((NY, NX), bool)
 smd = {l: np.full((NY, NX), -1, np.int32) for l in RL}           # SMD pad copper (no via-in-pad, any net)
@@ -82,7 +83,7 @@ def draw_poly(arr, pts, val):
 # ---------------------------------------------------------------- build the model
 for z in G["zones"]:
     if z["layer"] in RL and z["net"]:
-        draw_poly(owner[z["layer"]], z["poly"], NID[z["net"]])
+        draw_poly(zown[z["layer"]], z["poly"], NID[z["net"]])
 for r in G["rules"]:
     for l in r["layers"]:
         if l in RL and (r["no_tracks"] or r["no_copper"]):
@@ -177,19 +178,28 @@ def route(req):
     gi0, gi1, gj0, gj1 = max(0, i0 - pad), min(NY, i1 + pad), max(0, j0 - pad), min(NX, j1 + pad)
     free_t, free_v = {}, np.ones((i1 - i0, j1 - j0), bool)
     for l in RL:
-        o = owner[l][gi0:gi1, gj0:gj1]
+        o0 = owner[l][gi0:gi1, gj0:gj1]
+        zo = zown[l][gi0:gi1, gj0:gj1]
+        o = np.where(o0 != -1, o0, zo)                      # copper incl. pours
         other = (o != -1) & (o != n)
         dist, idx = ndimage.distance_transform_edt(~other, sampling=RES, return_indices=True)
         near = o[idx[0], idx[1]]
+        if req.get("via_through_pours"):                    # a via of another net in a pour just gets a clearance hole
+            other_v = (o0 != -1) & (o0 != n)
+            dist_v, idx_v = ndimage.distance_transform_edt(~other_v, sampling=RES, return_indices=True)
+            near_v = o0[idx_v[0], idx_v[1]]
+        else:
+            dist_v, near_v = dist, near
         cn = np.where(near >= 0, CLR[np.clip(near, 0, len(CLR) - 1)], 0.15)
         need_t = w / 2 + np.maximum(clr, cn) + tol
-        need_v = vd / 2 + np.maximum(clr, cn) + tol
+        cn_v = np.where(near_v >= 0, CLR[np.clip(near_v, 0, len(CLR) - 1)], 0.15)
+        need_v = vd / 2 + np.maximum(clr, cn_v) + tol
         sl = (slice(i0 - gi0, i1 - gi0), slice(j0 - gj0, j1 - gj0))
         ok_t = (dist[sl] >= need_t[sl]) & (nt_dist[l][i0:i1, j0:j1] >= w / 2 + tol) & (edge_dist[i0:i1, j0:j1] >= w / 2 + EDGE_CLR)
         free_t[l] = ok_t if l in layers else np.zeros_like(ok_t)
         s = smd[l][i0:i1, j0:j1]
         sd = ndimage.distance_transform_edt(s < 0, sampling=RES)
-        free_v &= (dist[sl] >= need_v[sl]) & (sd >= vd / 2 + 0.05)
+        free_v &= (dist_v[sl] >= need_v[sl]) & (sd >= vd / 2 + 0.05)
     free_v &= ~novia[i0:i1, j0:j1] & (edge_dist[i0:i1, j0:j1] >= vd / 2 + EDGE_CLR)
     # reserved corridors: [layer or "*", x0, y0, x1, y1] boxes this request may not use (a via anywhere in a box on
     # any of its layers is refused too, since the barrel crosses every layer)
