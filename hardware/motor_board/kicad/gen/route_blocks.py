@@ -665,7 +665,8 @@ def east_west_ends():
              dict(tag="R_SOC_F R82 to U1", net="/mcu/R_SOC_F", a=("pad", "R82", "2"), b=("pad", "U1", "25"),
                   layers=[B, F], layer_cost={B: 1.0, F: 1.3}, **q),
              dict(tag="R_SOC_F R82 to C92", net="/mcu/R_SOC_F", a=("pad", "R82", "2"), b=("pad", "C92", "1"),
-                  layers=[L4, F, B], layer_cost={L4: 1.0, F: 1.3, B: 3.0}, avoid=[[B, 41.9, 23.2, 42.9, 26.7]], **q)]   # over L4: keeps U1's east edge
+                  layers=[L4, F, B], layer_cost={L4: 1.0, F: 1.3, B: 3.0},
+                  avoid=[[B, 41.9, 23.2, 42.9, 26.7], [B, 42.0, 22.6, 45.3, 23.2]], **q)]    # (+ W_VA's lane under C92)   # over L4: keeps U1's east edge
                                                                                      # clear on the bottom (pin 24)
     return reqs + [dict(r, retry=True, margin=8.0, via_cost=0.6) for r in reqs if "fixed" not in r]
 
@@ -879,7 +880,11 @@ def _split_fixed(name):
 
 _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape": BLOCKS.pop("12a2 U6 escape"),
             "7g U1 pins 8/9 + U2 rear fan-out": _split_fixed("12b0 U2 rear bus"),
-            "7h U1 pin 24 escape": _split_fixed("12b1 pad escapes")}
+            "7h U1 pin 24 escape": _split_fixed("12b1 pad escapes"),
+            # W_VA: U1 pin 18 straight east on the bottom under C92 (R_SOC_F's cap) to its filter cap C41
+            "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
+                trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
+                    0.15)], vias=[]))]}
 _order = {}
 for _k, _v in BLOCKS.items():
     _order[_k] = _v
@@ -887,14 +892,21 @@ for _k, _v in BLOCKS.items():
         _order.update(_reserve)
 BLOCKS.clear()
 BLOCKS.update(_order)
+# block 12d: what the NW bottom-side block (11a) and the hub block left open north of the east bus, frozen after 12c;
+# L4 allowed now that the U2 rear bus has its lanes (R23/R25, the W_VA/W_VB divider bottoms west of U1, stay put:
+# their runs to the east side go on L4)
+BLOCKS["12d NW leftovers"] = auto("b12d_nw_left", layers=[B, F, L4], layer_cost={B: 1.0, F: 1.4, L4: 1.2}, via_cost=1.0)
 # R_SOC (U4 -> R82 over U1's east side) crosses the U2 rear bus's INL lanes whatever it does: route it after them
 _soc = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") == "R_SOC"]
 BLOCKS["8b east bus west ends"] = [r for r in BLOCKS["8b east bus west ends"] if r.get("net") != "R_SOC"]
 _order = {}
 for _k, _v in BLOCKS.items():
+    if _k == "12d NW leftovers":
+        continue
     _order[_k] = _v
     if _k == "12b hub nets":
         _order["12c R_SOC"] = _soc
+        _order["12d NW leftovers"] = BLOCKS["12d NW leftovers"]
 BLOCKS.clear()
 BLOCKS.update(_order)
 
