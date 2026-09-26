@@ -10,7 +10,8 @@ b = pcbnew.LoadBoard(pcb)
 t = pcbnew.ToMM
 bb = b.GetBoardEdgesBoundingBox()
 OX, OY = t(bb.GetLeft()) + 0.05, t(bb.GetTop()) + 0.05
-LAYERS = {pcbnew.F_Cu: "F.Cu", pcbnew.In1_Cu: "In1.Cu", pcbnew.In2_Cu: "In2.Cu", pcbnew.B_Cu: "B.Cu"}
+LAYERS = {pcbnew.F_Cu: "F.Cu", pcbnew.In1_Cu: "In1.Cu", pcbnew.In2_Cu: "In2.Cu", pcbnew.In3_Cu: "In3.Cu",
+          pcbnew.In4_Cu: "In4.Cu", pcbnew.B_Cu: "B.Cu"}
 
 
 def xy(p):

@@ -164,5 +164,78 @@ for t in b.GetTracks():
                 break
 for v in drop:                  # remove after the walk (removing while iterating the board's list crashes pcbnew)
     b.Remove(v)
+# ---------------------------------------------------------------- 6 layers (2026-09-25: the 4-layer board does not
+# complete -- U2's region and U1's via field are enclosed on L3).  F / L2 GND / L3 (VBAT feed + planned lanes, as
+# before) / L4 signals (new) / L5 GND (new, the return plane for L4 and the bottom) / B.  Everything routed so far
+# keeps its layer.
+b.SetCopperLayerCount(6)
+b.SetLayerName(pcbnew.In3_Cu, "L4.SIG")
+b.SetLayerName(pcbnew.In4_Cu, "L5.GND")
+if not [z for z in b.Zones() if not z.GetIsRuleArea() and z.GetLayer() == pcbnew.In4_Cu]:
+    src = [z for z in b.Zones() if z.GetZoneName() == "L2 GND plane"][0]
+    z = pcbnew.ZONE(b)
+    z.SetLayer(pcbnew.In4_Cu)
+    z.SetNetCode(src.GetNetCode())
+    z.SetZoneName("L5 GND plane")
+    z.SetAssignedPriority(src.GetAssignedPriority())
+    z.SetLocalClearance(src.GetLocalClearance())
+    z.SetMinThickness(src.GetMinThickness())
+    z.SetPadConnection(src.GetPadConnection())
+    z.SetThermalReliefGap(src.GetThermalReliefGap())
+    z.SetThermalReliefSpokeWidth(src.GetThermalReliefSpokeWidth())
+    so, ol = src.Outline(), z.Outline()
+    ol.NewOutline()
+    for i in range(so.OutlineCount() and so.Outline(0).PointCount()):
+        p = so.Outline(0).CPoint(i)
+        ol.Append(p.x, p.y)
+    b.Add(z)
+    print("added the L5 GND plane")
+for z in b.Zones():             # keep-outs that cover both old inner layers cover the new ones too
+    if z.GetIsRuleArea():
+        ls = z.GetLayerSet()
+        if ls.Contains(pcbnew.In1_Cu) and ls.Contains(pcbnew.In2_Cu) and not ls.Contains(pcbnew.In3_Cu):
+            ls.addLayer(pcbnew.In3_Cu)
+            ls.addLayer(pcbnew.In4_Cu)
+            z.SetLayerSet(ls)
+            print("keep-out on all inner layers:", z.GetZoneName())
 print("filling"); pcbnew.ZONE_FILLER(b).Fill(b.Zones()); print("saving")
 pcbnew.SaveBoard(str(BASE), b)
+
+# stack-up: 1.6 mm, 1 oz on every layer (the L3 VBAT feed carries weapon current: order 1 oz inner copper).
+# Dielectrics are nominal; match them to the fab's 6-layer stack at order time.
+STACKUP6 = '''		(stackup
+			(layer "F.SilkS" (type "Top Silk Screen"))
+			(layer "F.Paste" (type "Top Solder Paste"))
+			(layer "F.Mask" (type "Top Solder Mask") (thickness 0.01))
+			(layer "F.Cu" (type "copper") (thickness 0.035))
+			(layer "dielectric 1" (type "prepreg") (thickness 0.2) (material "FR4") (epsilon_r 4.4) (loss_tangent 0.02))
+			(layer "In1.Cu" (type "copper") (thickness 0.035))
+			(layer "dielectric 2" (type "core") (thickness 0.3) (material "FR4") (epsilon_r 4.6) (loss_tangent 0.02))
+			(layer "In2.Cu" (type "copper") (thickness 0.035))
+			(layer "dielectric 3" (type "prepreg") (thickness 0.37) (material "FR4") (epsilon_r 4.4) (loss_tangent 0.02))
+			(layer "In3.Cu" (type "copper") (thickness 0.035))
+			(layer "dielectric 4" (type "core") (thickness 0.3) (material "FR4") (epsilon_r 4.6) (loss_tangent 0.02))
+			(layer "In4.Cu" (type "copper") (thickness 0.035))
+			(layer "dielectric 5" (type "prepreg") (thickness 0.2) (material "FR4") (epsilon_r 4.4) (loss_tangent 0.02))
+			(layer "B.Cu" (type "copper") (thickness 0.035))
+			(layer "B.Mask" (type "Bottom Solder Mask") (thickness 0.01))
+			(layer "B.Paste" (type "Bottom Solder Paste"))
+			(layer "B.SilkS" (type "Bottom Silk Screen"))
+			(copper_finish "ENIG")
+			(dielectric_constraints no)
+		)
+'''
+txt = BASE.read_text()                  # (pcbnew keeps the old 4-layer stack-up block on save: replace it)
+k = txt.index("(stackup")
+i = txt.rfind("\n", 0, k) + 1
+depth = 0
+while True:                     # the matching close paren of the stackup block
+    c = txt[k]
+    depth += c == "("
+    depth -= c == ")"
+    k += 1
+    if depth == 0:
+        break
+k = txt.index("\n", k) + 1
+BASE.write_text(txt[:i] + STACKUP6 + txt[k:])
+print("stack-up: 6 layers")

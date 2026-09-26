@@ -3,7 +3,7 @@ block specs ask for, clear of every other net by the net classes' width + cleara
 
     uv run --no-project --with numpy --with scipy --with matplotlib python router.py geom.json blocks.json routes.json
 
-Model: 0.05 mm grid on the routing layers F.Cu, In2.Cu, B.Cu (In1 is the GND plane: vias pass, no tracks).  Each cell
+Model: 0.05 mm grid on the routing layers F.Cu, In2.Cu, In3.Cu, B.Cu (In1 and In4 are GND planes: vias pass, no tracks).  Each cell
 records the net whose copper covers it (pours as their outlines, then pads, tracks, vias on top).  A request routes one
 connection with A* (45-degree moves, per-layer costs, a via cost); the result becomes an obstacle for the next request.
 Pads are treated as their bounding boxes, so the router is slightly conservative next to round and rounded pads."""
@@ -19,7 +19,7 @@ from scipy import ndimage
 RES = 0.05
 MARGIN = 0.045              # rasterisation error allowance on every clearance
 EDGE_CLR = 0.3              # copper to board edge
-RL = ["F.Cu", "In2.Cu", "B.Cu"]
+RL = ["F.Cu", "In2.Cu", "In3.Cu", "B.Cu"]
 
 G = json.load(open(sys.argv[1]))
 REQ = json.load(open(sys.argv[2]))

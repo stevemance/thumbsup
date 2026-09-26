@@ -5,7 +5,7 @@ Coordinates: board-local mm (front-left corner, y toward the rear)."""
 import json
 import sys
 
-F, L3, B = "F.Cu", "In2.Cu", "B.Cu"
+F, L3, L4, B = "F.Cu", "In2.Cu", "In3.Cu", "B.Cu"      # L2 (In1) and L5 (In4) are GND planes
 DEFINED = []                    # request tags of the blocks defined so far, in order
 
 

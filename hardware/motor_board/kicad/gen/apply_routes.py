@@ -9,7 +9,7 @@ b = pcbnew.LoadBoard(src)
 t, F = pcbnew.ToMM, pcbnew.FromMM
 bb = b.GetBoardEdgesBoundingBox()
 OX, OY = t(bb.GetLeft()) + 0.05, t(bb.GetTop()) + 0.05
-LAY = {"F.Cu": pcbnew.F_Cu, "In2.Cu": pcbnew.In2_Cu, "B.Cu": pcbnew.B_Cu}
+LAY = {"F.Cu": pcbnew.F_Cu, "In2.Cu": pcbnew.In2_Cu, "In3.Cu": pcbnew.In3_Cu, "B.Cu": pcbnew.B_Cu}
 nets = {str(k): v for k, v in b.GetNetsByName().items()}
 nt = nv = 0
 for r in json.load(open(routes)):

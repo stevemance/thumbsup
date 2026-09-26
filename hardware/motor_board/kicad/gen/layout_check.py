@@ -152,14 +152,15 @@ say(f"  {len(todo)}: {' '.join(sorted(todo))}")
 # ---------------------------------------------------------------- renders
 if "--no-render" not in sys.argv:
     sets = {"L1_top": "F.Cu,F.SilkS,Edge.Cuts", "L2_gnd": "In1.Cu,Edge.Cuts", "L3_pwr": "In2.Cu,Edge.Cuts",
-            "L4_bottom": "B.Cu,B.SilkS,Edge.Cuts"}
+            "L4_sig": "In3.Cu,Edge.Cuts", "L5_gnd": "In4.Cu,Edge.Cuts",
+            "L6_bottom": "B.Cu,B.SilkS,Edge.Cuts"}
     for name, layers in sets.items():
         args = ["kicad-cli", "pcb", "export", "svg", "--layers", layers, "--mode-single", "--fit-page-to-board",
                 "--exclude-drawing-sheet", "-o", str(OUT / f"{name}.svg"), str(PCB)]
-        if name == "L4_bottom":
+        if name == "L6_bottom":
             args.insert(-2, "--mirror")
         subprocess.run(args, capture_output=True)
     code = ("import cairosvg,sys\nfor s in sys.argv[1:]:\n cairosvg.svg2png(url=s, write_to=s[:-4]+'.png', output_width=2400, "
             "background_color='white')")
     subprocess.run(["uvx", "--with", "cairosvg", "python", "-c", code] + [str(OUT / f"{n}.svg") for n in sets], capture_output=True)
-    say(f"renders: {OUT}/L1_top.png, L2_gnd.png, L3_pwr.png, L4_bottom.png (bottom mirrored: as seen from below)")
+    say(f"renders: {OUT}/L1_top.png, L2_gnd.png, L3_pwr.png, L4_sig.png, L5_gnd.png, L6_bottom.png (bottom mirrored: as seen from below)")

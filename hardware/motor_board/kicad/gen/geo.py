@@ -2,7 +2,7 @@
 Used by route_blocks.py generators to pick legal spots; DRC stays the final word."""
 import math
 
-CU = ("F.Cu", "In2.Cu", "B.Cu")
+CU = ("F.Cu", "In2.Cu", "In3.Cu", "B.Cu")
 
 
 def seg_pt(a, b, p):
