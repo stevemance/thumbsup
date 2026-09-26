@@ -3,6 +3,7 @@ layers, layer_cost, via_cost, margin (search window around the endpoints, mm), o
 A request with "fixed" = {"tracks": [...], "vias": [...]} passes hand-planned geometry straight through.
 Coordinates: board-local mm (front-left corner, y toward the rear)."""
 import json
+import os
 import sys
 
 F, L3, L4, B = "F.Cu", "In2.Cu", "In3.Cu", "B.Cu"      # L2 (In1) and L5 (In4) are GND planes
@@ -704,13 +705,117 @@ BLOCKS["7b U2 sense escape"] = u2_sense_escape()
 #  boxes them in -- J2's pins face U1's fan-out via row with U9 right behind it, J3's filters sit in a one-part band
 #  under the east bus -- so they get re-placed and planned instead.)
 BLOCKS["9a BMS corner"] = auto("b9_bms", layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.3})
-import os
 if os.environ.get("TRIAL") == "1":         # measurement only: every remaining signal pair, shortest first
     BLOCKS["10 trial"] = auto("b10_trial", layers=[F, B, L3], layer_cost={F: 1.0, B: 1.1, L3: 1.2}, via_cost=1.0)
 # block 11a: the bottom-side logic under the bridge (U6 INL gates, U7 INA239, U14 ARM buffer, the MCU-pin filters
 # north of U1): local pairs only, shortest first, bottom then top.  The long legs (U2 <-> U6, U1's south pins -> U6,
 # INA_nCS, the west runs to J1/R33) are planned separately.
 BLOCKS["11a NW logic local"] = auto("b11a_nw_local", layers=[B, F], layer_cost={B: 1.0, F: 2.0}, via_cost=1.5)
+# block 12a: U2's west-side logic pins 28 (W_nFAULT) and 33 (W_EN), which the generic fan-out found no spot for:
+# straight west on top between the mode/IDRIVE/VDS resistors to a via each (the router takes them on from there).
+def u2_west_escape():
+    # pin 28: the gap between C23 (bottom 21.41) and R44 (top 21.93) is centred on y 21.67, not on the pin
+    v28 = pick_via("W_nFAULT", (47.1, 21.67))
+    # pin 33: under the VDS trace (y 24.1), clear of pin 34's pad
+    v33 = pick_via("W_EN", (48.3, 24.55))
+    tr = [trk("W_nFAULT", F, [(50.0625, 21.75), (49.7, 21.67), (v28[0], 21.67), v28], 0.15),
+          trk("W_EN", F, [(50.0625, 24.25), (49.55, 24.25), (49.35, 24.45), (v33[0], 24.45), v33], 0.15)]
+    vi = [via("W_nFAULT", v28), via("W_EN", v33)]
+    return [dict(tag="U2 west logic escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["12a U2 west escape"] = u2_west_escape()
+
+
+# block 12a2: U6 (INL AND gates) escape.  Its input row (pins 1-7, y 11.36) faces a row of VBAT stitching vias
+# and R63's VBAT trace, so the signal pins drop inward instead: short bottom stubs to vias between U6's two pin rows
+# (clear of the stitching columns at x 27.8 / 30.8 and the W_ARM_S tie down x 29.85); L4 takes them from there.
+def u6_escape():
+    # On top, RS4's VBAT pad (x 28.15-30.25, y 7-11) sits over U6's middle and its stitching vias run down x 30.8
+    # (y 7.0-9.4): between the rows only x ~31.1-33 takes vias.  Pins 1-3 stagger there, pin 4 just north of the
+    # stitching column; pins 3 and 6 drop south, pin 6 into the gap of the VBAT via row at y 12.8 (x 28.6 / 30.6),
+    # pin 3 just east of it (so W_INLB, coming in from the north-east, passes north of W_INLA's via).
+    esc = (("W_INLA_M", [(32.45, 11.36), (32.45, 10.6), (32.7, 10.35)], (32.7, 8.55)),
+           ("W_ARM_S", [(31.8, 11.36), (31.8, 10.6), (32.05, 10.35)], (32.05, 9.3)),
+           ("/weapon/W_INLA", [(31.15, 11.36), (31.15, 12.1), (31.5, 12.45)], (31.5, 12.95)),
+           ("W_INLB_M", [(30.5, 11.36), (30.5, 10.6)], (30.85, 10.25)),
+           ("/weapon/W_INLB", [(29.2, 11.36), (29.2, 12.1), (29.6, 12.5)], (29.6, 12.9)))
+    tr, vi = [], []
+    for net, pts, v in esc:
+        tr.append(trk(net, B, pts + [v], 0.15))
+        vi.append(via(net, v))
+    # R63 (VBAT_SNS divider top) takes its own VBAT via beside it (the L3 VBAT feed is under it) instead of a trace
+    # west under U6's input row to the stitching via: that strip is where W_INLA drops and W_INLB passes
+    tr.append(trk("VBAT", B, [(33.95, 12.49), (34.6, 12.49)], 0.3))
+    vi.append(via("VBAT", (34.6, 12.49), 0.45, 0.25))
+    # W_ARM_S: pins 5 and 10 are tied by the bottom track down x 29.85; pin 2 joins that tie on L4 through a via at
+    # the tie's pin-10 end (clear of RS4's pad), the L4 hop passing south of the stitching column
+    a5 = (29.85, 6.62)
+    tr.append(trk("W_ARM_S", L4, [(32.05, 9.3), (31.5, 8.75), (31.5, 6.35), (30.1, 6.35), a5], 0.15))
+    vi.append(via("W_ARM_S", a5))
+    return [dict(tag="U6 escape (fixed)", fixed=dict(tracks=tr, vias=vi))]
+
+
+BLOCKS["12a2 U6 escape"] = u6_escape()
+
+
+# block 12b: the U1 hub nets that cross U1's field or leave U2's enclosed region (W_INH/INL, W_EN, W_nFAULT, R_S,
+# L_S3, MB_TX/RX, INA_nCS, W_INLx_M).  L4 is the long-haul layer: empty board-wide (under U1's field and under the
+# VBAT feed too), so these run there nearly straight; longest first so they take the direct lines.
+U2_REAR = {"W_INHA": (50.625, 27.3), "/weapon/W_INLA": (51.175, 27.3), "W_INHB": (51.725, 27.3),
+           "/weapon/W_INLB": (52.275, 27.3), "W_INHC": (52.825, 27.3), "/weapon/W_INLC": (53.375, 27.3)}
+
+
+# block 12b0: U2's rear group as one L4 bus from its via row (block 7d) -- the INH lines to U1 (INHC to its south
+# via row, INHB / INHA to its top), then the INL lines to U6's escape vias in the NW.  L4 only (the ends are vias).
+def u2_rear_bus():
+    # U1 pins 8 / 9 straight out north to staggered vias (pin 9 had no fan-out spot; pin 8's is inside U1's field,
+    # which is sealed on L4 by the fan-out via ring as on L3)
+    # INHA's lane arrives north of INHB's: INHA's via further out (north of pin 8), INHB's just off pin 9
+    v9 = (35.8, 19.3)
+    v8 = pick_via("W_INHA", (35.3, 18.6))
+    fx = [dict(tag="U1 pins 8/9 escape + U2 rear fan-out (fixed)",
+               fixed=dict(tracks=[trk("W_INHB", B, [(35.75, 20.32), v9], 0.15),
+                                  trk("W_INHA", B, [(35.25, 20.32), (35.25, 18.9), v8], 0.15)],
+                          vias=[via("W_INHB", v9), via("W_INHA", v8)]))]
+    # lane order from the via row (0.55 pitch: on L4 each via leaves only north or south): INHC south, INHA straight
+    # west from the westmost via, the rest north with INLA innermost -- routed inside-out
+    ends = {"W_INHC": ("via", 34.25, 28.7), "W_INHA": ("via", v8[0], v8[1]), "/weapon/W_INLA": ("via", 31.5, 12.95),
+            "W_INHB": ("via", v9[0], v9[1]), "/weapon/W_INLB": ("via", 29.6, 12.9),
+            "/weapon/W_INLC": ("pad", "U6", "8")}
+    # hand fan-out from the row: INHB / INHC down, the INL lines up to staggered lanes, all turned west
+    # (lanes N->S: INLC, INLB, INLA | INHA | INHB, INHC -- the INL lines all go on past U1's top to U6, and INHA
+    #  ends further out than INHB, so nothing crosses)
+    fan = {"W_INHB": [(51.725, 27.95), (50.7, 27.95)], "W_INHC": [(52.825, 28.25), (51.0, 28.25)],
+           "/weapon/W_INLA": [(51.175, 26.75), (50.3, 26.75)], "/weapon/W_INLB": [(52.275, 26.45), (50.6, 26.45)],
+           "/weapon/W_INLC": [(53.375, 26.15), (50.9, 26.15)]}
+    fx[0]["fixed"]["tracks"] += [trk(n, L4, [U2_REAR[n]] + pts, 0.15) for n, pts in fan.items()]
+    start = {n: ("pt", pts[-1][0], pts[-1][1], L4) for n, pts in fan.items()}
+    start["W_INHA"] = ("via",) + U2_REAR["W_INHA"]
+    q = dict(layers=[L4, B], layer_cost={L4: 1.0, B: 3.0}, via_cost=1.0, margin=5.0, w=0.15)
+    order = ["W_INHA", "W_INHB", "W_INHC", "/weapon/W_INLA", "/weapon/W_INLB", "/weapon/W_INLC"]   # inside-out
+    U1_L4 = ["In3.Cu", 28.8, 20.9, 41.9, 32.6]      # U1's footprint on L4: kept for the nets that must cross U1
+    rq = [dict(tag=f"{n} U2 rear bus", net=n, a=start[n], b=ends[n], **q,
+               **({"avoid": [U1_L4]} if "INL" in n else {})) for n in order]
+    return fx + rq + [dict(r, retry=True, margin=10.0, via_cost=0.7, layers=[L4, B, F, L3],
+                           layer_cost={L4: 1.0, B: 1.5, F: 1.5, L3: 1.5}) for r in rq]
+
+
+BLOCKS["12b0 U2 rear bus"] = u2_rear_bus()
+
+
+def hub_nets():
+    here = __import__("pathlib").Path(__file__).resolve().parent
+    pairs = sorted(json.load(open(here / "pairs" / "b12_hub.json")), key=lambda p: -p["dist"])
+    pairs = [p for p in pairs if not (p["net"] in U2_REAR and (p["a"][1] == "U2" or p["b"][1] == "U2" or
+                                                                p["net"] == "W_INHC"))]
+    q = dict(layers=[L4, B, F, L3], layer_cost={L4: 1.0, B: 1.4, F: 1.5, L3: 1.6}, via_cost=1.0, margin=4.0)
+    out = [dict(tag=f"{p['net']} {p['a'][1]}-{p['b'][1]}", net=p["net"], a=tuple(p["a"]), b=tuple(p["b"]), **q)
+           for p in pairs]
+    return out + [dict(r, retry=True, margin=10.0, via_cost=0.7) for r in out]
+
+
+BLOCKS["12b hub nets"] = hub_nets()
 FIELD_L3 = ["In2.Cu", 30.9, 21.9, 39.8, 30.3]        # U1's L3 via field: kept for the nets that must cross U1
 if os.environ.get("TRIAL") == "west":
     BLOCKS["10 trial west"] = auto("b10_west", first=() and (
@@ -718,7 +823,7 @@ if os.environ.get("TRIAL") == "west":
         "/mcu/SWDIO", "/mcu/SWCLK", "L_SOA", "L_SOB", "L_SOC", "/mcu/L_SOA_F", "/mcu/L_SOB_F"),
         layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.2}, via_cost=1.0, avoid=[FIELD_L3])
 if os.environ.get("TRIAL") == "hard":       # feasibility: the U1 crossers alone, longest first, any layer
-    _h = auto("b12_hard", layers=[F, B, L3], layer_cost={F: 1.0, B: 1.0, L3: 1.0}, via_cost=0.8, margin=10.0)
+    _h = auto("b12_hard", layers=[F, B, L3, L4], layer_cost={F: 1.0, B: 1.0, L3: 1.0, L4: 1.0}, via_cost=0.8, margin=10.0)
     BLOCKS["12 trial hard"] = sorted([r for r in _h if not r.get("retry")], key=lambda r: 0) + [r for r in _h if r.get("retry")]
 if os.environ.get("TRIAL") == "nw":
     BLOCKS["11 trial nw"] = auto("b11_nw", first=("INA_nCS", "W_INLB_M", "W_INLC_M", "W_INLA_M", "/mcu/VBAT_SNS",

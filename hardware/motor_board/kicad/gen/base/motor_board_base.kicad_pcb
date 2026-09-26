@@ -46744,7 +46744,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23"
 		(layer "B.Cu")
 		(uuid "fe690e0b-1daa-4c04-8cc0-6066776541d3")
-		(at 130.5 84.6 -90)
+		(at 130.5 85.2 -90)
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236)")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "D7"
@@ -48464,14 +48464,6 @@
 		(uuid "ed174f0d-5cf4-4611-bfda-535c991a76bb")
 	)
 	(via
-		(at 129 84.999999)
-		(size 0.6)
-		(drill 0.3)
-		(layers "F.Cu" "B.Cu")
-		(net "VBAT")
-		(uuid "ee7b9e96-13de-4283-abe2-2d009f5fe44b")
-	)
-	(via
 		(at 155.65 83.049999)
 		(size 0.6)
 		(drill 0.3)
@@ -48702,14 +48694,6 @@
 		(layer "F.Cu")
 		(net "GND")
 		(uuid "d6b767e6-c192-45d1-8f80-b6d5caed7cbf")
-	)
-	(segment
-		(start 150.0625 94.75)
-		(end 148.88 94.75)
-		(width 0.25)
-		(layer "F.Cu")
-		(net "GND")
-		(uuid "e200080a-f4e3-4b5a-94b7-1d553fa400e6")
 	)
 	(segment
 		(start 150.0625 91.25)
@@ -49270,14 +49254,6 @@
 		(layers "F.Cu" "B.Cu")
 		(net "GND")
 		(uuid "6fef5ca2-371b-4c81-8169-9b1dc737b83a")
-	)
-	(via
-		(at 148.88 94.75)
-		(size 0.45)
-		(drill 0.25)
-		(layers "F.Cu" "B.Cu")
-		(net "GND")
-		(uuid "74690a18-bdbf-463a-bf5e-f67572559c59")
 	)
 	(via
 		(at 131.219999 92.695)
@@ -49878,6 +49854,14 @@
 		(layers "F.Cu" "B.Cu")
 		(net "GND")
 		(uuid "ecdb87da-1301-40ec-9683-f50ce37d8d87")
+	)
+	(via
+		(at 129 84.999999)
+		(size 0.6)
+		(drill 0.3)
+		(layers "F.Cu" "B.Cu")
+		(net "GND")
+		(uuid "ee7b9e96-13de-4283-abe2-2d009f5fe44b")
 	)
 	(via
 		(at 123.699999 71.149999)
