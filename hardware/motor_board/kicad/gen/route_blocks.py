@@ -412,7 +412,8 @@ BLOCKS["6d VM bulk"] = auto("b6d_vm_bulk", w=0.5, via=0.6, drill=0.3, layers=[F,
                             layer_cost={F: 1.0, B: 1.0, L3: 1.3}, via_cost=1.0, margin=4.0)
 
 # block 6: U3 / U4 local (charge pump, AVDD, buck FB/SW): short cap hookups, top first; 0.25 leaves a 0.5-pitch pin
-BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0)
+BLOCKS["6 U3/U4 local"] = auto("b6_drives_local", w=0.25, layers=[F, B], layer_cost={F: 1.0, B: 1.5}, via_cost=2.0,
+                                avoid=[[F, 23.5, 32.75, 26.6, 34.3]])     # the U3 +3V3 tie (7j) below U3's INH vias
 
 # ---------------------------------------------------------------- fan-out of the other ICs (dog-bones)
 def ic_fanout(ref, pairs_name, skip=("GND",), side_layer=None, depths=(0.5, 0.95, 1.4, 1.85, 2.3)):
@@ -888,6 +889,9 @@ _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape
             "7j U3 +3V3 tie": [dict(tag="U3 +3V3 tie (fixed)", fixed=dict(tracks=[
                 trk("+3V3", F, [(x, 32.4), (x, 33.95)], 0.15) for x in (23.75, 24.75, 25.75)] + [
                 trk("+3V3", F, [(23.75, 33.95), (26.35, 33.95)], 0.2)], vias=[via("+3V3", (26.35, 33.95))]))],
+            # L_INHC: U1 pin 62 out west to a via between C63 and R61 (inward is full)
+            "7l U1 pin 62 escape": [dict(tag="U1 pin 62 escape (fixed)", fixed=dict(tracks=[
+                trk("L_INHC", B, [(29.82, 23.25), (28.6, 23.25), (28.4, 23.1)], 0.15)], vias=[via("L_INHC", (28.4, 23.1))]))],
             "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
                 trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
                     0.15)], vias=[]))]}
