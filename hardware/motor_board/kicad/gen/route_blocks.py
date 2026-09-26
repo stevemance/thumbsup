@@ -698,6 +698,13 @@ def u2_sense_escape():
 
 BLOCKS["7b U2 sense escape"] = u2_sense_escape()
 
+# block 9a: BMS corner (U8, J4 balance header, R7-R11, C4-C11), a self-contained local group: router with frozen
+# pairs, checked by eye.  Bottom-left; the L3 under it is free.
+# (The two motor-sensor clusters were tried the same way and came out as detours through U1's field: their placement
+#  boxes them in -- J2's pins face U1's fan-out via row with U9 right behind it, J3's filters sit in a one-part band
+#  under the east bus -- so they get re-placed and planned instead.)
+BLOCKS["9a BMS corner"] = auto("b9_bms", layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.3})
+
 # block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
 def gnd_drops(name):
     here = __import__("pathlib").Path(__file__).resolve().parent
