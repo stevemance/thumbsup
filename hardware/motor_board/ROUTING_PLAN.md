@@ -67,6 +67,21 @@ MCU pin swaps (firmware).  Trials kept behind `TRIAL=` in route_blocks.py (west,
 Tools added: `spot.py` (free spots for re-placing a part, on the routed board), router `avoid` boxes
 (reserve planned corridors in a router request).
 
+## Status (2026-09-26): 6 layers, 496 of 585 connections, DRC 0
+
+Stack-up now F / L2 GND / L3 (VBAT feed + lanes) / L4 signals / L5 GND / B (base_edits.py).  Since then: U2 rear
+bus on L4, all hub nets (W_INH/INL/EN/nFAULT, R_S1-3, L_S3, MB_TX/RX, INA_nCS), NW logic, rails, GND pad vias,
+F/B GND fills, and a rip-up-and-reroute post-pass in router.py (only `soft` = router-made local routes).
+Hand-placed escapes are reservations applied right after block 7d (route_blocks.py, `_reserve`).
+
+89 left (about 38 rail/GND, 51 signal), all blocked by placement or hand geometry, not by router order:
+- U1 west pins 59/60 (L_INHA / L_nFAULT to U3): C112 (left-sensor cap, top) sits over their only outward via
+  spots; U3's right-column SOA/SOB/SOC face C306 (its AVDD cap).  -> re-place the left-sensor island (U9,
+  C110-C112, R110-R112) and C306's neighbourhood.
+- Right sensors: R114-R116 in a one-part band under the east bus; U10's inputs.  -> re-place.
+- Phase-sense caps C42/C44 (W_VB/W_NTC) east of U1 behind C92 / R117.
+- A few +3V3/+5V islands and GND pads in dense spots.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
