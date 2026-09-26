@@ -54,6 +54,9 @@ PADPOS["C28"] = ((52.1, 29.05), (52.1, 30.6))
 # except C400: its mirror spot touches MH4's courtyard, so it goes on the bottom right under U4's VM caps, standing
 # (VM pad nearest the pins, GND pad clear of MH4's washer keep-out), reached by one via from C403's VM pad
 FLIP = {"C400", "C406"}
+# C112 (U9's L_H3B filter cap) sat west of U1 over the only outward via spots of U1 pins 59/60, far from its own
+# net: it goes beside U9 pin 6, the pin it filters
+PADPOS["C112"] = ((34.42, 27.0), (35.38, 27.0))
 PADPOS["C400"] = ((68.9, 29.9), (68.9, 31.45))
 # Current-sense filters of the right drive: R80/R81 (CSA A/B) were on the bottom west of U1, the wrong side of U1 for
 # both their input (from U4) and their output (U1.34/35, C90/C91 at U1's rear edge).  They go up to the top at U4's

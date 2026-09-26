@@ -5,6 +5,7 @@ A spot is free when the part's courtyard box (its current size, rotated) overlap
 no copper on that side's layer (pads, tracks, vias) other than its own pads' nets, with 0.15 mm clearance.  Reports
 the nearest few by distance from (x, y)."""
 import json
+import os
 import math
 import sys
 from pathlib import Path
@@ -46,8 +47,8 @@ w0, h0 = bx1 - bx0, by1 - by0
 
 g = json.load(open(HERE / "out" / "route" / "geom.json"))
 sp = Space(g)
-for r in json.load(open(HERE / "out" / "route" / "routes.json")):
-    if r.get("ok"):
+for r in ([] if os.environ.get("SPOT_BASE") else json.load(open(HERE / "out" / "route" / "routes.json"))):
+    if r.get("ok"):             # SPOT_BASE=1: placement only (routed copper will re-route around the part)
         for t in r["tracks"]:
             sp.add_track(t["pts"], t["w"], t["layer"], t["net"])
         for v in r["vias"]:

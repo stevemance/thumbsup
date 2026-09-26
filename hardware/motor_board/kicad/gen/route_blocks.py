@@ -892,6 +892,12 @@ _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape
             # L_INHC: U1 pin 62 out west to a via between C63 and R61 (inward is full)
             "7l U1 pin 62 escape": [dict(tag="U1 pin 62 escape (fixed)", fixed=dict(tracks=[
                 trk("L_INHC", B, [(29.82, 23.25), (28.6, 23.25), (28.4, 23.1)], 0.15)], vias=[via("L_INHC", (28.4, 23.1))]))],
+            # L_nFAULT / L_INHA: U1 pins 60 / 59 out west (C112 moved off their via spots): pin 60 between R61's pads
+            # to a via beyond it, pin 59 to a via in the gap between R61 and U1's pads
+            "7m U1 pins 59/60 escape": [dict(tag="U1 pins 59/60 escape (fixed)", fixed=dict(tracks=[
+                trk("L_nFAULT", B, [(29.82, 24.25), (27.35, 24.25)], 0.15),
+                trk("L_INHA", B, [(29.82, 24.75), (28.72, 24.75)], 0.15)],
+                vias=[via("L_nFAULT", (27.35, 24.25)), via("L_INHA", (28.72, 24.75))]))],
             "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
                 trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
                     0.15)], vias=[]))]}

@@ -444,10 +444,20 @@ if os.environ.get("RRR", "1") == "1":
         soft = [k for k, r_ in enumerate(results) if r_["ok"] and r_["_req"].get("soft")]
         rebuild([r_ for k, r_ in enumerate(results) if r_["ok"] and k not in soft])
         probe = route(dict(freq, retry=False))
+        if probe is None and not os.environ.get("RRR_WHY"):
+            continue
         if probe is None:
+            # (RRR_WHY=1, slow) blocked by protected copper: find which, by probing with only the base board and naming what the
+            # free path runs into
+            rebuild([])
+            p2 = route(dict(freq, retry=False))
+            why = sorted({results[k]["tag"] for k, r_ in enumerate(results) if r_["ok"] and k not in soft
+                          and p2 is not None and clash(p2, r_)}) if p2 else ["base board (pads / keep-outs)"]
+            print(f"hard  {tag}: blocked by {why[:6]}")
             continue
         blockers = [k for k in soft if clash(probe, results[k])]
         if not blockers or len(blockers) > int(os.environ.get("RRR_MAX", "10")):
+            print(f"soft  {tag}: {len(blockers)} soft blockers")
             continue
         keep = [r_ for k, r_ in enumerate(results) if r_["ok"] and k not in blockers]
         rebuild(keep)
