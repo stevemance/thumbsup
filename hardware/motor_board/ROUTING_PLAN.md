@@ -36,6 +36,29 @@ L2 is never cut.  Everything on L1/L4 references it; L3 signals reference it too
 10. **Close-out**: GND pours on F/B in the open rear areas, stitched to L2; 0 unconnected; DRC and
     `layout_check.py` green; JLC checks (FAB.md).
 
+## Status (2026-09-25)
+
+Done, DRC 0: items 1-4 above; the **east bus** (route_blocks 8a/8b: twelve L3 lanes behind U2, U4 front group
+round U1's NE corner, south group round U1's rear, CSA filters R80/R81 moved to U4's corner, R82 beside U1.25,
+C90/C91 swapped); **BMS corner** (9a); **NW bottom-side logic, local pairs** (11a).
+
+What the remaining nets run into (found by a trial pass of the router over everything left: 66 of 134 pairs
+routed, every long U1-hub net failed):
+
+- **U1's field is sealed on L3** except U1's west strip and a gap on the east side at y 26.9-29.05 (once the
+  two +3V3A vias go: +3V3A is bottom-local).  Nets that must cross it: MB_TX/MB_RX (east pins -> J1 west),
+  L_S3 (U9 west -> U1.24 east), R_S1/R_S2 (U10 east -> U1.51/.56 west).  A pin swap would remove these
+  crossings, but the pins are tied to peripherals (TIM2 hall inputs, USART1), so it is a firmware decision.
+- **Everything east of the bus's north group** (x 42.1-42.7, y 20.5-28.4 on L3) reaches U1 only on F/B:
+  the U2 rear group (W_INHA/B/C, W_INLA/B/C), W_EN, W_nFAULT.
+- **U6 (INL gates) in the far NW** makes W_INLx a loop U1 -> NW -> U2's rear (27-45 mm); **U10 sits under the
+  bus's east-end columns** (no via reachable near it); the **sensor clusters** are boxed in (J2's pins face
+  U1's fan-out via row with U9 right behind it; J3's filters R114-R116 sit in a one-part band under the bus).
+  None of these can simply move: a free-spot search finds no room near any of them on either side.
+
+Tools added: `spot.py` (free spots for re-placing a part, on the routed board), router `avoid` boxes
+(reserve planned corridors in a router request).
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.

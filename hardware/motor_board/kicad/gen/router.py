@@ -191,6 +191,19 @@ def route(req):
         sd = ndimage.distance_transform_edt(s < 0, sampling=RES)
         free_v &= (dist[sl] >= need_v[sl]) & (sd >= vd / 2 + 0.05)
     free_v &= ~novia[i0:i1, j0:j1] & (edge_dist[i0:i1, j0:j1] >= vd / 2 + EDGE_CLR)
+    # reserved corridors: [layer or "*", x0, y0, x1, y1] boxes this request may not use (a via anywhere in a box on
+    # any of its layers is refused too, since the barrel crosses every layer)
+    for bl, bx0, by0, bx1, by1 in req.get("avoid", []):
+        bi0, bj0 = cidx(bx0, by0)
+        bi1, bj1 = cidx(bx1, by1)
+        bi0, bi1 = max(bi0, i0) - i0, min(bi1 + 1, i1) - i0
+        bj0, bj1 = max(bj0, j0) - j0, min(bj1 + 1, j1) - j0
+        if bi0 >= bi1 or bj0 >= bj1:
+            continue
+        for l in RL:
+            if bl in ("*", l) and l in free_t:
+                free_t[l][bi0:bi1, bj0:bj1] = False
+        free_v[bi0:bi1, bj0:bj1] = False
     # endpoints are always enterable (they sit in the net's own copper)
     for l, i, j in starts + goals:
         if l in free_t and i0 <= i < i1 and j0 <= j < j1:

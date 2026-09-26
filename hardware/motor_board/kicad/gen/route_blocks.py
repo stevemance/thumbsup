@@ -704,6 +704,17 @@ BLOCKS["7b U2 sense escape"] = u2_sense_escape()
 #  boxes them in -- J2's pins face U1's fan-out via row with U9 right behind it, J3's filters sit in a one-part band
 #  under the east bus -- so they get re-placed and planned instead.)
 BLOCKS["9a BMS corner"] = auto("b9_bms", layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.3})
+import os
+if os.environ.get("TRIAL") == "1":         # measurement only: every remaining signal pair, shortest first
+    BLOCKS["10 trial"] = auto("b10_trial", layers=[F, B, L3], layer_cost={F: 1.0, B: 1.1, L3: 1.2}, via_cost=1.0)
+# block 11a: the bottom-side logic under the bridge (U6 INL gates, U7 INA239, U14 ARM buffer, the MCU-pin filters
+# north of U1): local pairs only, shortest first, bottom then top.  The long legs (U2 <-> U6, U1's south pins -> U6,
+# INA_nCS, the west runs to J1/R33) are planned separately.
+BLOCKS["11a NW logic local"] = auto("b11a_nw_local", layers=[B, F], layer_cost={B: 1.0, F: 2.0}, via_cost=1.5)
+if os.environ.get("TRIAL") == "nw":
+    BLOCKS["11 trial nw"] = auto("b11_nw", first=("INA_nCS", "W_INLB_M", "W_INLC_M", "W_INLA_M", "/mcu/VBAT_SNS",
+                                                 "R_MTEMP", "W_ARM_S", "/mcu/NRST", "W_nFAULT", "DRV_OFF"),
+                                 layers=[B, F, L3], layer_cost={B: 1.0, F: 1.3, L3: 1.3}, via_cost=1.0)
 
 # block 4: every GND pad still off the plane gets its own via to L2 (short stub, nearest legal spot)
 def gnd_drops(name):
