@@ -926,6 +926,13 @@ for _k, _v in BLOCKS.items():
 BLOCKS.clear()
 BLOCKS.update(_order)
 
+# router-made local routes the rip-up-and-reroute pass may lift (never hand-placed geometry or the planned buses)
+for _name, _reqs in BLOCKS.items():
+    if _name.split()[0] in ("9a", "11a", "12b", "12d", "12e", "12f", "12g", "12h", "4"):
+        for _r in _reqs:
+            if "fixed" not in _r:
+                _r["soft"] = True
+
 if __name__ == "__main__":
     upto = sys.argv[2] if len(sys.argv) > 2 else None
     out = []

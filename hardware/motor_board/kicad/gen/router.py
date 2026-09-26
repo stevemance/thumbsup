@@ -9,6 +9,7 @@ connection with A* (45-degree moves, per-layer costs, a via cost); the result be
 Pads are treated as their bounding boxes, so the router is slightly conservative next to round and rounded pads."""
 import heapq
 import json
+import os
 import math
 import sys
 
@@ -347,6 +348,34 @@ def fixed(req):
     return dict(tracks=out_t, vias=out_v, length=0)
 
 
+BASE_OWNER = {l: owner[l].copy() for l in RL}
+BASE_NOVIA = novia.copy()
+BASE_VIAS = {k: list(v) for k, v in VIAS_OF.items()}
+
+
+def paint(res):
+    for tt in res["tracks"]:
+        n = NID[tt["net"]]
+        for a, b_ in zip(tt["pts"], tt["pts"][1:]):
+            draw_capsule(owner[tt["layer"]], a, b_, tt["w"] / 2, n)
+    for v in res["vias"]:
+        n = NID[v["net"]]
+        note_via(n, v["c"])
+        for l in RL:
+            draw_disc(owner[l], v["c"], v["d"] / 2, n)
+        draw_disc(novia, v["c"], v.get("drill", 0.2) / 2 + 0.25, True)
+
+
+def rebuild(keep):
+    for l in RL:
+        owner[l][:] = BASE_OWNER[l]
+    novia[:] = BASE_NOVIA
+    VIAS_OF.clear()
+    VIAS_OF.update({k: list(v) for k, v in BASE_VIAS.items()})
+    for res in keep:
+        paint(res)
+
+
 results = []
 done = set()
 for req in REQ:
@@ -364,4 +393,79 @@ for req in REQ:
     else:
         print(f"{'ok2 ' if req.get('retry') else 'ok  '}  {tag}: {r['length']} mm, {len(r['vias'])} vias, layers {sorted({t['layer'] for t in r['tracks']})}")
         results.append(dict(tag=tag, ok=True, **r))
+    results[-1]["_req"] = req
+
+
+# ---------------------------------------------------------------- rip-up and reroute (post-pass)
+# A request that finally failed is routed once with every *soft* route lifted (requests marked soft: router-made
+# local routes; hand-placed geometry and planned buses never are); the soft routes its path runs into are ripped up,
+# the failed request routed, then the ripped ones re-routed in their original order.  Kept only if all of them route.
+def seg_d(a, b, c, d):
+    def pt(p, q, r_):
+        dx, dy = q[0] - p[0], q[1] - p[1]
+        L2 = dx * dx + dy * dy
+        u = 0 if L2 == 0 else max(0, min(1, ((r_[0] - p[0]) * dx + (r_[1] - p[1]) * dy) / L2))
+        return math.hypot(r_[0] - p[0] - u * dx, r_[1] - p[1] - u * dy)
+    return min(pt(a, b, c), pt(a, b, d), pt(c, d, a), pt(c, d, b))
+
+
+def clash(p, q):
+    for t1 in p["tracks"]:
+        for t2 in q["tracks"]:
+            if t1["layer"] != t2["layer"] or t1["net"] == t2["net"]:
+                continue
+            for a, b_ in zip(t1["pts"], t1["pts"][1:]):
+                for c, d in zip(t2["pts"], t2["pts"][1:]):
+                    if seg_d(a, b_, c, d) < (t1["w"] + t2["w"]) / 2 + 0.2:
+                        return True
+    for v in p["vias"] + q["vias"]:
+        other = q if v in p["vias"] else p
+        for t2 in other["tracks"]:
+            if t2["net"] == v["net"]:
+                continue
+            for c, d in zip(t2["pts"], t2["pts"][1:]):
+                if seg_d(c, d, v["c"], v["c"]) < v["d"] / 2 + t2["w"] / 2 + 0.2:
+                    return True
+    return False
+
+
+if os.environ.get("RRR", "1") == "1":
+    final_fail = {}
+    for k, res in enumerate(results):
+        if not res["ok"] and res["tag"] not in done:
+            final_fail[res["tag"]] = k
+    won = 0
+    for tag, kf in final_fail.items():
+        freq = results[kf]["_req"]
+        if "fixed" in freq:
+            continue
+        soft = [k for k, r_ in enumerate(results) if r_["ok"] and r_["_req"].get("soft")]
+        rebuild([r_ for k, r_ in enumerate(results) if r_["ok"] and k not in soft])
+        probe = route(dict(freq, retry=False))
+        if probe is None:
+            continue
+        blockers = [k for k in soft if clash(probe, results[k])]
+        if not blockers or len(blockers) > 4:
+            continue
+        keep = [r_ for k, r_ in enumerate(results) if r_["ok"] and k not in blockers]
+        rebuild(keep)
+        rf = route(freq)
+        new = {}
+        if rf is not None:
+            for k in blockers:
+                rr = route(results[k]["_req"])
+                if rr is None:
+                    break
+                new[k] = rr
+        if rf is not None and len(new) == len(blockers):
+            for k, rr in new.items():
+                results[k] = dict(results[k], **rr)
+            results[kf] = dict(tag=tag, ok=True, _req=freq, **rf)
+            done.add(tag)
+            won += 1
+            print(f"rrr   {tag}: rerouted, ripped {len(blockers)}")
+    rebuild([r_ for r_ in results if r_["ok"]])
+    print(f"rip-up and reroute: {won} of {len(final_fail)} failures recovered")
+for r_ in results:
+    r_.pop("_req", None)
 json.dump(results, open(sys.argv[3], "w"), indent=0)
