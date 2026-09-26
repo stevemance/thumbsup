@@ -8,7 +8,8 @@ from pathlib import Path
 import pcbnew
 
 HERE = Path(__file__).resolve().parent
-PCB = HERE.parent / "motor_board" / "motor_board.kicad_pcb"
+import os
+PCB = Path(os.environ["CROP_PCB"]) if os.environ.get("CROP_PCB") else HERE.parent / "motor_board" / "motor_board.kicad_pcb"
 x0, y0, x1, y1 = map(float, sys.argv[1:5])
 out = Path(sys.argv[5]).resolve()
 layers = sys.argv[6] if len(sys.argv) > 6 else "F.Cu,B.Cu,In2.Cu,F.SilkS,Edge.Cuts"

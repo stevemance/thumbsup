@@ -928,7 +928,7 @@ BLOCKS.update(_order)
 
 # router-made local routes the rip-up-and-reroute pass may lift (never hand-placed geometry or the planned buses)
 for _name, _reqs in BLOCKS.items():
-    if _name.split()[0] in ("6", "7b", "8b", "9a", "11a", "12b", "12c", "12d", "12e", "12f", "12g", "12h", "4"):
+    if _name.split()[0] in ("3", "6", "7b", "8b", "9a", "11a", "12b", "12c", "12d", "12e", "12f", "12g", "12h", "4"):
         for _r in _reqs:
             if "fixed" not in _r:
                 _r["soft"] = True
