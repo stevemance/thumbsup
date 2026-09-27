@@ -115,6 +115,22 @@ for e in tail_edits.EDITS:
         r.setdefault("layers", ["F.Cu", "B.Cu", "In3.Cu", "In2.Cu"])
         r.setdefault("via_through_pours", True)
         reqs.append(r)
+    elif op == "zone":                  # a pour (lowest priority, fills around everything; the router ignores "* fill")
+        src = [z for z in b.Zones() if z.GetZoneName() == "L2 GND plane"][0]
+        z = pcbnew.ZONE(b)
+        z.SetLayer(LAY[e["layer"]]); z.SetNetCode(nets[e["net"]].GetNetCode()); z.SetZoneName(e["name"])
+        z.SetAssignedPriority(e.get("priority", 0)); z.SetLocalClearance(F(e.get("clr", 0.2)))
+        z.SetMinThickness(F(e.get("min_w", 0.25))); z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+        ol = z.Outline(); ol.NewOutline()
+        if e.get("poly"):
+            for x_, y_ in e["poly"]:
+                ol.Append(F(x_ + OX), F(y_ + OY))
+        else:
+            so = src.Outline()
+            for i in range(so.Outline(0).PointCount()):
+                q = so.Outline(0).CPoint(i); ol.Append(q.x, q.y)
+        b.Add(z)
     elif op == "drop":
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),

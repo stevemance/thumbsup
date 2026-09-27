@@ -83,7 +83,7 @@ def draw_poly(arr, pts, val):
 
 # ---------------------------------------------------------------- build the model
 for z in G["zones"]:
-    if z["layer"] in RL and z["net"] and not z["name"].endswith("GND fill"):   # the outer GND fills pour last, around everything
+    if z["layer"] in RL and z["net"] and not z["name"].endswith(" fill"):   # the outer GND fills pour last, around everything
         draw_poly(zown[z["layer"]], z["poly"], NID[z["net"]])
 for r in G["rules"]:
     for l in r["layers"]:
