@@ -45,9 +45,9 @@ assert me, ref
 (bx0, by0, bx1, by1), mynets = me
 w0, h0 = bx1 - bx0, by1 - by0
 
-g = json.load(open(HERE / "out" / "route" / "geom.json"))
+g = json.load(open(os.environ.get("SPOT_GEOM") or HERE / "out" / "route" / "geom.json"))   # SPOT_GEOM: a full-board export (tracks included)
 sp = Space(g)
-for r in ([] if os.environ.get("SPOT_BASE") else json.load(open(HERE / "out" / "route" / "routes.json"))):
+for r in ([] if os.environ.get("SPOT_BASE") or os.environ.get("SPOT_GEOM") else json.load(open(HERE / "out" / "route" / "routes.json"))):
     if r.get("ok"):             # SPOT_BASE=1: placement only (routed copper will re-route around the part)
         for t in r["tracks"]:
             sp.add_track(t["pts"], t["w"], t["layer"], t["net"])

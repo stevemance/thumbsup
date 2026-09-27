@@ -131,6 +131,13 @@ for e in tail_edits.EDITS:
             for i in range(so.Outline(0).PointCount()):
                 q = so.Outline(0).CPoint(i); ol.Append(q.x, q.y)
         b.Add(z)
+    elif op == "vip":                   # via in pad (filled + capped, FAB.md): a boxed-in passive pad straight to a plane/pour
+        pd = [q for q in fps[e["pad"][0]].Pads() if q.GetNumber() == e["pad"][1]][0]
+        x = pcbnew.PCB_VIA(b)
+        x.SetPosition(pd.GetPosition() + pcbnew.VECTOR2I_MM(*e.get("off", (0, 0))))
+        x.SetWidth(F(e.get("d", 0.4))); x.SetDrill(F(e.get("drill", 0.2)))
+        x.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); x.SetNet(pd.GetNet())
+        b.Add(x)
     elif op == "drop":
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),

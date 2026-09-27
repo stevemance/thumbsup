@@ -63,7 +63,7 @@ if reqs:
     lap("geometry export")
     out = run(["uv", "run", "--no-project", "--with", "numpy", "--with", "scipy", "--with", "matplotlib", "python",
                str(HERE / "router.py"), str(W / "geom.json"), str(W / "requests.json"), str(W / "routes.json")],
-              timeout=3600, env=dict(__import__("os").environ, RRR="0"))
+              timeout=3600, env=dict(__import__("os").environ, RRR=__import__("os").environ.get("TAIL_RRR", "0")))
     print("\n".join(l for l in out.splitlines() if l.startswith(("ok", "FAIL"))))
     lap("router")
     routes = json.load(open(W / "routes.json"))
