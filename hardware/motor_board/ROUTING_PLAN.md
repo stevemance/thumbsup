@@ -129,6 +129,20 @@ on placement, not routing order:
 - The free board area left is on the bottom only: the left edge (x 5-13) and the top strip (x 35-70, y 0-8.5).
 A placement revision of the U1 / U3 / J2 / J3 / U10 region is the next real step.
 
+## Board growth 75 -> 85 mm (2026-09-28): 59 open, DRC 0
+
+`kicad/gen/grow.py` cut the board along a stepped line and moved the east part +10 mm: between weapon cells C and B
+(each cell's commutation loop untouched; the VBAT / GND pours between them stretch), then between U2 and its small
+parts, then west of the buck (L1, C28-C30, D2 move with U2) and east of U1's cluster.  46 crossing tracks were
+bridged, 8 re-routed.  Moved with the east part: MH2 / MH4, J3, U2, U4, U10, U12, JW1 / JW2, JR1-3 (compute board and
+chassis must follow).  The new band (x ~45-59, y 17-35) is free of parts; crossing it: the L3 bus (y 27.8-31.3), L4
+lanes (y 33.2-34.4, 23.6-25.9), and bridged B / F tracks (B y 21.0, 25.95, 28.07, 33.7).  Vias in the lower band only
+at y 31.55-33.0.
+
+Right-sensor block tried in the band (U10, filters, pull-ups): H2 / H3 pull-ups and H3B connected, but J3's pin
+order is the reverse of U10's input order and the block's power pins sit over the bus: net zero, reverted.  A clean
+version needs the block drawn by hand around the via strip.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
