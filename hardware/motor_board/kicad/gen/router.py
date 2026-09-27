@@ -183,6 +183,8 @@ def route(req):
     for l in RL:
         o0 = (PADS_ONLY if req.get("ignore_tracks") else owner)[l][gi0:gi1, gj0:gj1]
         zo = zown[l][gi0:gi1, gj0:gj1]
+        if req.get("ignore_pours"):                          # short ties through a pour: it refills around them
+            zo = np.full_like(zo, -1)
         o = np.where(o0 != -1, o0, zo)                      # copper incl. pours
         other = (o != -1) & (o != n)
         dist, idx = ndimage.distance_transform_edt(~other, sampling=RES, return_indices=True)
