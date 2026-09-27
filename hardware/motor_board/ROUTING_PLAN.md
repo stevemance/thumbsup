@@ -82,6 +82,27 @@ Hand-placed escapes are reservations applied right after block 7d (route_blocks.
 - Phase-sense caps C42/C44 (W_VB/W_NTC) east of U1 behind C92 / R117.
 - A few +3V3/+5V islands and GND pads in dense spots.
 
+## Status (2026-09-27): freeze-and-edit tail, 65 open, DRC 0
+
+The board is no longer rebuilt from route_all.py: `kicad/gen/frozen/board.kicad_pcb` is the accepted board and
+`tail_edits.py` lists edits on top of it (`tail.py` applies them + DRC in ~30 s, `tail.py freeze` accepts).  Every
+accepted round is in `kicad/gen/tail_log/NN_*.py`, in order.  Deviations made in the tail (for review):
+- **L3 VBAT feed trimmed** in its south-west corner (x 21-34.6 / y 16.5-20.8 and x 21-26 / y 10.2-16.5): no pack
+  current there (C1 sits on the L1 pack pour; the feed's stitching vias are all at y <= 15.8); frees L3 for the
+  U7 / J1 / U1-north signals.
+- **+3V3 pour on L4** ("L4 3V3 fill", lowest priority, around every L4 signal) with pad drops; the U7-area +3V3
+  wiring on B was lifted onto it.
+- **Via-in-pad** (filled + capped, already in FAB.md for the thermal vias) on three boxed-in passive pads
+  (C112.2, C74.1, C62.1).  Own GND drop vias added for ~63 GND pads that relied on the outer fills only.
+- **Moved parts:** C92 (R_SOC_F filter cap) to the top under R82; R23 / R25 (W_VA / W_VB divider bottoms) beside
+  R22 / R24 (they were 15 mm west of the rest of their nets); INH pair hand-laid with a jog on L4.
+- FAB.md still describes the 4-layer stack-up: update at close-out.
+
+Open clusters (need re-placement or a decision): right-sensor J3 fan-out (H2/H3 filters and pull-ups; option:
+pull-ups on the U10 side of the 1 k filters, a schematic change), U1 east W_NTC / W_INLA_M, the U3 -> U1 trio
+(L_INHA / L_nFAULT: source and pin order reversed, needs a layer hop), SPI to U7 and U3, SWDIO / NRST to J1,
+left-sensor island (L_VS, L_H1/H2, L_S1/S2), +5V to JP1 / JP2 / J1 / R20, LED R62.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
