@@ -104,6 +104,7 @@ for p in G["pads"]:
             draw_rect(smd[l], p["box"], nid)
     if p["tht"] and p["drill"]:
         draw_disc(novia, p["c"], p["drill"] / 2 + 0.25, True)            # hole-to-hole
+PADS_ONLY = {l: owner[l].copy() for l in RL}      # (for probes that ignore existing tracks: pads here, vias below)
 for t_ in G["tracks"]:
     if t_["layer"] in RL:
         draw_capsule(owner[t_["layer"]], t_["a"], t_["b"], t_["w"] / 2, NID[t_["net"]])
@@ -118,6 +119,7 @@ for v in G["vias"]:
     note_via(NID[v["net"]], v["c"])
     for l in RL:
         draw_disc(owner[l], v["c"], v["d"] / 2, NID[v["net"]])
+        draw_disc(PADS_ONLY[l], v["c"], v["d"] / 2, NID[v["net"]])
     draw_disc(novia, v["c"], 0.3 / 2 + 0.25, True)                       # hole-to-hole (drill <= 0.3)
 edge_dist = np.minimum.reduce([YS[:, None] + 0 * XS[None, :], (H - YS)[:, None] + 0 * XS[None, :],
                                XS[None, :] + 0 * YS[:, None], (W - XS)[None, :] + 0 * YS[:, None]])
@@ -179,7 +181,7 @@ def route(req):
     gi0, gi1, gj0, gj1 = max(0, i0 - pad), min(NY, i1 + pad), max(0, j0 - pad), min(NX, j1 + pad)
     free_t, free_v = {}, np.ones((i1 - i0, j1 - j0), bool)
     for l in RL:
-        o0 = owner[l][gi0:gi1, gj0:gj1]
+        o0 = (PADS_ONLY if req.get("ignore_tracks") else owner)[l][gi0:gi1, gj0:gj1]
         zo = zown[l][gi0:gi1, gj0:gj1]
         o = np.where(o0 != -1, o0, zo)                      # copper incl. pours
         other = (o != -1) & (o != n)

@@ -18,6 +18,12 @@ bb = b.GetBoardEdgesBoundingBox()
 t = pcbnew.ToMM
 W, H = t(bb.GetWidth()), t(bb.GetHeight())
 svg = out.with_suffix(".svg")
+if os.environ.get("CROP_NOZONE"):          # tracks only: drop the pours (a copy of the board, the original is untouched)
+    for z in list(b.Zones()):
+        if not z.GetIsRuleArea():
+            b.Remove(z)
+    PCB = out.with_suffix(".kicad_pcb")
+    pcbnew.SaveBoard(str(PCB), b)
 subprocess.run(["kicad-cli", "pcb", "export", "svg", "--layers", layers, "--mode-single", "--fit-page-to-board",
                 "--exclude-drawing-sheet", "-o", str(svg), str(PCB)], capture_output=True)
 scale = 60      # px per mm
