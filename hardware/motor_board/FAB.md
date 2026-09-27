@@ -23,7 +23,8 @@ design decision changes one of these, change it here too. Tick through it on ord
 | Board size | 75 x 35 mm, 1 design | PLACEMENT 1 |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
 | **Via-in-pad** | **yes: epoxy-filled and capped** (free on JLC 6-layer boards) | thermal vias in U2/U3/U4's exposed pads, 8 vias in RS2's GND pad (layout step 1), and vias in the pads of C112.2, C74.1, C62.1 (routing, ROUTING_PLAN.md 2026-09-27) |
-| Min track / space | 0.127 / 0.127 mm (JLC 6-layer: 0.09 / 0.09) | project rules |
+| Min track / space | 0.127 / 0.127 mm on logic nets (Default class); 0.15 on power, drive, gate, sense, rail classes (JLC 6-layer: 0.09 / 0.09) | project rules |
+| Hole to copper | 0.2 mm (JLC 6-layer via hole to track: 0.2) | project rules |
 | Min via | 0.4 mm pad / 0.2 mm drill for signals; 0.45 / 0.25 GND and rails; 0.6 / 0.3 power (JLC 6-layer min 0.25 / 0.15) | project rules |
 | Impedance control | no | nothing on the board needs it (layout step 0) |
 | Mask / silk | any colour; silk on both sides | wire names are on the bottom silk |

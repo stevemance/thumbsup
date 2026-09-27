@@ -322,6 +322,10 @@ def route(req):
     if drop:
         vias.append(pb)
     out_v = [dict(net=net, c=[round(x, 4), round(y, 4)], d=vd, drill=vdr) for x, y in vias]
+    length = sum(math.dist(a, b_) for tt in out_t for a, b_ in zip(tt["pts"], tt["pts"][1:]))
+    if req.get("max_ratio") and length > req["max_ratio"] * max(math.dist(pa, pb), 1.0):   # spaghetti: refuse it
+        print(f"LONG  {req.get('tag') or net}: {length:.1f} mm for {math.dist(pa, pb):.1f} mm end to end")
+        return None
     # the new copper is an obstacle for the next requests
     for tt in out_t:
         for a, b_ in zip(tt["pts"], tt["pts"][1:]):
