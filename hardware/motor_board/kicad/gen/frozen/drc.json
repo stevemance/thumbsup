@@ -1,7 +1,7 @@
 {
     "$schema": "https://schemas.kicad.org/drc.v1.json",
     "coordinate_units": "mm",
-    "date": "2026-09-27T13:32:52",
+    "date": "2026-09-27T14:49:38",
     "ignored_checks": [
         {
             "description": "Footprint has no courtyard defined",
@@ -159,12 +159,12 @@
                     "uuid": "8fa41822-8802-4aac-9a2e-153a04dd87c0"
                 },
                 {
-                    "description": "Track [+3V3] on F.Cu, length 0.7000 mm",
+                    "description": "Track [+3V3] on F.Cu, length 0.0500 mm",
                     "pos": {
                         "x": 132.949999,
                         "y": 96.65
                     },
-                    "uuid": "bfac6d31-177b-4a81-a7ad-c6b068087501"
+                    "uuid": "f815fdf9-2fd7-45d3-9fd6-f1ad432a0740"
                 }
             ],
             "severity": "error",
@@ -205,12 +205,12 @@
                     "uuid": "44645bca-82ed-49c9-ba7e-8f6d198e5438"
                 },
                 {
-                    "description": "Track [+3V3] on B.Cu, length 1.3000 mm",
+                    "description": "Track [+3V3] on B.Cu, length 0.0539 mm",
                     "pos": {
-                        "x": 142.75,
-                        "y": 90.3
+                        "x": 142.77,
+                        "y": 90.35
                     },
-                    "uuid": "053fc6d2-e8e2-4620-8cd9-38234f3e4482"
+                    "uuid": "7325fec2-3f00-410c-be39-fe1e7a9e1f3a"
                 }
             ],
             "severity": "error",
@@ -220,12 +220,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 1 [+3V3] of R60 on B.Cu",
+                    "description": "Track [+3V3] on B.Cu, length 0.0510 mm",
                     "pos": {
                         "x": 144.2,
                         "y": 99.26
                     },
-                    "uuid": "1104299d-6b19-4d10-899b-16de7c32a51c"
+                    "uuid": "67307166-4c5d-4529-a810-f4f5279c0ab3"
                 },
                 {
                     "description": "Track [+3V3] on B.Cu, length 0.7071 mm",
@@ -251,12 +251,12 @@
                     "uuid": "ad721d2e-83d6-4244-93c0-2fc9227119ab"
                 },
                 {
-                    "description": "Track [+3V3] on B.Cu, length 0.9250 mm",
+                    "description": "Track [+3V3] on B.Cu, length 0.0559 mm",
                     "pos": {
                         "x": 143.2,
                         "y": 100.975
                     },
-                    "uuid": "fe683f32-16dc-42a9-afe7-7f2f3e0f7f08"
+                    "uuid": "b857592c-4fe9-4341-862e-a8a0c7dc7faf"
                 }
             ],
             "severity": "error",
@@ -358,81 +358,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
-                },
-                {
                     "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
                     "pos": {
                         "x": 100.25,
                         "y": 70.25
                     },
                     "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
-                    "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
-                },
-                {
-                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
-                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
-                },
-                {
-                    "description": "Zone 'L2 GND plane' [GND] on L2.GND, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "d2b696f0-05a3-45d1-a05e-4b1ba3e30619"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
-                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
                 },
                 {
                     "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
@@ -473,12 +404,81 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [L_MTEMP] on F.Cu, length 0.9500 mm",
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                },
+                {
+                    "description": "Zone 'L5 GND plane' [GND] on L5.GND, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "b336a51e-03c0-4f0c-bf9c-469b7b2407cf"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                },
+                {
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                },
+                {
+                    "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
+                    "description": "Track [L_MTEMP] on F.Cu, length 0.6364 mm",
                     "pos": {
                         "x": 141.3,
-                        "y": 98.6
+                        "y": 97.65
                     },
-                    "uuid": "3605836a-6c3b-47e2-a39d-4218ba42cdbf"
+                    "uuid": "5ce54227-5e33-4886-bcf2-f05200a8b3b2"
                 },
                 {
                     "description": "Track [L_MTEMP] on F.Cu, length 0.6500 mm",
@@ -596,12 +596,12 @@
                     "uuid": "7fee9dc5-7ed3-4d99-b2f4-0b58c7e75eca"
                 },
                 {
-                    "description": "Track [L_INHA] on F.Cu, length 0.3000 mm",
+                    "description": "Pad 27 [L_INHA] of U3 on F.Cu",
                     "pos": {
                         "x": 123.25,
                         "y": 102.4
                     },
-                    "uuid": "05a4d426-bc90-4eb2-96a7-73374d2c7a14"
+                    "uuid": "9a9189cc-5fbe-4431-8b08-67df5bbbdda6"
                 }
             ],
             "severity": "error",
@@ -634,12 +634,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [SPI_MOSI] on B.Cu, length 0.3041 mm",
+                    "description": "Track [SPI_MOSI] on L3.PWR+SIG, length 2.4000 mm",
                     "pos": {
-                        "x": 127.9,
-                        "y": 97.25
+                        "x": 130.0,
+                        "y": 97.2
                     },
-                    "uuid": "b27df30b-b538-4ab6-97d5-796bed91da01"
+                    "uuid": "e54261ba-eb85-4ce8-82e0-4439fbc905f7"
                 },
                 {
                     "description": "Pad 2 [SPI_MOSI] of U7 on B.Cu",
@@ -657,12 +657,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [SPI_MOSI] on L3.PWR+SIG, length 4.8500 mm",
+                    "description": "Track [SPI_MOSI] on L3.PWR+SIG, length 12.2000 mm",
                     "pos": {
-                        "x": 130.0,
+                        "x": 142.2,
                         "y": 102.05
                     },
-                    "uuid": "87f95482-2530-42b0-bab9-cee1c84e08d8"
+                    "uuid": "59a67a3c-552b-4a2e-af51-5d5affab5451"
                 },
                 {
                     "description": "Track [SPI_MOSI] on F.Cu, length 0.4301 mm",
@@ -688,12 +688,12 @@
                     "uuid": "38a4d1ee-a09a-41cb-9316-6c2ced4fa537"
                 },
                 {
-                    "description": "Track [SPI_SCK] on B.Cu, length 0.3000 mm",
+                    "description": "Track [SPI_SCK] on L3.PWR+SIG, length 1.4500 mm",
                     "pos": {
-                        "x": 128.55,
+                        "x": 129.699999,
                         "y": 98.25
                     },
-                    "uuid": "6c3cdc6a-f95d-4f78-849f-89a3a5654682"
+                    "uuid": "b0c4edcd-5715-4703-8c14-d621a3cc5664"
                 }
             ],
             "severity": "error",
@@ -703,12 +703,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [SPI_SCK] on B.Cu, length 0.3000 mm",
+                    "description": "Track [SPI_SCK] on L3.PWR+SIG, length 1.4500 mm",
                     "pos": {
-                        "x": 128.55,
+                        "x": 129.699999,
                         "y": 98.25
                     },
-                    "uuid": "6c3cdc6a-f95d-4f78-849f-89a3a5654682"
+                    "uuid": "b0c4edcd-5715-4703-8c14-d621a3cc5664"
                 },
                 {
                     "description": "Pad 5 [SPI_SCK] of U7 on B.Cu",
@@ -795,12 +795,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 1 [/sensors/L_H1] of R110 on F.Cu",
+                    "description": "Track [/sensors/L_H1] on F.Cu, length 0.9800 mm",
                     "pos": {
-                        "x": 132.56,
+                        "x": 133.539999,
                         "y": 95.4
                     },
-                    "uuid": "9c7e7c81-29d9-48cf-8a04-3b27d9573d80"
+                    "uuid": "c75a9754-2996-4b0c-b612-9fdaf3cba7b5"
                 },
                 {
                     "description": "Pad 3 [/sensors/L_H1] of J2 on F.Cu",
@@ -818,12 +818,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [/sensors/L_H2] on F.Cu, length 0.7778 mm",
+                    "description": "Track [/sensors/L_H2] on F.Cu, length 0.5000 mm",
                     "pos": {
-                        "x": 136.75,
-                        "y": 98.1
+                        "x": 136.2,
+                        "y": 97.55
                     },
-                    "uuid": "df874470-a535-46bc-8ca6-f0db7325ed1b"
+                    "uuid": "f4e1014d-a12e-4b22-933b-c6ff2ac89a00"
                 },
                 {
                     "description": "Pad 4 [/sensors/L_H2] of J2 on F.Cu",
@@ -1002,12 +1002,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 2 [/sensors/L_H2B] of R111 on F.Cu",
+                    "description": "Track [/sensors/L_H2B] on F.Cu, length 0.3200 mm",
                     "pos": {
                         "x": 136.8,
                         "y": 97.14
                     },
-                    "uuid": "e1f469ea-b0cf-4316-ab6f-5d06ae2f2474"
+                    "uuid": "a82d0166-e477-4189-8c53-b50355c78382"
                 },
                 {
                     "description": "Track [/sensors/L_H2B] on F.Cu, length 0.0707 mm",
@@ -1094,12 +1094,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 1 [/mcu/NRST] of C67 on B.Cu",
+                    "description": "Track [/mcu/NRST] on B.Cu, length 0.0539 mm",
                     "pos": {
-                        "x": 133.75,
-                        "y": 88.58
+                        "x": 133.8,
+                        "y": 88.6
                     },
-                    "uuid": "374fd270-f6ac-4f04-a731-fed8eae8e1cb"
+                    "uuid": "db602af5-83ce-49f8-a206-d08976b7426a"
                 },
                 {
                     "description": "Track [/mcu/NRST] on B.Cu, length 0.9192 mm",
@@ -1171,12 +1171,12 @@
                     "uuid": "4e123062-10f5-4512-9e63-238f0b8b75c2"
                 },
                 {
-                    "description": "Pad 1 [W_NTC] of C44 on B.Cu",
+                    "description": "Track [W_NTC] on B.Cu, length 0.0583 mm",
                     "pos": {
                         "x": 146.72,
                         "y": 90.25
                     },
-                    "uuid": "81a4c9a9-3f4f-4170-9992-891bbbd09d70"
+                    "uuid": "d9a63454-9586-4dad-989a-c1a28b00c4ea"
                 }
             ],
             "severity": "error",
@@ -1240,12 +1240,12 @@
                     "uuid": "ae9c3eba-0373-4cfe-9f25-9151cea33288"
                 },
                 {
-                    "description": "Track [R_SOC] on L4.SIG, length 0.7000 mm",
+                    "description": "Track [R_SOC] on L4.SIG, length 3.6062 mm",
                     "pos": {
-                        "x": 154.45,
-                        "y": 101.3
+                        "x": 157.0,
+                        "y": 98.75
                     },
-                    "uuid": "3160057c-605c-4e2b-a279-47583b43f161"
+                    "uuid": "314f5efb-babd-4451-9e89-46ba130c7756"
                 }
             ],
             "severity": "error",
@@ -1347,58 +1347,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 3 [/sensors/R_H2B] of U10 on B.Cu",
+                    "description": "Track [/sensors/R_H3B] on L4.SIG, length 1.3435 mm",
                     "pos": {
-                        "x": 160.25,
-                        "y": 98.85
-                    },
-                    "uuid": "4fe11408-7e9b-4e81-81bc-e7ca88b2a950"
-                },
-                {
-                    "description": "Pad 2 [/sensors/R_H2B] of R115 on B.Cu",
-                    "pos": {
-                        "x": 152.49,
-                        "y": 98.2
-                    },
-                    "uuid": "3f521093-1b38-4ed8-a785-d4a79b5990ed"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
-                    "description": "Pad 6 [/sensors/R_H3B] of U10 on B.Cu",
-                    "pos": {
-                        "x": 160.25,
-                        "y": 96.05
-                    },
-                    "uuid": "f1d2e5df-0d68-47c8-987d-6a91f6b3ddd6"
-                },
-                {
-                    "description": "Pad 2 [/sensors/R_H3B] of R116 on B.Cu",
-                    "pos": {
-                        "x": 150.49,
-                        "y": 98.2
-                    },
-                    "uuid": "8cea4bd5-336c-437f-8410-4081a6b084ac"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
-                    "description": "Pad 1 [/sensors/R_H3B] of C116 on B.Cu",
-                    "pos": {
-                        "x": 161.27,
+                        "x": 159.0,
                         "y": 103.1
                     },
-                    "uuid": "d82dfaab-1857-4f9f-be62-c32b3eaf965d"
+                    "uuid": "1e150929-5234-4dfd-96f5-e5a59f90931b"
                 },
                 {
                     "description": "Pad 6 [/sensors/R_H3B] of U10 on B.Cu",
@@ -1416,20 +1370,20 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 1 [W_VA] of R23 on B.Cu",
+                    "description": "Track [W_VA] on B.Cu, length 0.0781 mm",
                     "pos": {
                         "x": 160.8,
                         "y": 74.96
                     },
-                    "uuid": "76c636c8-7146-4a42-928a-bb293096b331"
+                    "uuid": "f4e14c2d-c779-476a-85c0-70b51b31a9d2"
                 },
                 {
-                    "description": "Pad 1 [W_VA] of C41 on B.Cu",
+                    "description": "Track [W_VA] on B.Cu, length 0.0539 mm",
                     "pos": {
-                        "x": 144.95,
-                        "y": 92.23
+                        "x": 144.9,
+                        "y": 92.25
                     },
-                    "uuid": "195a69b1-3fed-4c1f-8e10-d49b08604e39"
+                    "uuid": "f38419df-61e2-491f-948a-d47d28e0058d"
                 }
             ],
             "severity": "error",
@@ -1447,12 +1401,12 @@
                     "uuid": "9d9b6996-7405-43ee-adf5-873b4330300d"
                 },
                 {
-                    "description": "Track [/sensors/R_H2] on B.Cu, length 1.7000 mm",
+                    "description": "Pad 4 [/sensors/R_H2] of J3 on B.Cu",
                     "pos": {
                         "x": 153.5,
                         "y": 99.95
                     },
-                    "uuid": "0d480144-54eb-4034-9dcd-f3ce873fbfb7"
+                    "uuid": "71afd65a-9c6b-4bd6-a565-45a0e019990d"
                 }
             ],
             "severity": "error",
@@ -1516,12 +1470,12 @@
                     "uuid": "328c8904-eede-475e-93ce-62f775675bee"
                 },
                 {
-                    "description": "Pad 1 [/sensors/R_VS] of U12 on B.Cu",
+                    "description": "Track [/sensors/R_VS] on B.Cu, length 0.4375 mm",
                     "pos": {
                         "x": 148.8375,
                         "y": 98.1
                     },
-                    "uuid": "d2acc713-fb81-4668-82e5-ae84e94181e5"
+                    "uuid": "7f1c57ce-f12b-4894-a8dc-8b1176bbd105"
                 }
             ],
             "severity": "error",
@@ -10753,29 +10707,6 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1896 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 144.75,
-                        "y": 96.65
-                    },
-                    "uuid": "013a7110-79f7-4647-898c-cfeeeffd0af1"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 144.405,
-                        "y": 96.419999
-                    },
-                    "uuid": "149c0056-2d08-4794-bde5-f8ee8683ad1f"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
             "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1781 mm)",
             "items": [
                 {
@@ -10799,23 +10730,23 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1861 mm)",
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1896 mm)",
             "items": [
                 {
                     "description": "Via [GND] on F.Cu - B.Cu",
                     "pos": {
-                        "x": 158.45,
-                        "y": 102.95
+                        "x": 144.75,
+                        "y": 96.65
                     },
-                    "uuid": "0898ff3c-dfe8-4c7b-b1b8-9ecf81d8a5e6"
+                    "uuid": "013a7110-79f7-4647-898c-cfeeeffd0af1"
                 },
                 {
                     "description": "Via [GND] on F.Cu - B.Cu",
                     "pos": {
-                        "x": 158.545,
-                        "y": 103.35
+                        "x": 144.405,
+                        "y": 96.419999
                     },
-                    "uuid": "576115e4-05b2-4d6c-a82b-46667add673d"
+                    "uuid": "149c0056-2d08-4794-bde5-f8ee8683ad1f"
                 }
             ],
             "severity": "warning",
@@ -11259,29 +11190,6 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1536 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 102.65,
-                        "y": 88.4
-                    },
-                    "uuid": "3519c4c7-fd92-4062-8557-6a874ae80669"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 102.7,
-                        "y": 88.05
-                    },
-                    "uuid": "bb49c1f8-4bfb-406f-aba2-f8296592017e"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
             "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2046 mm)",
             "items": [
                 {
@@ -11299,6 +11207,29 @@
                         "y": 88.8125
                     },
                     "uuid": "61da85b1-1899-4963-a9bf-7aec35840509"
+                }
+            ],
+            "severity": "warning",
+            "type": "hole_to_hole"
+        },
+        {
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1536 mm)",
+            "items": [
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 102.65,
+                        "y": 88.4
+                    },
+                    "uuid": "3519c4c7-fd92-4062-8557-6a874ae80669"
+                },
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 102.7,
+                        "y": 88.05
+                    },
+                    "uuid": "bb49c1f8-4bfb-406f-aba2-f8296592017e"
                 }
             ],
             "severity": "warning",
@@ -11345,6 +11276,29 @@
                         "y": 86.15
                     },
                     "uuid": "6eb5de73-414f-4d62-9144-4eeeafe5030a"
+                }
+            ],
+            "severity": "warning",
+            "type": "hole_to_hole"
+        },
+        {
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1781 mm)",
+            "items": [
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 156.75,
+                        "y": 104.3
+                    },
+                    "uuid": "4a5249f3-2f7e-4e8e-b8e1-8c6093a9de57"
+                },
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 156.35,
+                        "y": 104.35
+                    },
+                    "uuid": "e9646947-7a5e-4e99-86b9-03e09d0112ba"
                 }
             ],
             "severity": "warning",
@@ -11414,52 +11368,6 @@
                         "y": 92.695
                     },
                     "uuid": "753e58a8-4729-4320-881e-dd4e2ca28302"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2008 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 158.45,
-                        "y": 102.4
-                    },
-                    "uuid": "568f3cf5-0421-45ff-a7e0-64a148e3cb1f"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 158.86,
-                        "y": 102.515
-                    },
-                    "uuid": "82ffa26c-3f0a-4dfc-873b-4d0d1b266821"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1781 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 158.45,
-                        "y": 102.4
-                    },
-                    "uuid": "568f3cf5-0421-45ff-a7e0-64a148e3cb1f"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 158.65,
-                        "y": 102.05
-                    },
-                    "uuid": "ef4a67b2-fcf4-4a1e-8e28-fc93491bf528"
                 }
             ],
             "severity": "warning",
@@ -11558,29 +11466,6 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2398 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 167.15,
-                        "y": 88.15
-                    },
-                    "uuid": "6f85375e-2d21-41d0-932f-b0112a4ed099"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 166.7,
-                        "y": 87.899999
-                    },
-                    "uuid": "921ac081-a0bd-4abf-898b-ef4b9fb9246a"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
             "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1551 mm)",
             "items": [
                 {
@@ -11598,6 +11483,29 @@
                         "y": 87.899999
                     },
                     "uuid": "e35fe660-5418-40a7-b53c-ac2ed5a84ef2"
+                }
+            ],
+            "severity": "warning",
+            "type": "hole_to_hole"
+        },
+        {
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2398 mm)",
+            "items": [
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 167.15,
+                        "y": 88.15
+                    },
+                    "uuid": "6f85375e-2d21-41d0-932f-b0112a4ed099"
+                },
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 166.7,
+                        "y": 87.899999
+                    },
+                    "uuid": "921ac081-a0bd-4abf-898b-ef4b9fb9246a"
                 }
             ],
             "severity": "warning",
@@ -11696,29 +11604,6 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1551 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 167.85,
-                        "y": 88.15
-                    },
-                    "uuid": "b2535571-db0e-464f-b589-9b8362dcf300"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 167.5,
-                        "y": 87.899999
-                    },
-                    "uuid": "e35fe660-5418-40a7-b53c-ac2ed5a84ef2"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
             "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1778 mm)",
             "items": [
                 {
@@ -11736,6 +11621,29 @@
                         "y": 88.099999
                     },
                     "uuid": "d985ff68-5507-4a02-ad35-a1bf17d978c8"
+                }
+            ],
+            "severity": "warning",
+            "type": "hole_to_hole"
+        },
+        {
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1551 mm)",
+            "items": [
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 167.85,
+                        "y": 88.15
+                    },
+                    "uuid": "b2535571-db0e-464f-b589-9b8362dcf300"
+                },
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 167.5,
+                        "y": 87.899999
+                    },
+                    "uuid": "e35fe660-5418-40a7-b53c-ac2ed5a84ef2"
                 }
             ],
             "severity": "warning",
@@ -11926,15 +11834,15 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1399 mm)",
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1500 mm)",
             "items": [
                 {
                     "description": "Via [/power/BAL4] on F.Cu - B.Cu",
                     "pos": {
-                        "x": 109.45,
-                        "y": 95.35
+                        "x": 109.95,
+                        "y": 96.65
                     },
-                    "uuid": "0e717076-75b4-4380-bcb6-41a400991c98"
+                    "uuid": "8fcae2ab-9741-400d-9939-e0172cf6aa2a"
                 },
                 {
                     "description": "PTH pad 5 [/power/BAL4] of J4",
@@ -11949,15 +11857,15 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1500 mm)",
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1399 mm)",
             "items": [
                 {
                     "description": "Via [/power/BAL4] on F.Cu - B.Cu",
                     "pos": {
-                        "x": 109.95,
-                        "y": 96.65
+                        "x": 109.45,
+                        "y": 95.35
                     },
-                    "uuid": "8fcae2ab-9741-400d-9939-e0172cf6aa2a"
+                    "uuid": "0e717076-75b4-4380-bcb6-41a400991c98"
                 },
                 {
                     "description": "PTH pad 5 [/power/BAL4] of J4",
@@ -12509,19 +12417,19 @@
             "type": "via_dangling"
         },
         {
-            "description": "Via is not connected or connected on only one layer",
+            "description": "Track has unconnected end",
             "items": [
                 {
-                    "description": "Via [R_SOC] on F.Cu - B.Cu",
+                    "description": "Track [R_SOC] on L4.SIG, length 3.6062 mm",
                     "pos": {
-                        "x": 153.75,
-                        "y": 101.3
+                        "x": 157.0,
+                        "y": 98.75
                     },
-                    "uuid": "e59accdc-635d-4a65-ac95-2ede50910e7f"
+                    "uuid": "314f5efb-babd-4451-9e89-46ba130c7756"
                 }
             ],
             "severity": "warning",
-            "type": "via_dangling"
+            "type": "track_dangling"
         },
         {
             "description": "Via is not connected or connected on only one layer",
