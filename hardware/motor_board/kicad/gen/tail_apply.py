@@ -116,6 +116,11 @@ for e in tail_edits.EDITS:
         r.setdefault("layers", ["F.Cu", "B.Cu", "In3.Cu", "In2.Cu"])
         r.setdefault("via_through_pours", True)
         reqs.append(r)
+    elif op == "outline":               # replace a zone's outline (board-local polygon)
+        z = [z for z in b.Zones() if z.GetZoneName() == e["name"]][0]
+        ol = z.Outline(); ol.RemoveAllContours(); ol.NewOutline()
+        for x_, y_ in e["poly"]:
+            ol.Append(F(x_ + OX), F(y_ + OY))
     elif op == "zone":                  # a pour (lowest priority, fills around everything; the router ignores "* fill")
         src = [z for z in b.Zones() if z.GetZoneName() == "L2 GND plane"][0]
         z = pcbnew.ZONE(b)
