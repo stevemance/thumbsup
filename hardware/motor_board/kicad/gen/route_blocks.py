@@ -909,6 +909,13 @@ _reserve = {"7e U2 west escape": BLOCKS.pop("12a U2 west escape"), "7f U6 escape
                 trk("L_SOC", F, [(26.4, 29.25), (26.98, 29.22)], 0.15),
                 trk("/drive_left/L_AVDD", F, [(26.4, 29.75), (27.65, 29.73)], 0.25)],
                 vias=[via("L_SOA", (26.4, 27.3)), via("L_SOB", (27.05, 27.9)), via("L_SOC", (26.98, 29.22))]))],
+            # left-sensor escapes found with esc.py: U9 pin 7 (L_S1), J2 pin 6 (L_TEMPJ), R111 pin 2 (L_H2B)
+            "7o sensor escapes": [dict(tag="sensor escapes (fixed)", fixed=dict(tracks=[
+                trk("L_S1", F, [(32.95, 27.15), (32.325, 27.15), (32.0, 27.05)], 0.15),
+                trk("/sensors/L_TEMPJ", F, [(35.8, 29.9), (36.05, 29.9), (36.2, 29.6)], 0.15),
+                trk("/sensors/L_H2B", F, [(36.8, 27.14), (37.12, 27.14), (38.55, 26.99)], 0.15)],
+                vias=[via("L_S1", (32.0, 27.05)), via("/sensors/L_TEMPJ", (36.2, 29.6)),
+                      via("/sensors/L_H2B", (38.55, 26.99))]))],
             "7i U1 pin 18 to C41": [dict(tag="U1 pin 18 to C41 (fixed)", fixed=dict(tracks=[
                 trk("W_VA", B, [(41.175, 22.75), (42.2, 22.75), (42.35, 22.9), (44.45, 22.9), (44.95, 22.4), (44.95, 22.23)],
                     0.15)], vias=[]))]}
