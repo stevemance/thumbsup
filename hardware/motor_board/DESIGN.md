@@ -440,9 +440,10 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 1. **Weapon commutation loop ≤ 6 nH, target 3 nH:** one 10 µF per half-bridge (C25 A, C26 B,
    C31 C) directly across that half-bridge's drain and shunt ground on the same layer, bridge →
    shunt → cap in the tightest possible loop, solid GND plane on layer 2 directly under it.
-   4-layer board, **1 oz inner copper** (JLC's default is 0.5 oz).
+   6-layer board (JLC061611-1080B, L1-L2 0.069 mm; FAB.md), **1 oz inner copper** (JLC's default is 0.5 oz).
 2. **Stack-up and pack current path:** L1 (top) power + parts, L2 solid GND, L3 power pours +
-   signals, L4 (bottom) small parts + signals (no bare pack-current copper, all under mask).  BAT
+   signals, L4 signals + a +3V3 fill, L5 solid GND, L6 (bottom) small parts + signals (no bare
+   pack-current copper, all under mask).  (Was 4 layers; 6 since routing, ROUTING_PLAN.md.)  BAT
    holes → Q7/Q8 → RS4 → C1 → bridges on wide L1/L3 pours with the return on a dedicated
    power-ground region; the 22–27 A return must not flow under the MCU,
    the CSA traces or the header ground pins (20–45 mV of offset = 0.5 A of weapon-current error).

@@ -96,10 +96,20 @@ accepted round is in `kicad/gen/tail_log/NN_*.py`, in order.  Deviations made in
   (C112.2, C74.1, C62.1).  Own GND drop vias added for ~63 GND pads that relied on the outer fills only.
 - **Moved parts:** C92 (R_SOC_F filter cap) to the top under R82; R23 / R25 (W_VA / W_VB divider bottoms) beside
   R22 / R24 (they were 15 mm west of the rest of their nets); INH pair hand-laid with a jog on L4.
-- FAB.md still describes the 4-layer stack-up: update at close-out.
+- Stack-up chosen and set in the boards: JLC061611-1080B (FAB.md).
 
-Open clusters (need re-placement or a decision): right-sensor J3 fan-out (H2/H3 filters and pull-ups; option:
-pull-ups on the U10 side of the 1 k filters, a schematic change), U1 east W_NTC / W_INLA_M, the U3 -> U1 trio
+Decisions (researched 2026-09-27):
+- **Hall pull-ups stay at the connector** (no move to the U10 side of the 1 k filters): the SN74LVC3G17's VT- is
+  0.84 V min at VCC 3 V; a 1 k / 4.7 k divider plus an open-drain Hall's VOL (0.2-0.4 V) gives 0.74-0.91 V at the
+  input, no margin.  J3's filters / pull-ups get re-placed instead.
+- **Logic lanes on L3 between U3 / U4's thermal vias: allowed**, only in the gaps of the via array (no vias added
+  there).  TI asks for as much thermal-pad GND copper as possible on every layer; here the array reaches the two
+  full GND planes (L2, L5), L3 under the pad has no copper to lose, and the drive dissipates ~1 W at the ~1 A
+  traction limit (design/calcs.md 5), so an L3 GND island would add little.
+- **L3 VBAT feed trim: kept**: no VBAT via or pad lies in the removed area and the feed width on the pack path is
+  unchanged.
+
+Open clusters (need re-placement or a decision): right-sensor J3 fan-out (H2/H3 filters and pull-ups: re-place), U1 east W_NTC / W_INLA_M, the U3 -> U1 trio
 (L_INHA / L_nFAULT: source and pin order reversed, needs a layer hop), SPI to U7 and U3, SWDIO / NRST to J1,
 left-sensor island (L_VS, L_H1/H2, L_S1/S2), +5V to JP1 / JP2 / J1 / R20, LED R62.
 

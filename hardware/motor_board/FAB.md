@@ -16,15 +16,15 @@ design decision changes one of these, change it here too. Tick through it on ord
 ## PCB options (order form)
 | Option | Value | Why / source |
 |---|---|---|
-| Layers | 4 | DESIGN 6.1-6.2 |
-| Stack-up | **JLC04161H-7628** (1.6 mm; L1-L2 prepreg 0.21 mm) | the thin L1-L2 gap keeps the commutation loop ~4 nH (PLACEMENT 3) |
+| Layers | **6** | the 4-layer board could not be routed (ROUTING_PLAN.md, 2026-09-25); layer jobs: L1 parts + power, L2 GND, L3 VBAT feed + signals, L4 signals + "+3V3 fill", L5 GND, L6 parts + signals |
+| Stack-up | **JLC061611-1080B** (1.6 mm, 1 oz outer **and inner**): L1-L2 1080 prepreg 0.069 mm, L2-L3 core 0.075 mm, L3-L4 2116 + 0.865 core + 2116 (1.08 mm), L4-L5 core 0.075 mm, L5-L6 1080 0.069 mm | thin L1-L2 keeps the weapon commutation loop under the old ~4 nH estimate (was 0.21 mm on the 4-layer stack; PLACEMENT 3); L3 / L4 each sit 0.075 mm over their own GND plane and 1.08 mm from each other (low crosstalk); the L3 VBAT pour against L2 adds plane capacitance.  In KiCad (base_edits.py STACKUP6).  Confirm the name on the order form: JLC renames stack-ups |
 | Outer copper | 1 oz | 0.5 mm-pitch QFNs; the pack current rides L1 + L3 pours |
-| **Inner copper** | **1 oz** (JLC's default is 0.5 oz: change it) | DESIGN 6.1 |
+| **Inner copper** | **1 oz** (pick an "inner 1 oz" stack-up; JLC's default is 0.5 oz) | DESIGN 6.1: the pack current rides the L3 pour |
 | Board size | 75 x 35 mm, 1 design | PLACEMENT 1 |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
-| **Via-in-pad** | **yes: epoxy-filled and capped** | thermal vias in U2/U3/U4's exposed pads and 8 vias in RS2's GND pad (layout step 1) |
-| Min track / space | 0.127 / 0.127 mm (standard 4-layer capability) | project rules |
-| Min via | 0.45 mm pad / 0.25 mm drill | project rules |
+| **Via-in-pad** | **yes: epoxy-filled and capped** (free on JLC 6-layer boards) | thermal vias in U2/U3/U4's exposed pads, 8 vias in RS2's GND pad (layout step 1), and vias in the pads of C112.2, C74.1, C62.1 (routing, ROUTING_PLAN.md 2026-09-27) |
+| Min track / space | 0.127 / 0.127 mm (JLC 6-layer: 0.09 / 0.09) | project rules |
+| Min via | 0.4 mm pad / 0.2 mm drill for signals; 0.45 / 0.25 GND and rails; 0.6 / 0.3 power (JLC 6-layer min 0.25 / 0.15) | project rules |
 | Impedance control | no | nothing on the board needs it (layout step 0) |
 | Mask / silk | any colour; silk on both sides | wire names are on the bottom silk |
 | Order number | "specify a location" (a clear spot on the bottom) or remove | cosmetic |

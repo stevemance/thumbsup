@@ -51,7 +51,8 @@ a 5.2 mm washer/standoff circle clear on both sides.
   forward) and high side (source pins forward) side by side, the phase strip across their front edges with the
   wire hole in front of it; the low side's source feeds its shunt directly behind; the local 10 uF stands behind the
   high side's drain tab, its GND pad 0.75 mm from the shunt's GND pad. Loop ~32 mm through the pad centres,
-  ~53 mm2; **estimated ~4 nH** (review: JLC 7628 stack, L1-L2 0.21 mm; ~70 % of it is the parts' own inductance)
+  ~53 mm2; **estimated ~4 nH** (review: JLC 7628 stack, L1-L2 0.21 mm; ~70 % of it is the parts' own inductance; the 6-layer
+  JLC061611-1080B stack has L1-L2 0.069 mm, so the plane part only shrinks)
   against DESIGN 6.1's <= 6 nH (target 3 nH). Kelvin ties NT1-NT3 just behind the inner edge of each shunt's GND
   pad (NT2 is turned to stand on the inner corner of RS2's GND pad, same net, so it stays out of the strip in front of
   U2's phase-C pins); TH1 in the gap behind phase B's high-side drain.
@@ -144,7 +145,7 @@ Pad-edge distances from `critical.py`, centre distances from `facts.py` / `place
   board sees least (the review agreed); they are 12-28 mm from the holes. RS1 is a metal-element shunt.
 
 ## 6. JLCPCB assembly
-- Standard PCBA, double-sided, 4 layers. The board is under 70 x 70 mm, so JLC adds rails: rails on all four edges,
+- Standard PCBA, double-sided, 6 layers (FAB.md). The board is under 70 x 70 mm, so JLC adds rails: rails on all four edges,
   **mouse-bite tabs away from J2/J3/C29/C30/R402 on the rear edge, no V-cut there** (pads are 0.40 mm from it).
 - Every pad pair passes JLC's minimum SMD spacing (0402 0.18 / 0603 0.25 / 1206 0.35 / SOT 0.4 / QFN-QFN 1.0 mm);
   Q7-Q8 was the one QFN pair below 1.0 mm and is now 1.1 mm.
