@@ -113,6 +113,22 @@ Open clusters (need re-placement or a decision): right-sensor J3 fan-out (H2/H3 
 (L_INHA / L_nFAULT: source and pin order reversed, needs a layer hop), SPI to U7 and U3, SWDIO / NRST to J1,
 left-sensor island (L_VS, L_H1/H2, L_S1/S2), +5V to JP1 / JP2 / J1 / R20, LED R62.
 
+## Status (2026-09-27, later): 60 open, DRC 0 - placement-bound
+
+Since the decisions above: J3's H2B / H3B filter outputs routed (under the connector body, L3 south strip to
+C115 / C116); Default (logic) netclass clearance 0.127 and hole-to-copper 0.2 (JLC 6-layer: 0.09 / 0.2; FAB.md);
+the router refuses wandering routes (`max_ratio`).  Every remaining item was tried with rip-up / re-lay and fails
+on placement, not routing order:
+- **U10 sits on the L3 east bus's northward turn**: no via can reach its pins, so U10.6 (H3B) and U10.7 (R_S1)
+  share one bottom-side gap and cannot both escape.  The H2 / H3 pull-ups (R58 / R59) can't reach J3's pins:
+  J3's body (courtyard y 28.8-35) takes the space south, the bus the vias north.  Needs U10 (+ C50, C114-C116) moved
+  off the bus, or J3 moved.
+- **Left-sensor front end (U9, R110-R112, C110-C112, R54-R56, U11) sits on top of U1** (bottom side): every link
+  to U1's pins needs a via through U1's escape field.  Needs the group moved off U1.
+- **U3 -> U1 (L_INHA, L_nFAULT, L_SOC, SPI to U7, SWDIO / NRST to J1)**: pin orders reversed and one L3 corridor.
+- The free board area left is on the bottom only: the left edge (x 5-13) and the top strip (x 35-70, y 0-8.5).
+A placement revision of the U1 / U3 / J2 / J3 / U10 region is the next real step.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
