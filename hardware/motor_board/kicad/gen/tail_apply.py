@@ -40,6 +40,7 @@ for e in tail_edits.EDITS:
     if e["op"] not in ("rip", "rip_ref"):
         continue
     if e["op"] == "rip_ref":
+        e = dict(e, nets=e.get("nets") or [q.GetNetname() for q in fps[e["ref"]].Pads()])   # only the part's own nets
         boxes = []
         for p in fps[e["ref"]].Pads():
             r = p.GetBoundingBox()
