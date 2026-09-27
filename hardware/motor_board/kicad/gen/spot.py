@@ -46,6 +46,8 @@ assert me, ref
 w0, h0 = bx1 - bx0, by1 - by0
 
 g = json.load(open(os.environ.get("SPOT_GEOM") or HERE / "out" / "route" / "geom.json"))   # SPOT_GEOM: a full-board export (tracks included)
+if os.environ.get("SPOT_PADSONLY"):     # courtyards + pads only: the tracks there will be re-laid
+    g = dict(g, tracks=[], vias=[])
 sp = Space(g)
 for r in ([] if os.environ.get("SPOT_BASE") or os.environ.get("SPOT_GEOM") else json.load(open(HERE / "out" / "route" / "routes.json"))):
     if r.get("ok"):             # SPOT_BASE=1: placement only (routed copper will re-route around the part)
