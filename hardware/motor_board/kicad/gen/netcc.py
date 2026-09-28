@@ -50,10 +50,10 @@ def at(p, l):
 
 
 info = {}
-for x in b.GetTracks():
-    if x.GetNetCode() != nc:
-        continue
-    k = ("t", id(x))
+segs = [x for x in b.GetTracks() if x.GetNetCode() == nc]      # one proxy per item (keys by uuid)
+U = lambda x: ("t", x.m_Uuid.AsString())
+for x in segs:
+    k = U(x)
     find(k)
     if x.GetClass() == "PCB_VIA":
         for l in CU:
@@ -80,7 +80,6 @@ for f in b.GetFootprints():
                     if fp.Contains(p.GetPosition(), i):
                         join(k, zk)
 # tracks / vias to each other and to pads
-segs = [x for x in b.GetTracks() if x.GetNetCode() == nc]
 ends = {}
 for x in segs:
     pts = [x.GetPosition()] if x.GetClass() == "PCB_VIA" else [x.GetStart(), x.GetEnd()]
@@ -88,17 +87,17 @@ for x in segs:
         ends.setdefault((p.x, p.y), []).append(x)
 for (px, py), xs in ends.items():
     for y in xs[1:]:
-        join(("t", id(xs[0])), ("t", id(y)))
+        join(U(xs[0]), U(y))
 for x in segs:
     if x.GetClass() == "PCB_VIA":
         continue
     for k, p in pads:
         if p.IsOnLayer(x.GetLayer()) and (p.HitTest(x.GetStart()) or p.HitTest(x.GetEnd())):
-            join(("t", id(x)), k)
+            join(U(x), k)
 for v in [x for x in segs if x.GetClass() == "PCB_VIA"]:     # a track passing over a via's centre
     for x in segs:
         if x.GetClass() != "PCB_VIA" and x.HitTest(v.GetPosition()):
-            join(("t", id(v)), ("t", id(x)))
+            join(U(v), U(x))
 comp = {}
 for k in list(par):
     comp.setdefault(find(k), []).append(k)

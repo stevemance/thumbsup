@@ -23,7 +23,7 @@ rmax = float(sys.argv[5]) if len(sys.argv) > 5 else 6.0
 rots = [int(sys.argv[6])] if len(sys.argv) > 6 else [0, 90]
 layer = "F.Cu" if side == "F" else "B.Cu"
 
-b = pcbnew.LoadBoard(str(HERE / "base" / "motor_board_base.kicad_pcb"))
+b = pcbnew.LoadBoard(os.environ.get("SPOT_BOARD") or str(HERE / "base" / "motor_board_base.kicad_pcb"))   # SPOT_BOARD: e.g. frozen/board.kicad_pcb
 boxes, me = [], None
 for f in b.GetFootprints():
     fside = "B" if f.IsFlipped() else "F"
@@ -60,7 +60,7 @@ mypads = [p for p in g["pads"] if p["ref"] == ref]
 
 def free(cx, cy, w, h):
     x0, y0, x1, y1 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
-    if x0 < 0.5 or y0 < 0.5 or x1 > 74.5 or y1 > 34.5:
+    if x0 < 0.5 or y0 < 0.5 or x1 > g["board"][0] - 0.5 or y1 > g["board"][1] - 0.5:
         return False
     for q in boxes:
         if x0 < q[2] and q[0] < x1 and y0 < q[3] and q[1] < y1:
