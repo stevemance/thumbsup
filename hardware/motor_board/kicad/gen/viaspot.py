@@ -64,7 +64,38 @@ def ok(p):
     return 0.35 <= p[0] <= g["board"][0] - 0.35 and 0.35 <= p[1] <= g["board"][1] - 0.35
 
 
+BLK1 = __import__("os").environ.get("VS_BLK1")        # also list spots blocked by exactly one track (to lift)
+
+
+def blockers(p):
+    if any(inpoly(r["poly"], p) for r in rules):
+        return None
+    if any(math.dist(v["c"], p) < D / 2 + v["d"] / 2 + CLR for v in vias):
+        return None
+    if any(box_d(q["box"], p) < D / 2 + CLR for q in pads):
+        return None
+    if not (0.35 <= p[0] <= g["board"][0] - 0.35 and 0.35 <= p[1] <= g["board"][1] - 0.35):
+        return None
+    return {(t["net"], t["layer"]) for t in tracks if sd(t["a"], t["b"], p) < D / 2 + t["w"] / 2 + CLR}
+
+
 cx, cy = pad["c"]
+if BLK1:
+    POWER = {"GND", "VBAT", "/drive_left/L_VM", "/drive_right/R_VM", "+5V"}
+    seen = {}
+    n = int(R / 0.05)
+    for i in range(-n, n + 1):
+        for j in range(-n, n + 1):
+            p = (round(cx + i * 0.05, 3), round(cy + j * 0.05, 3))
+            bl = blockers(p)
+            if bl is not None and len(bl) == 1 and not (bl & {(x, l) for x in POWER for l in LAY}):
+                k = next(iter(bl))
+                d = box_d(pad["box"], p)
+                if k not in seen or d < seen[k][0]:
+                    seen[k] = (d, p)
+    for k, (d, p) in sorted(seen.items(), key=lambda kv: kv[1][0]):
+        print(f"   lift {k[0]} on {k[1]}: via at {p}, {d:.2f} mm off the pad")
+    sys.exit(0)
 out = []
 n = int(R / 0.05)
 for i in range(-n, n + 1):
