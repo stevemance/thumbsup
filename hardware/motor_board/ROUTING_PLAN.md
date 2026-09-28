@@ -209,6 +209,25 @@ back to J2 over L4 / L5, 39 mm), but the band window is 3.3 mm tall (U2_DVDD on 
 29.33, L1 east), C45 only fits on B where the R_VSRC B run sits, and the old JP1.1 pad was the +3V3 junction of
 U1.16 / C47 / the L5 tie to C60: net zero.
 
+## Status (2026-09-28, night): 24 open, DRC 0, parity 0
+
+Rounds 27-33, by hand-guided lifts (`genvip`: a via at / in the pad where one to three other runs are lifted and
+re-laid; `genfence`: lift a run that fences a GND fill island and re-lay it around the island; rip `cross=True`
+also lifts segments that only pass through the box):
+- +3V3 complete: C47 (U9 decap) via at its pad edge; U3 pin 23 (nSLEEP) via below the pin tied on L5 to pin 28.
+- VBAT_SW Kelvin sense at R2; SPI_SCK to U7 (26 mm, 14 mm of it on L5: 5.3 MHz max, acceptable, could be tidied);
+  INA_nCS from PB8 (MB_TX's L4 run re-laid, 25 mm); SWDIO to J1 (via in U1.49's pad, L5 leg).
+- **C410** (U4's third VM bulk cap, 20 mm from U4 since placement) linked by a 0.15 mm run via L3 / L5: it sits in
+  R402's slow RC filter (0.1 ohm, ~1.6 us), and a ~70 mOhm series path (C410 alone ~0.3 us) keeps its share of the
+  hot-plug slew limiting.  No legal spot near U4 (the strip between the weapon via corridor and U4's thermal field is
+  full of U4's fan-out vias); dropping it would need the hot-plug sim re-run (it sits near the 4 V/us limit).
+- A GND island (C61) merged by re-laying R_S3.
+- Lesson: signal runs on L4 split the 3V3 fill (each one cost +3V3 islands); new runs now avoid L4 and use L5.
+
+Left (24): GND 4 (C64 / C90 / C73, C91, C111, C45, C50), +5V 2 (JP2, R20), the left front end (L_S3, L_H1, L_VS x2,
+L_VSRC, L_MTEMP: U9 / U11 on U1's via field), the right sensors (R_H2, R_H3, R_H3B, R_TEMPJ: J3's pull-up / filter
+crossings on the L3 bus band), R_SOC, R_MTEMP x2, W_INLA_M, W_NTC (R43), SPI_MOSI, L_nCS, SWDIO to TP2.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
