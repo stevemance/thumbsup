@@ -1,0 +1,7 @@
+# move R58 by 2.15 rot +90 pads
+EDITS = [
+    dict(op="rip_ref", ref="R58"),
+    dict(op="move", ref="R58", x=54.75, y=31.7, rot=270.0, side="F"),
+    dict(op="route", net="/sensors/R_H2", a=("pad", "R58", "1"), b=('pad', 'J3', '4'), layers=['F.Cu', 'B.Cu', 'In2.Cu', 'In4.Cu', 'In3.Cu'], layer_cost={"In4.Cu": 1.5, "In3.Cu": 2.0}, w=0.15, margin=6.0, max_ratio=4.0),
+    dict(op="route", net="+3V3", a=("pad", "R58", "2"), b=('pad', 'R43', '1'), layers=['F.Cu', 'B.Cu', 'In2.Cu', 'In4.Cu', 'In3.Cu'], layer_cost={"In4.Cu": 1.5, "In3.Cu": 2.0}, w=0.2, margin=6.0, max_ratio=4.0),
+]
