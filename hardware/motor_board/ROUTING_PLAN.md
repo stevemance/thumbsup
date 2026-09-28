@@ -228,6 +228,20 @@ Left (24): GND 4 (C64 / C90 / C73, C91, C111, C45, C50), +5V 2 (JP2, R20), the l
 L_VSRC, L_MTEMP: U9 / U11 on U1's via field), the right sensors (R_H2, R_H3, R_H3B, R_TEMPJ: J3's pull-up / filter
 crossings on the L3 bus band), R_SOC, R_MTEMP x2, W_INLA_M, W_NTC (R43), SPI_MOSI, L_nCS, SWDIO to TP2.
 
+Rounds 34-37 (to 20 open): part moves found by `genmove` (candidate spots with free courtyard / keep-outs / pad
+clearance, same side or flipped, each re-routed): C90 turned, C50 2.3 mm north, R43 flipped to the top, D8 (R_MTEMP
+clamp) from the NW corner into the band beside R53 / C73.  Each move of a part that sat on a rail junction needs that
+junction re-joined explicitly (R43, C64 were +3V3 B-bridge junctions).
+
+What the last 20 are stuck on:
+- Left front end (L_H1, L_VS x2, L_VSRC, L_MTEMP, L_S3, GND at C111 / C45): U9 sits on U1's fan-out via field;
+  J2.3 (H1) and J2.1 (VS) are under U9's pad columns; no legal via or part spot within 4 mm.  Needs U9 moved.
+- Right sensors (R_H2, R_H3, R_H3B, R_TEMPJ): J3's pin order (TEMPJ, H3, H2, H1 west to east) with the filter row
+  right above and U10 to the east makes the filter outputs, the pull-up lanes and TEMPJ cross; the L3 bus band
+  (y 27.8-30.8) forbids vias between them.  R117 beside J3 fixes R_TEMPJ but costs R_H3B.
+- U1 pins without escape: 6 (R_MTEMP), 21 (W_INLA_M), 41 (L_nCS).
+- +5V at R20 (buck FB top, needs a +5V sense 12 mm away) and JP2; SPI_MOSI to U7; SWDIO to TP2; R_SOC (R82).
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
