@@ -60,7 +60,11 @@ for e in tail_edits.EDITS:
         elif x.GetClass() == "PCB_TRACK":
             if e.get("layers") and pcbnew.BOARD.GetStandardLayerName(x.GetLayer()) not in e["layers"]:
                 continue
-            if any(inbox(loc(x.GetStart()), bx) or inbox(loc(x.GetEnd()), bx) for bx in boxes):
+            p0, p1 = loc(x.GetStart()), loc(x.GetEnd())
+            hit = any(inbox(p0, bx) or inbox(p1, bx) for bx in boxes)
+            if not hit and e.get("cross"):                    # also segments that only pass through the box
+                hit = any(inbox((p0[0] + (p1[0] - p0[0]) * k / 40, p0[1] + (p1[1] - p0[1]) * k / 40), bx) for bx in boxes for k in range(41))
+            if hit:
                 kill_all[id(x)] = x
                 if e.get("reroute"):
                     rr_kill[id(x)] = x
