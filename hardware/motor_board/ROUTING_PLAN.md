@@ -252,7 +252,23 @@ Rounds 38-40 (to 17 open), no board growth:
 - Tooling: `genl5.py` (scratchpad) = for each open, via spots at both ends that are clear or behind <= 2 liftable
   non-power runs, the lifts (re-routed), router-drawn stubs, an L5 jumper.  pcbnew's SaveBoard re-nets a lone new via
   that overlaps a fill to the fill's net; `via` / `vip` now drop a 0.02 mm L5 anchor stub of the via's own net.
-- The other GND opens (C111, C45) went with these rounds; 2 GND fill-island items remain.
+- Rounds 41-42: R40.2 GND island joined (W_EN lifted off B there); C46 flipped to the bottom (GND pad off an
+  unanchored F island).
+
+What the last 17 need (2026-09-28; genl5 swept every open at 4 mm / up to 3 lifts, genmove / fence-lift / TP
+relocation tried; nothing left that closes without breaking another net):
+- Left front end, 6 + 2 GND (L_VS x2, L_MTEMP, L_S3, L_nCS, SWDIO to TP2; C111.2 / C45.2 on fenced F fill islands):
+  every via spot is in U1's fan-out field or the W_* lane bundle.  L_MTEMP closes only by cutting the R_INHB L3 lane.
+  Real fix: move J2 + U9 / U11 / JP1 and their passives off U1 (about 12 x 14 mm on top at the rear edge).  No such
+  area exists at 85 mm (the free top band x 46-55, y 26-35 holds the +5V trunks and is ~10 x 9 mm).
+- +5V at JP2: JP2 sits inside the W_* bundle.  Between JP2 and any +5V copper, vias are blocked by that bundle
+  (north / west) or the L3 bus band (south).
+- +5V at R20 (buck FB top): R20.1 is over the L3 east bus; the nearest +5V is 12 mm away.
+- Right sensors (R_H2, R_H3, R_H3B): the pull-ups R58 / R59 are far from J3, and the H2 / H3 filter outputs face
+  away from U10.  Pull-ups on the filtered side are ruled out (LVC3G17 VT- margin).
+- U1 pins without an escape: 6 (R_MTEMP), 21 (W_INLA_M); also R_SOC and SPI_MOSI.
+- Levers left: grow the rear band by ~6-8 mm (room for the left front end), or 8 layers, or re-lay the U1 east /
+  W_* lane fan-out by hand to open via columns.
 
 ## Conventions
 
