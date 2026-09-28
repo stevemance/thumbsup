@@ -202,6 +202,13 @@ boxed by L_MTEMP's and NRST's fan-out vias, PB8 by an L4 lane under its only wes
 splits an L4 3V3 island: net zero.  Tail gotcha found: `SaveBoard` re-nets an unconnected new via to the plane net
 (GND); hand vias for signal nets must get their track in the same step, or be left to the router.
 
+After the swaps (round 26, 33 open): GND vias for U7 (INA239) pin 7 and TP12, each by lifting one signal run
+(`viaspot.py` with VS_BLK1 lists via spots blocked by a single track).  Tried and not taken: the left sensor supply
+cluster (U11, JP1, C45, C46) moved off U1 into the band beside the +5V bridge.  L_VS / L_VSRC then connect (L_VS
+back to J2 over L4 / L5, 39 mm), but the band window is 3.3 mm tall (U2_DVDD on F at y 25.75, the +5V bridge at
+29.33, L1 east), C45 only fits on B where the R_VSRC B run sits, and the old JP1.1 pad was the +3V3 junction of
+U1.16 / C47 / the L5 tie to C60: net zero.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.

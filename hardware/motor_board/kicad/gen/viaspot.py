@@ -61,7 +61,7 @@ def ok(p):
     for q in pads:
         if box_d(q["box"], p) < D / 2 + CLR:
             return False
-    return 0.35 <= p[0] <= g["board"][0] - 0.35 and 0.35 <= p[1] <= g["board"][1] - 0.35
+    return 0.55 <= p[0] <= g["board"][0] - 0.55 and 0.55 <= p[1] <= g["board"][1] - 0.55
 
 
 BLK1 = __import__("os").environ.get("VS_BLK1")        # also list spots blocked by exactly one track (to lift)
@@ -74,7 +74,7 @@ def blockers(p):
         return None
     if any(box_d(q["box"], p) < D / 2 + CLR for q in pads):
         return None
-    if not (0.35 <= p[0] <= g["board"][0] - 0.35 and 0.35 <= p[1] <= g["board"][1] - 0.35):
+    if not (0.55 <= p[0] <= g["board"][0] - 0.55 and 0.55 <= p[1] <= g["board"][1] - 0.55):
         return None
     return {(t["net"], t["layer"]) for t in tracks if sd(t["a"], t["b"], p) < D / 2 + t["w"] / 2 + CLR}
 
@@ -88,13 +88,14 @@ if BLK1:
         for j in range(-n, n + 1):
             p = (round(cx + i * 0.05, 3), round(cy + j * 0.05, 3))
             bl = blockers(p)
-            if bl is not None and len(bl) == 1 and not (bl & {(x, l) for x in POWER for l in LAY}):
-                k = next(iter(bl))
+            nb = int(__import__("os").environ.get("VS_NB", "1")); near = float(__import__("os").environ.get("VS_NEAR", "99"))
+            if bl is not None and 1 <= len(bl) <= nb and not (bl & {(x, l) for x in POWER for l in LAY}) and box_d(pad["box"], p) <= near:
+                k = tuple(sorted(bl))
                 d = box_d(pad["box"], p)
                 if k not in seen or d < seen[k][0]:
                     seen[k] = (d, p)
     for k, (d, p) in sorted(seen.items(), key=lambda kv: kv[1][0]):
-        print(f"   lift {k[0]} on {k[1]}: via at {p}, {d:.2f} mm off the pad")
+        print(f"   lift {k}: via at {p}, {d:.2f} mm off the pad")
     sys.exit(0)
 out = []
 n = int(R / 0.05)
