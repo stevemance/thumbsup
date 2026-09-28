@@ -1,7 +1,7 @@
 {
     "$schema": "https://schemas.kicad.org/drc.v1.json",
     "coordinate_units": "mm",
-    "date": "2026-09-28T07:43:33",
+    "date": "2026-09-28T07:36:42",
     "ignored_checks": [
         {
             "description": "Footprint has no courtyard defined",
@@ -105,6 +105,29 @@
             "description": "Missing connection between items",
             "items": [
                 {
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                },
+                {
+                    "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
                     "description": "Zone 'L5 GND plane' [GND] on L5.GND, priority 0",
                     "pos": {
                         "x": 100.25,
@@ -128,29 +151,6 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
-                },
-                {
-                    "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
-                    "pos": {
-                        "x": 100.25,
-                        "y": 70.25
-                    },
-                    "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
-                }
-            ],
-            "severity": "error",
-            "type": "unconnected_items"
-        },
-        {
-            "description": "Missing connection between items",
-            "items": [
-                {
                     "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
                     "pos": {
                         "x": 100.25,
@@ -174,20 +174,20 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [L_MTEMP] on F.Cu, length 0.6364 mm",
+                    "description": "Track [L_MTEMP] on F.Cu, length 0.9500 mm",
                     "pos": {
                         "x": 141.3,
-                        "y": 97.65
+                        "y": 98.6
                     },
-                    "uuid": "5ce54227-5e33-4886-bcf2-f05200a8b3b2"
+                    "uuid": "3605836a-6c3b-47e2-a39d-4218ba42cdbf"
                 },
                 {
-                    "description": "Track [L_MTEMP] on F.Cu, length 0.6500 mm",
+                    "description": "Track [L_MTEMP] on F.Cu, length 0.2121 mm",
                     "pos": {
-                        "x": 134.85,
-                        "y": 94.6
+                        "x": 134.7,
+                        "y": 94.75
                     },
-                    "uuid": "6a691bce-ad26-4d5a-8b24-7975f398c2d1"
+                    "uuid": "609fa5c8-626a-4f58-a0b5-85a63f1671a0"
                 }
             ],
             "severity": "error",
@@ -243,20 +243,20 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [SPI_MOSI] on L3.PWR+SIG, length 2.4000 mm",
-                    "pos": {
-                        "x": 130.0,
-                        "y": 97.2
-                    },
-                    "uuid": "e54261ba-eb85-4ce8-82e0-4439fbc905f7"
-                },
-                {
                     "description": "Pad 2 [SPI_MOSI] of U7 on B.Cu",
                     "pos": {
                         "x": 123.5,
                         "y": 81.1
                     },
                     "uuid": "2c5feb50-dac9-4bb1-bdec-8b354adb5785"
+                },
+                {
+                    "description": "Track [SPI_MOSI] on L3.PWR+SIG, length 2.4000 mm",
+                    "pos": {
+                        "x": 130.0,
+                        "y": 97.2
+                    },
+                    "uuid": "e54261ba-eb85-4ce8-82e0-4439fbc905f7"
                 }
             ],
             "severity": "error",
@@ -289,12 +289,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Pad 5 [/sensors/L_VSRC] of U11 on F.Cu",
+                    "description": "Track [/sensors/L_VSRC] on F.Cu, length 0.0515 mm",
                     "pos": {
                         "x": 138.8375,
                         "y": 94.1
                     },
-                    "uuid": "d6b686e6-2022-40ad-8241-9d8c5ed7dc0b"
+                    "uuid": "b1472f40-83bb-4f80-bcc7-9cdfc8d733c0"
                 },
                 {
                     "description": "Track [/sensors/L_VSRC] on F.Cu, length 1.1500 mm",
@@ -343,12 +343,12 @@
                     "uuid": "940819e4-82d9-4566-8c9d-8295b4ac5d27"
                 },
                 {
-                    "description": "Track [+5V] on F.Cu, length 0.4950 mm",
+                    "description": "Track [+5V] on F.Cu, length 1.0000 mm",
                     "pos": {
                         "x": 144.85,
-                        "y": 94.1
+                        "y": 95.1
                     },
-                    "uuid": "a24d8f57-d3de-47ee-a980-845168ada14a"
+                    "uuid": "5834ff9f-c007-4ef9-834c-be376b91cf95"
                 }
             ],
             "severity": "error",
@@ -404,12 +404,35 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [/mcu/SWDIO] on L5.GND, length 0.6750 mm",
+                    "description": "Pad 9 [/mcu/SWDIO] of J1 on B.Cu",
                     "pos": {
-                        "x": 129.975,
-                        "y": 99.8
+                        "x": 114.6,
+                        "y": 89.835
                     },
-                    "uuid": "9bdd7448-01e4-49be-9b10-118247005988"
+                    "uuid": "cc5d79b8-a568-4553-882d-80af67c734e3"
+                },
+                {
+                    "description": "Pad 49 [/mcu/SWDIO] of U1 on B.Cu",
+                    "pos": {
+                        "x": 129.825,
+                        "y": 99.75
+                    },
+                    "uuid": "78f68188-0484-4104-8493-611e00b73890"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
+                    "description": "Pad 49 [/mcu/SWDIO] of U1 on B.Cu",
+                    "pos": {
+                        "x": 129.825,
+                        "y": 99.75
+                    },
+                    "uuid": "78f68188-0484-4104-8493-611e00b73890"
                 },
                 {
                     "description": "Pad 1 [/mcu/SWDIO] of TP2 on F.Cu",
@@ -527,12 +550,12 @@
                     "uuid": "740b03dd-4b04-46b3-8393-8a84bf6f4430"
                 },
                 {
-                    "description": "Pad 2 [R_MTEMP] of R117 on B.Cu",
+                    "description": "Track [R_MTEMP] on B.Cu, length 0.8839 mm",
                     "pos": {
                         "x": 143.425,
                         "y": 93.7
                     },
-                    "uuid": "6ecc6154-ab94-4eec-88ec-ff4d90035d38"
+                    "uuid": "d5d55b74-3549-4358-949d-4c021ca36237"
                 }
             ],
             "severity": "error",
@@ -542,12 +565,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [/sensors/R_H3B] on L4.SIG, length 1.3435 mm",
+                    "description": "Track [/sensors/R_H3B] on L4.SIG, length 2.7500 mm",
                     "pos": {
-                        "x": 169.0,
-                        "y": 103.1
+                        "x": 169.95,
+                        "y": 102.15
                     },
-                    "uuid": "1e150929-5234-4dfd-96f5-e5a59f90931b"
+                    "uuid": "54b5ea4e-6e19-4728-96a8-5ce8d135c2d8"
                 },
                 {
                     "description": "Pad 6 [/sensors/R_H3B] of U10 on B.Cu",
@@ -573,12 +596,12 @@
                     "uuid": "9d9b6996-7405-43ee-adf5-873b4330300d"
                 },
                 {
-                    "description": "Track [/sensors/R_H2] on B.Cu, length 1.7000 mm",
+                    "description": "Pad 4 [/sensors/R_H2] of J3 on B.Cu",
                     "pos": {
                         "x": 163.5,
                         "y": 99.95
                     },
-                    "uuid": "0d480144-54eb-4034-9dcd-f3ce873fbfb7"
+                    "uuid": "71afd65a-9c6b-4bd6-a565-45a0e019990d"
                 }
             ],
             "severity": "error",
@@ -619,12 +642,12 @@
                     "uuid": "1121d992-774d-4644-84c5-3f69c21fd9cd"
                 },
                 {
-                    "description": "Track [/sensors/R_H3] on B.Cu, length 1.4142 mm",
+                    "description": "Track [/sensors/R_H3] on B.Cu, length 0.6000 mm",
                     "pos": {
                         "x": 162.5,
-                        "y": 99.35
+                        "y": 99.95
                     },
-                    "uuid": "ce6344b7-c58a-416d-86db-da78905ec2b9"
+                    "uuid": "4e0e9385-915d-401b-ae9e-b77beb0070aa"
                 }
             ],
             "severity": "error",
