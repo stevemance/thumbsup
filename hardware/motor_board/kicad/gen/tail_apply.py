@@ -51,6 +51,8 @@ for e in tail_edits.EDITS:
     for x in b.GetTracks():
         if e.get("nets") and x.GetNetname() not in e["nets"]:
             continue
+        if x.GetNetname() in e.get("except_nets", ()):     # region rips: everything but the listed (power) nets
+            continue
         if x.GetClass() == "PCB_VIA":
             if not e.get("keep_vias") and any(inbox(loc(x.GetPosition()), bx) for bx in boxes):
                 kill_all[id(x)] = x

@@ -161,6 +161,31 @@ L2 over the slot length.  First pass: +3V3 x2, NRST, W_NTC, L_SOC (L5 lengths 4.
 zone-to-zone items carry no position.  GND: 8 padded pieces left (C64 / C90 / C73, TP12, C111, C45, C61, R61, C50,
 U7.7), all fenced by signal tracks with no legal via spot.
 
+## Status (2026-09-28, end): 38 open, DRC 0 - needs decisions
+
+Rounds 22-24: L_INHC (L3 + L5); **power LED D3 and R62 moved** into the band beside the +5V bridge (R62 had been
+35 mm from D3, at U4; D3 is still on the rear edge, top side); +5V to JP1; **+5V trunk to J1** (compute-board feed,
+<= 0.45 A) as a 0.35 mm L5 run ~2.5 mm inside the rear edge (y ~32.5, x 18-51): no other path exists, and a strip
+right at the edge is blocked by the GND via rows at y 33.2 / 34.1.  L2 is untouched; the L5 strip south of the trunk
+is stitched by those rows.  W_VA's hop over U1's east pins is now on L5 (analog sense between planes).
+
+Left (38): 8 GND pads (C64 / C90 / C73, TP12, C111, C45, C61, R61, C50, U7.7: no legal via within 1.5 mm even at
+0.3 / 0.15, `viaspot.py`), and 30 signal / rail connections in three knots:
+1. **Left Hall front end on top of U1** (U9, R110-R112, C110-C112, R54-R56, U11, C46 / C47): L_S1-3, L_VS x2, L_VSRC,
+   L_H1, L_MTEMP, +3V3 at C47 / U9.  U9 sits on U1's escape via field (the vias under it are U1's fan-out); a via
+   search finds no legal spot for any of its outputs.
+2. **Right sensors** (U10 on the L3 bus turn, J3 filters): R_H2 / R_H3 / R_H3B / R_TEMPJ / R_SOC / W_NTC: every
+   trial trades one for another (R_H2 vs R_H1, R_H3B vs R_S1).  C410 (U4's third VM bulk cap, 20 mm from U4 since
+   placement) has no free spot within 7 mm of U4.
+3. **U1 west / south-west** (SWDIO x2, SPI_SCK / SPI_MOSI to U7, L_nCS, INA_nCS, R_MTEMP x2, W_INLA_M, VBAT_SW, +5V
+   at JP2 / R20).  Re-laying U1's west fan-out automatically makes it worse (38 -> 45): the hand-planned escapes
+   are denser than the grid router reproduces.
+
+Options, cheapest first: (a) **MCU pin swaps** for the hall inputs (L_S1-3, R_S1-3: TIM2 / TIM3 channels have
+alternate pins) and SWD-adjacent signals, putting each on the U1 side facing its source: schematic + firmware
+change; (b) **8 layers** (JLC 8-layer): two more signal layers under the same placement; (c) a hand re-placement of
+the U1 surround (left front end off U1, U10 off the bus), which means re-drawing U1's fan-out by hand.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
