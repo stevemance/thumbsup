@@ -1,7 +1,7 @@
 {
     "$schema": "https://schemas.kicad.org/drc.v1.json",
     "coordinate_units": "mm",
-    "date": "2026-09-28T08:38:48",
+    "date": "2026-09-28T08:02:51",
     "ignored_checks": [
         {
             "description": "Footprint has no courtyard defined",
@@ -105,6 +105,29 @@
             "description": "Missing connection between items",
             "items": [
                 {
+                    "description": "Zone 'F GND fill' [GND] on F.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "d959df45-0ad4-4fa5-8878-ad722924d888"
+                },
+                {
+                    "description": "Zone 'B GND fill' [GND] on B.Cu, priority 0",
+                    "pos": {
+                        "x": 100.25,
+                        "y": 70.25
+                    },
+                    "uuid": "0a13ea9d-5a39-4f6b-b04c-c466d91364c5"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
                     "description": "Track [L_MTEMP] on F.Cu, length 0.6364 mm",
                     "pos": {
                         "x": 141.3,
@@ -113,12 +136,12 @@
                     "uuid": "5ce54227-5e33-4886-bcf2-f05200a8b3b2"
                 },
                 {
-                    "description": "Track [L_MTEMP] on F.Cu, length 0.2121 mm",
+                    "description": "Track [L_MTEMP] on F.Cu, length 0.6500 mm",
                     "pos": {
-                        "x": 134.7,
-                        "y": 94.75
+                        "x": 134.85,
+                        "y": 94.6
                     },
-                    "uuid": "609fa5c8-626a-4f58-a0b5-85a63f1671a0"
+                    "uuid": "6a691bce-ad26-4d5a-8b24-7975f398c2d1"
                 }
             ],
             "severity": "error",
@@ -458,12 +481,12 @@
                     "uuid": "740b03dd-4b04-46b3-8393-8a84bf6f4430"
                 },
                 {
-                    "description": "Track [R_MTEMP] on B.Cu, length 0.8839 mm",
+                    "description": "Pad 2 [R_MTEMP] of R117 on B.Cu",
                     "pos": {
                         "x": 143.425,
                         "y": 93.7
                     },
-                    "uuid": "d5d55b74-3549-4358-949d-4c021ca36237"
+                    "uuid": "6ecc6154-ab94-4eec-88ec-ff4d90035d38"
                 }
             ],
             "severity": "error",
@@ -8019,20 +8042,20 @@
             "description": "Silkscreen clearance",
             "items": [
                 {
-                    "description": "Reference field of C90",
+                    "description": "Reference field of C62",
                     "pos": {
-                        "x": 141.25,
-                        "y": 102.24
+                        "x": 132.25,
+                        "y": 104.56
                     },
-                    "uuid": "5c2005b3-b3e0-416f-b0df-05ba3bbd72ba"
+                    "uuid": "42baebc5-ff26-4cd3-998f-aaf04ab9fd7a"
                 },
                 {
-                    "description": "Reference field of C64",
+                    "description": "Reference field of R70",
                     "pos": {
-                        "x": 141.77,
-                        "y": 101.75
+                        "x": 130.25,
+                        "y": 104.57
                     },
-                    "uuid": "80dfeb06-c7b2-4dfe-8b32-27b6e56ad632"
+                    "uuid": "ac44ceab-82ed-4839-9b58-48bdadd6a468"
                 }
             ],
             "severity": "warning",
@@ -8088,29 +8111,6 @@
             "description": "Silkscreen clearance",
             "items": [
                 {
-                    "description": "Reference field of C73",
-                    "pos": {
-                        "x": 143.25,
-                        "y": 102.79
-                    },
-                    "uuid": "5236e47c-1225-4592-a846-ab84aa8af37c"
-                },
-                {
-                    "description": "Reference field of C90",
-                    "pos": {
-                        "x": 141.25,
-                        "y": 102.24
-                    },
-                    "uuid": "5c2005b3-b3e0-416f-b0df-05ba3bbd72ba"
-                }
-            ],
-            "severity": "warning",
-            "type": "silk_overlap"
-        },
-        {
-            "description": "Silkscreen clearance",
-            "items": [
-                {
                     "description": "Reference field of D8",
                     "pos": {
                         "x": 126.75,
@@ -8134,20 +8134,20 @@
             "description": "Silkscreen clearance",
             "items": [
                 {
-                    "description": "Reference field of C62",
+                    "description": "Reference field of C91",
                     "pos": {
-                        "x": 132.25,
+                        "x": 139.25,
                         "y": 104.56
                     },
-                    "uuid": "42baebc5-ff26-4cd3-998f-aaf04ab9fd7a"
+                    "uuid": "4f00ae47-f7e4-413b-a0e1-877edee05dbb"
                 },
                 {
-                    "description": "Reference field of R70",
+                    "description": "Reference field of C90",
                     "pos": {
-                        "x": 130.25,
-                        "y": 104.57
+                        "x": 141.25,
+                        "y": 104.56
                     },
-                    "uuid": "ac44ceab-82ed-4839-9b58-48bdadd6a468"
+                    "uuid": "5c2005b3-b3e0-416f-b0df-05ba3bbd72ba"
                 }
             ],
             "severity": "warning",
@@ -8263,6 +8263,29 @@
                         "y": 93.07
                     },
                     "uuid": "fc8e77c8-4bef-4cdf-b05b-3ffbb1fbcec0"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of R59 on B.Silkscreen",
+                    "pos": {
+                        "x": 169.846359,
+                        "y": 93.83
+                    },
+                    "uuid": "b7a64b3c-3ad4-40b5-aa4d-489ab3f32dc8"
+                },
+                {
+                    "description": "Reference field of C50",
+                    "pos": {
+                        "x": 170.75,
+                        "y": 93.39
+                    },
+                    "uuid": "eaa98d94-3ff9-4761-a3f9-70b84561d326"
                 }
             ],
             "severity": "warning",
@@ -9925,29 +9948,6 @@
             "type": "hole_to_hole"
         },
         {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1772 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 117.2,
-                        "y": 87.95
-                    },
-                    "uuid": "146b8e83-45f2-4d1b-a827-4a0e123a1f0a"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 117.05,
-                        "y": 87.55
-                    },
-                    "uuid": "f9327771-cc18-4b25-a119-4a8a6675eb95"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
             "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2250 mm)",
             "items": [
                 {
@@ -9965,6 +9965,29 @@
                         "y": 87.95
                     },
                     "uuid": "a7a4586f-c9ca-46e2-b1c5-6b070240c640"
+                }
+            ],
+            "severity": "warning",
+            "type": "hole_to_hole"
+        },
+        {
+            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.1772 mm)",
+            "items": [
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 117.2,
+                        "y": 87.95
+                    },
+                    "uuid": "146b8e83-45f2-4d1b-a827-4a0e123a1f0a"
+                },
+                {
+                    "description": "Via [GND] on F.Cu - B.Cu",
+                    "pos": {
+                        "x": 117.05,
+                        "y": 87.55
+                    },
+                    "uuid": "f9327771-cc18-4b25-a119-4a8a6675eb95"
                 }
             ],
             "severity": "warning",
@@ -10218,29 +10241,6 @@
                         "y": 87.1
                     },
                     "uuid": "4c36dd13-b05f-4ee0-93f4-bf244b1f1607"
-                }
-            ],
-            "severity": "warning",
-            "type": "hole_to_hole"
-        },
-        {
-            "description": "Drilled hole too close to other hole (board setup constraints min 0.2500 mm; actual 0.2123 mm)",
-            "items": [
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 139.75,
-                        "y": 104.5
-                    },
-                    "uuid": "32c2ce94-3389-4d03-9a4f-c7b65dfa6d45"
-                },
-                {
-                    "description": "Via [GND] on F.Cu - B.Cu",
-                    "pos": {
-                        "x": 139.85,
-                        "y": 104.1
-                    },
-                    "uuid": "b0a5749c-96ca-427e-a76d-69c51dbce5ca"
                 }
             ],
             "severity": "warning",
@@ -11213,19 +11213,19 @@
             "type": "silk_edge_clearance"
         },
         {
-            "description": "Track has unconnected end",
+            "description": "Via is not connected or connected on only one layer",
             "items": [
                 {
-                    "description": "Track [/mcu/R_SOA_F] on B.Cu, length 1.6500 mm",
+                    "description": "Via [/mcu/R_SOA_F] on F.Cu - B.Cu",
                     "pos": {
-                        "x": 138.75,
-                        "y": 102.77
+                        "x": 138.5,
+                        "y": 100.45
                     },
-                    "uuid": "b830cc3e-ba0e-465c-9ce7-f03fa0cca9aa"
+                    "uuid": "11065ff7-87e3-49b9-b597-acb8c642f7bd"
                 }
             ],
             "severity": "warning",
-            "type": "track_dangling"
+            "type": "via_dangling"
         },
         {
             "description": "Track has unconnected end",
