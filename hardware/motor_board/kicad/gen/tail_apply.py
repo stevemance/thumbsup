@@ -27,6 +27,15 @@ def inbox(p, box):
     return box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]
 
 
+def anchor(v):
+    """A lone new via overlapping a pour's fill is re-netted to the pour's net on SaveBoard (pcbnew connectivity);
+    a 0.02 mm stub of its own net on L5 inside the barrel keeps its net until the router joins it."""
+    x = pcbnew.PCB_TRACK(b)
+    x.SetStart(v.GetPosition()); x.SetEnd(v.GetPosition() + pcbnew.VECTOR2I_MM(0.02, 0))
+    x.SetWidth(F(0.15)); x.SetLayer(pcbnew.In4_Cu); x.SetNet(v.GetNet())
+    b.Add(x)
+
+
 def remove(items):
     for x in items:                  # collect first, then remove (removing while iterating crashes pcbnew)
         b.Remove(x)
@@ -157,6 +166,7 @@ for e in tail_edits.EDITS:
         x.SetWidth(F(e.get("d", 0.4))); x.SetDrill(F(e.get("drill", 0.2)))
         x.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); x.SetNet(nets[e["net"]])
         b.Add(x)
+        anchor(x)
     elif op == "route":
         r = {k: v for k, v in e.items() if k != "op"}
         r.setdefault("tag", f"{e['net']} {e['a'][1]}-{e['b'][1]}")
@@ -224,6 +234,7 @@ for e in tail_edits.EDITS:
         x.SetWidth(F(e.get("d", 0.4))); x.SetDrill(F(e.get("drill", 0.2)))
         x.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); x.SetNet(pd.GetNet())
         b.Add(x)
+        anchor(x)
     elif op == "drop":
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),
