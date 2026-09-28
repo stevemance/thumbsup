@@ -186,6 +186,22 @@ alternate pins) and SWD-adjacent signals, putting each on the U1 side facing its
 change; (b) **8 layers** (JLC 8-layer): two more signal layers under the same placement; (c) a hand re-placement of
 the U1 surround (left front end off U1, U10 off the bus), which means re-drawing U1's fan-out by hand.
 
+## MCU pin swaps (2026-09-28, rev L1): 35 open, DRC 0, parity 0
+
+User chose pin swaps (option a above).  Done in `design/motor_board.py` (ST pin-database check passes),
+netlist / pin map regenerated, `mcu.kicad_sch` edited in place (the sheet generator re-rolls every symbol uuid, which
+would break the footprint links), board pads re-netted with the tail op `swap_pin` (review/CHANGES.md "Rev L1"):
+L_S2 -> PB4 (takes R_nCS's pin-57 via beside U9.5), L_S1 -> PB5, R_nCS -> PA11 (takes INA_nCS's pin-45 stub beside
+its own L3 lane via), INA_nCS -> PB8-BOOT0 (R61 removed; nSWBOOT0 / nBOOT0 option bytes), PC6 unused.
+Why PC6 is left empty: it has no via reach at all (pins 37 / 39's vias, C91 under it, J2's mounting pad above), so
+whatever sits there cannot route; the only way to free it was to give BOOT0's pin a second job.
+
+Tried and not taken: a W-group rotation (W_INLA_M -> PC13, W_nFAULT -> PA6 / PB8, W_NTC / R_MTEMP -> PA7 / PF1):
+W_INLA_M and R_MTEMP connect, but pin 6 (PF1) and pin 61 (PB8) have no escape for the net pushed onto them (PF1 is
+boxed by L_MTEMP's and NRST's fan-out vias, PB8 by an L4 lane under its only westward exit) and W_INLA_M's L4 path
+splits an L4 3V3 island: net zero.  Tail gotcha found: `SaveBoard` re-nets an unconnected new via to the plane net
+(GND); hand vias for signal nets must get their track in the same step, or be left to the router.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
