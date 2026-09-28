@@ -1,7 +1,7 @@
 {
     "$schema": "https://schemas.kicad.org/drc.v1.json",
     "coordinate_units": "mm",
-    "date": "2026-09-28T10:16:58",
+    "date": "2026-09-28T09:49:49",
     "ignored_checks": [
         {
             "description": "Footprint has no courtyard defined",
@@ -82,12 +82,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [L_MTEMP] on F.Cu, length 0.9500 mm",
+                    "description": "Track [L_MTEMP] on F.Cu, length 0.6364 mm",
                     "pos": {
                         "x": 141.3,
-                        "y": 98.6
+                        "y": 97.65
                     },
-                    "uuid": "3605836a-6c3b-47e2-a39d-4218ba42cdbf"
+                    "uuid": "5ce54227-5e33-4886-bcf2-f05200a8b3b2"
                 },
                 {
                     "description": "Track [L_MTEMP] on F.Cu, length 0.6500 mm",
@@ -211,6 +211,29 @@
                         "y": 92.1
                     },
                     "uuid": "afb25c1a-c2d0-4e5b-b30e-8a52c0bbbc99"
+                }
+            ],
+            "severity": "error",
+            "type": "unconnected_items"
+        },
+        {
+            "description": "Missing connection between items",
+            "items": [
+                {
+                    "description": "Track [/sensors/L_H1] on F.Cu, length 0.9800 mm",
+                    "pos": {
+                        "x": 133.539999,
+                        "y": 95.4
+                    },
+                    "uuid": "c75a9754-2996-4b0c-b612-9fdaf3cba7b5"
+                },
+                {
+                    "description": "Pad 3 [/sensors/L_H1] of J2 on F.Cu",
+                    "pos": {
+                        "x": 132.8,
+                        "y": 99.9
+                    },
+                    "uuid": "4ba7fa33-0936-4c6d-abe8-bbdd309eb964"
                 }
             ],
             "severity": "error",
@@ -381,12 +404,12 @@
             "description": "Missing connection between items",
             "items": [
                 {
-                    "description": "Track [/sensors/R_H3B] on L4.SIG, length 2.7500 mm",
+                    "description": "Track [/sensors/R_H3B] on L4.SIG, length 1.3435 mm",
                     "pos": {
-                        "x": 169.95,
-                        "y": 102.15
+                        "x": 169.0,
+                        "y": 103.1
                     },
-                    "uuid": "54b5ea4e-6e19-4728-96a8-5ce8d135c2d8"
+                    "uuid": "1e150929-5234-4dfd-96f5-e5a59f90931b"
                 },
                 {
                     "description": "Pad 6 [/sensors/R_H3B] of U10 on B.Cu",

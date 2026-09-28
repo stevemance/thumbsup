@@ -22,7 +22,7 @@ fig, ax = plt.subplots(figsize=((x1 - x0) * 0.9, (y1 - y0) * 0.9), dpi=90)
 ax.set_xlim(x0, x1); ax.set_ylim(y1, y0); ax.set_aspect("equal")
 ax.set_xticks(range(int(x0), int(x1) + 1)); ax.set_yticks(range(int(y0), int(y1) + 1)); ax.grid(lw=0.3, alpha=0.4)
 inb = lambda p, m=1: x0 - m <= p[0] <= x1 + m and y0 - m <= p[1] <= y1 + m
-for l in ("B.Cu", "In2.Cu", "In3.Cu", "F.Cu"):
+for l in ("B.Cu", "In4.Cu", "In2.Cu", "In3.Cu", "F.Cu"):
     if l not in show:
         continue
     for p in g["pads"]:

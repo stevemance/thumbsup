@@ -22,7 +22,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 | **Inner copper** | **1 oz** (pick an "inner 1 oz" stack-up; JLC's default is 0.5 oz) | DESIGN 6.1: the pack current rides the L3 pour |
 | Board size | **85 x 35 mm**, 1 design (grown from 75 mm for routing room, 2026-09-28: the east part moved +10 mm, incl. MH2 / MH4, J3, U2, U4, JW1 / JW2, JR1-3) | PLACEMENT 1, ROUTING_PLAN.md |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
-| **Via-in-pad** | **yes: epoxy-filled and capped** (free on JLC 6-layer boards) | thermal vias in U2/U3/U4's exposed pads, 8 vias in RS2's GND pad (layout step 1), and vias in the pads of C112.2, C74.1, C62.1 (routing, ROUTING_PLAN.md 2026-09-27) |
+| **Via-in-pad** | **yes: epoxy-filled and capped** (free on JLC 6-layer boards) | thermal vias in U2/U3/U4's exposed pads, 8 vias in RS2's GND pad (layout step 1), and vias in the pads of C112.2, C74.1, C62.1, J2.3 (pad edge), R54.1 (routing, ROUTING_PLAN.md 2026-09-27/28) |
 | Min track / space | 0.127 / 0.127 mm on logic nets (Default class); 0.15 on power, drive, gate, sense, rail classes (JLC 6-layer: 0.09 / 0.09) | project rules |
 | Hole to copper | 0.2 mm (JLC 6-layer via hole to track: 0.2) | project rules |
 | Min via | 0.4 mm pad / 0.2 mm drill for signals; 0.45 / 0.25 GND and rails; 0.6 / 0.3 power (JLC 6-layer min 0.25 / 0.15) | project rules |
