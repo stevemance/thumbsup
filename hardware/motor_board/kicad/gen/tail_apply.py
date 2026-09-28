@@ -36,6 +36,7 @@ def remove(items):
 reqs, n_rip = [], 0
 # pass 1: every rip, against the frozen board (after one Remove the board's track list can no longer be walked)
 kill_all, soft_via, hard_via = {}, set(), set()
+rr_kill, rr_opt = {}, {}           # rips with reroute=True: their items, and the route options per net
 for e in tail_edits.EDITS:
     if e["op"] not in ("rip", "rip_ref"):
         continue
@@ -60,6 +61,9 @@ for e in tail_edits.EDITS:
                 continue
             if any(inbox(loc(x.GetStart()), bx) or inbox(loc(x.GetEnd()), bx) for bx in boxes):
                 kill_all[id(x)] = x
+                if e.get("reroute"):
+                    rr_kill[id(x)] = x
+                    rr_opt[x.GetNetname()] = e["reroute"] if isinstance(e["reroute"], dict) else {}
 # a via caught only by layer-limited rips stays if a surviving track still lands on it
 for v in [x for x in kill_all.values() if id(x) in soft_via and id(x) not in hard_via]:
     vp = v.GetPosition()
@@ -77,6 +81,51 @@ for x in kill_all.values():
         near = min(gpads, key=lambda q: math.dist(q[2], c))
         if math.dist(near[2], c) < 2.0:
             redrop.append((near[0], near[1]))
+# reroute: the cut ends a ripped run leaves (surviving track ends, vias, pads) get re-joined after every other route
+rr_reqs = []
+if rr_kill:
+    alive = [x for x in b.GetTracks() if id(x) not in kill_all]
+    ends = {}
+    for x in rr_kill.values():
+        if x.GetClass() != "PCB_TRACK":
+            continue
+        n = x.GetNetname()
+        for p in (x.GetStart(), x.GetEnd()):
+            if any(id(y) in rr_kill and y.GetClass() == "PCB_TRACK" and y is not x and p in (y.GetStart(), y.GetEnd())
+                   and y.GetLayer() == x.GetLayer() for y in rr_kill.values()):
+                continue                                   # interior joint of the ripped run
+            q = loc(p); en = None
+            for y in alive:
+                if y.GetNetname() != n:
+                    continue
+                if y.GetClass() == "PCB_VIA" and y.GetPosition() == p:
+                    en = ("via", round(q[0], 4), round(q[1], 4)); break
+                if y.GetClass() == "PCB_TRACK" and y.GetLayer() == x.GetLayer() and p in (y.GetStart(), y.GetEnd()):
+                    en = ("pt", round(q[0], 4), round(q[1], 4), pcbnew.BOARD.GetStandardLayerName(x.GetLayer())); break
+            if en is None:
+                for f in b.GetFootprints():
+                    for pd in f.Pads():
+                        if pd.GetNetname() == n and pd.IsOnLayer(x.GetLayer()) and pd.HitTest(p):
+                            en = ("pad", f.GetReference(), pd.GetNumber())
+            if en is not None:
+                ends.setdefault(n, [])
+                if en not in ends[n]:
+                    ends[n].append(en)
+
+    def xy(en):
+        if en[0] == "pad":
+            pd = [q for q in fps[en[1]].Pads() if q.GetNumber() == en[2]][0]
+            return loc(pd.GetPosition())
+        return en[1], en[2]
+    for n, es in ends.items():
+        done = [es[0]]; rest = es[1:]
+        while rest:                                        # nearest-neighbour tree over the cut ends
+            a_, b_ = min(((a, c) for a in done for c in rest), key=lambda ac: math.dist(xy(ac[0]), xy(ac[1])))
+            o = rr_opt[n]
+            rr_reqs.append(dict(dict(net=n, a=a_, b=b_, tag=f"rr {n} {a_[1]}-{b_[1]}",
+                                     w=max(t(x.GetWidth()) for x in rr_kill.values() if x.GetClass() == "PCB_TRACK" and x.GetNetname() == n), margin=4.0,
+                                     layers=["F.Cu", "B.Cu", "In3.Cu", "In2.Cu"], via_through_pours=True), **o))
+            done.append(b_); rest.remove(b_)
 remove(list(kill_all.values()))
 # pass 2: everything else, in order
 for e in tail_edits.EDITS:
@@ -151,6 +200,7 @@ for e in tail_edits.EDITS:
                          via_through_pours=True))
     else:
         raise SystemExit(f"unknown op {op}")
+reqs += rr_reqs
 for ref_, num_ in dict.fromkeys(redrop):
     reqs.append(dict(tag=f"redrop {ref_}.{num_}", net="GND", a=("pad", ref_, num_), b=("drop",), layers=["F.Cu", "B.Cu"],
                      w=0.3, via=0.45, drill=0.25, margin=2.5, via_through_pours=True))
