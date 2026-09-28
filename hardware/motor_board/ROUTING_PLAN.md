@@ -143,6 +143,24 @@ Right-sensor block tried in the band (U10, filters, pull-ups): H2 / H3 pull-ups 
 order is the reverse of U10's input order and the block's power pins sit over the bus: net zero, reverted.  A clean
 version needs the block drawn by hand around the via strip.
 
+## Status (2026-09-28, later): 43 open, DRC 0 - L5 takes jumpers
+
+Rounds 17-21 (tail_log): U12 1.6 mm north with C49 beside its R_VS pin (R_VS / R_VSRC done); a `reroute` option on
+rips (lift a blocking run, route the open, re-join the run's cut ends); L4 3V3 fill islands stitched with short hops;
+a batch of per-open experiments (`TAIL_EXP`: one edits module per trial, own work dir, run in parallel).
+
+**Decision: L5 (In4, the second GND plane) takes short signal jumpers** where U1's field is full on all four signal
+layers (a via-spot search finds no legal 0.3 mm via within 1.5 mm of eight boxed-in GND pads there).  The router
+uses L5 only when a request lists it, at layer cost 4, so it goes there just to get past a fence; the plane refills
+around the jumpers.  Why this is acceptable: L2 stays unbroken and is the reference for F and L3; the jumpers carry
+slow logic (NRST, W_NTC, L_SOC, +3V3 ties), none of the gate / Kelvin / SPI-clock / shunt nets; motor supplies
+(R_VM) never go there.  Cost: small slots in L5 under the U1 area, where the L4 signals above it then reference L3 /
+L2 over the slot length.  First pass: +3V3 x2, NRST, W_NTC, L_SOC (L5 lengths 4.6-9 mm).
+
+`netcc.py` lists a net's disconnected pieces the way DRC counts them (zone islands, tracks, vias, pads); DRC's
+zone-to-zone items carry no position.  GND: 8 padded pieces left (C64 / C90 / C73, TP12, C111, C45, C61, R61, C50,
+U7.7), all fenced by signal tracks with no legal via spot.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
