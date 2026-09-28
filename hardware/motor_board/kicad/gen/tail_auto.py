@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-LN = {"F.Cu": "F.Cu", "B.Cu": "B.Cu", "L3.PWR+SIG": "In2.Cu", "L4.SIG": "In3.Cu"}
+LN = {"F.Cu": "F.Cu", "B.Cu": "B.Cu", "L3.PWR+SIG": "In2.Cu", "L4.SIG": "In3.Cu", "L5.GND": "In4.Cu"}
 
 
 def end(i, bx, by):

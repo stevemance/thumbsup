@@ -14,10 +14,10 @@ g = json.load(open(sys.argv[1]))
 drc = json.load(open(sys.argv[2]))
 x0, y0, x1, y1 = map(float, sys.argv[3:7])
 out = sys.argv[7]
-LY = {"F": "F.Cu", "B": "B.Cu", "L3": "In2.Cu", "L4": "In3.Cu"}
+LY = {"F": "F.Cu", "B": "B.Cu", "L3": "In2.Cu", "L4": "In3.Cu", "L5": "In4.Cu"}
 show = [LY[k] for k in (sys.argv[8].split(",") if len(sys.argv) > 8 and sys.argv[8] else LY)]
 hl = set(sys.argv[9].split(",")) if len(sys.argv) > 9 else set()
-COL = {"F.Cu": "#d62728", "B.Cu": "#1f5fbf", "In2.Cu": "#e08a00", "In3.Cu": "#17a2b8"}
+COL = {"F.Cu": "#d62728", "B.Cu": "#1f5fbf", "In2.Cu": "#e08a00", "In3.Cu": "#17a2b8", "In4.Cu": "#2ca02c"}
 fig, ax = plt.subplots(figsize=((x1 - x0) * 0.9, (y1 - y0) * 0.9), dpi=90)
 ax.set_xlim(x0, x1); ax.set_ylim(y1, y0); ax.set_aspect("equal")
 ax.set_xticks(range(int(x0), int(x1) + 1)); ax.set_yticks(range(int(y0), int(y1) + 1)); ax.grid(lw=0.3, alpha=0.4)
