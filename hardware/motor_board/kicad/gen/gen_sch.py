@@ -11,13 +11,13 @@ import sys
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, "/home/smance/projects/thumbsup/hardware/motor_board/kicad/lib_build")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib_build"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kicadlib as K  # noqa: E402
 from kicadlib import Str  # noqa: E402
 from blocks import BLOCKS, order_key  # noqa: E402
 
-MB = Path("/home/smance/projects/thumbsup/hardware/motor_board")
+MB = Path(__file__).resolve().parents[2]
 PROJ = MB / "kicad" / "motor_board"
 BACKUP = Path(__file__).resolve().parent / "out" / "sch_backup"
 ROOT_UUID = "171e0a5d-7eac-4b29-8fcf-e7df83310741"

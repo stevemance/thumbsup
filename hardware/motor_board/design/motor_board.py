@@ -362,15 +362,15 @@ MCU_PINS = {
     "28": ("VREF+", "+3V3A", ""), "29": ("VDDA", "+3V3A", ""), "30": ("PB10", "R_S3", "TIM2_CH3"),
     "31": ("VSS", "GND", ""), "32": ("VDD", "+3V3", ""), "33": ("PB11", "W_SOC", "COMP6_INP"),
     "34": ("PB12", "R_SOA_F", "ADC4_IN3"), "35": ("PB13", "R_SOB_F", "ADC3_IN5"), "36": ("PB14", "W_INLB_M", "TIM1_CH2N"),
-    "37": ("PB15", "W_INLC_M", "TIM1_CH3N"), "38": ("PC6", "L_S1", "TIM3_CH1"), "39": ("PC7", "L_INHB", "TIM8_CH2"),
+    "37": ("PB15", "W_INLC_M", "TIM1_CH3N"), "38": ("PC6", "NC", ""), "39": ("PC7", "L_INHB", "TIM8_CH2"),
     "40": ("PC8", "R_INHC", "TIM20_CH3"), "41": ("PC9", "L_nCS", ""), "42": ("PA8", "L_SOA_F", "ADC5_IN1"),
-    "43": ("PA9", "L_SOB_F", "ADC5_IN2"), "44": ("PA10", "W_INHC", "TIM1_CH3"), "45": ("PA11", "INA_nCS", ""),
+    "43": ("PA9", "L_SOB_F", "ADC5_IN2"), "44": ("PA10", "W_INHC", "TIM1_CH3"), "45": ("PA11", "R_nCS", ""),
     "46": ("PA12", "W_EN", ""), "47": ("VSS", "GND", ""), "48": ("VDD", "+3V3", ""),
     "49": ("PA13", "SWDIO", "SYS_JTMS-SWDIO"), "50": ("PA14", "SWCLK", "SYS_JTCK-SWCLK"), "51": ("PA15", "R_S1", "TIM2_CH1"),
     "52": ("PC10", "SPI_SCK", "SPI3_SCK"), "53": ("PC11", "SPI_MISO", "SPI3_MISO"), "54": ("PC12", "SPI_MOSI", "SPI3_MOSI"),
-    "55": ("PD2", "W_ARM_S", ""), "56": ("PB3", "R_S2", "TIM2_CH2"), "57": ("PB4", "R_nCS", ""),
-    "58": ("PB5", "L_S2", "TIM3_CH2"), "59": ("PB6", "L_INHA", "TIM8_CH1"), "60": ("PB7", "L_nFAULT", "TIM8_BKIN"),
-    "61": ("PB8-BOOT0", "BOOT0", ""), "62": ("PB9", "L_INHC", "TIM8_CH3"), "63": ("VSS", "GND", ""), "64": ("VDD", "+3V3", ""),
+    "55": ("PD2", "W_ARM_S", ""), "56": ("PB3", "R_S2", "TIM2_CH2"), "57": ("PB4", "L_S2", "TIM3_CH1"),
+    "58": ("PB5", "L_S1", "TIM3_CH2"), "59": ("PB6", "L_INHA", "TIM8_CH1"), "60": ("PB7", "L_nFAULT", "TIM8_BKIN"),
+    "61": ("PB8-BOOT0", "INA_nCS", ""), "62": ("PB9", "L_INHC", "TIM8_CH3"), "63": ("VSS", "GND", ""), "64": ("VDD", "+3V3", ""),
 }
 part("U1", "STM32G474RET6", "Package_QFP:LQFP-64_10x10mm_P0.5mm", {p: (n, net) for p, (n, net, _) in MCU_PINS.items()},
      LCSC["STM32G474RET6"], "170 MHz M4F; TIM1 weapon, TIM8 drive L, TIM20 drive R, TIM3/TIM2 drive sensors, SPI3 to U3/U4/U7, USART1 to compute")
@@ -382,7 +382,6 @@ two("C66", "4.7uF 16V", C0603, "+3V3A", "GND", LCSC["4u7_16V_0603"], "U1 VREF+ p
 two("C71", "100nF 16V", C0402, "+3V3A", "GND", LCSC["100n_16V_0402"], "U1 VREF+ pin 28")
 two("R60", "0R", R0402, "+3V3", "+3V3A", "C17168", "VDDA feed (0 ohm; fit a 600 ohm@100MHz ferrite if ADC noise is a problem)")
 two("C67", "100nF 16V", C0402, "NRST", "GND", LCSC["100n_16V_0402"], "NRST (internal pull-up)")
-two("R61", "10k 1%", R0402, "BOOT0", "GND", LCSC["R10k"], "boot from flash")
 two("R63", "68k 1%", R0402, "VBAT", "VBAT_SNS", LCSC["R68k"], "pack divider top (25.2 V -> 3.23 V)")
 two("R64", "10k 1%", R0402, "VBAT_SNS", "GND", LCSC["R10k"], "pack divider bottom")
 two("R33", "100k", R0402, "VBAT_SNS", "VBAT_SNS_H", LCSC["R100k"], "header branch of the pack divider: a compute-board pin's reset pull-down (RP2040 ~50 k) shifts the MCU reading < 6 % instead of 10-15 %; the compute board reads it through this 100 k (add ~10 nF at its ADC pin)")

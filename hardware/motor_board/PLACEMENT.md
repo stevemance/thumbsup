@@ -376,7 +376,6 @@ Coordinates are the footprint origin, board top view, origin at the front-left c
 | R42 | 10k 1% | bottom | 23.75, 17.10 | 180 | W_nFAULT pull-up + glitch filter at PC13 (DESIGN: filter at the pin) | 8.6 mm to U1.2 |
 | R43 | 10k 1% | bottom | 46.45, 34.00 | 180 | weapon NTC pull-up + filter near the MCU pin (5.4 mm, see 5.3) | 11.3 mm to U1.20 |
 | R60 | 0R | bottom | 44.20, 28.75 | 90 | VDDA cap / VDDA feed at pin 29 | 3.0 mm to U1.29 |
-| R61 | 10k 1% | bottom | 28.05, 24.25 | -90 | BOOT0 pull-down at pin 60 | 1.9 mm to U1.60 |
 | R62 | 1k | bottom | 59.50, 21.75 | -90 | power LED resistor: bottom, anywhere on the +5V-LED line (3 mA) | 22.4 mm to D3.2 |
 | R63 | 68k 1% | bottom | 33.95, 13.00 | -90 | pack voltage divider + filter toward the MCU pin (DC node; 9.6 mm, see 5.3) | 11.3 mm to U1.17 |
 | R64 | 10k 1% | bottom | 33.95, 11.00 | 90 | pack voltage divider + filter toward the MCU pin (DC node; 9.6 mm, see 5.3) | 12.9 mm to U1.17 |

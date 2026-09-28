@@ -11,9 +11,14 @@ R = float(sys.argv[4]) if len(sys.argv) > 4 else 1.5
 D = float(sys.argv[5]) if len(sys.argv) > 5 else 0.4
 DR = float(sys.argv[6]) if len(sys.argv) > 6 else 0.2
 CLR = 0.127 + 0.05
-pad = [p for p in g["pads"] if p["ref"] == ref and p["num"] == num][0]
+if ref == "pt":                      # viaspot.py geom.json pt x,y,net [r]: around a point, for that net
+    _x, _y, _n = num.split(",", 2)
+    pad = dict(c=[float(_x), float(_y)], box=[float(_x)] * 2 + [float(_y)] * 2, net=_n, layers=[])
+    pad["box"] = [float(_x), float(_y), float(_x), float(_y)]
+else:
+    pad = [p for p in g["pads"] if p["ref"] == ref and p["num"] == num][0]
 net = pad["net"]
-LAY = ("F.Cu", "In2.Cu", "In3.Cu", "B.Cu")
+LAY = ("F.Cu", "In2.Cu", "In3.Cu", "In4.Cu", "B.Cu")
 
 
 def sd(a, b, p):
@@ -70,7 +75,7 @@ for i in range(-n, n + 1):
             out.append((box_d(pad["box"], p), d, p))
 out.sort()
 print(ref, num, net, "pad", pad["c"], pad["box"], pad["layers"])
-for bd, d, p in out[:6]:
+for bd, d, p in out[:int(__import__("os").environ.get("VS_N", "6"))]:
     print(f"   {'in pad' if bd == 0 else f'{bd:.2f} mm off the pad'}  at {p}  (off {round(p[0]-cx,3)},{round(p[1]-cy,3)})")
 if not out:
     print("   none within", R)

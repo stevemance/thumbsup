@@ -36,7 +36,7 @@ BLOCKS = {
         "DRV_OFF pull-up (shared)": ["R50", "TP8"],
     },
     "mcu": {
-        "MCU (STM32G474)": ["U1", "C60", "C61", "C62", "C63", "C64", "C65", "C66", "C71", "R60", "C74", "C67", "R61"],
+        "MCU (STM32G474)": ["U1", "C60", "C61", "C62", "C63", "C64", "C65", "C66", "C71", "R60", "C74", "C67"],
         "3.3 V LDO": ["U5", "C69", "C70"],
         "Header to compute board": ["J1", "R16", "R17", "R33", "R40"],
         "Test pads": ["TP1", "TP2", "TP3", "TP4", "TP5", "TP7", "TP11", "TP12"],

@@ -549,3 +549,21 @@ MT6701, SMBJ20A, STM32G474 DS). §8.1 went from ~4 000 to ~2 200 words; DESIGN.m
 ## RM0440 check (after the trim)
 
 The STM32 facts the firmware contract relies on were checked against RM0440 Rev 7 (now in datasheets/): backup registers survive every system reset and BOR, lost only on VDD+VBAT power-off or BDRST (§7.1.3); RTCSEL can only change through a backup-domain reset; RCC_CSR has no separate POR flag (BORRSTF, PINRSTF, IWDGRSTF, …); SYSCFG_CFGR2.CLL routes the core LOCKUP to the TIM1/8/20 break and needs BKE = 1 (BKE gates every break source); OSSI = 0 releases the outputs to GPIO (Hi-Z), OSSI = 1 holds the OISx idle level; TIMx_AF1.BKINE gates only the BKIN pin, and it, OISx and BKE are frozen by LOCK level ≥ 1 (so LOCK stays 0). No text change needed.
+
+## Rev L1 (2026-09-28): MCU pin swaps for routing
+
+Made during PCB routing (ROUTING_PLAN.md, tail round 25): the left sensor buffer U9 sits over U1's escape field,
+and PC6 (L_S1) has no reachable via.  Swaps, all checked against ST's pin database by motor_board.py:
+
+| Pin | Before | After |
+|---|---|---|
+| 38 PC6 | L_S1 (TIM3_CH1) | not used (NC) |
+| 57 PB4 | R_nCS | L_S2 (TIM3_CH1) |
+| 58 PB5 | L_S2 (TIM3_CH2) | L_S1 (TIM3_CH2) |
+| 45 PA11 | INA_nCS | R_nCS |
+| 61 PB8-BOOT0 | BOOT0 (R61 10 k to GND) | INA_nCS (R12 100 k pull-up); **R61 removed** |
+
+Consequences: left encoder A/B are now on CH2/CH1 (the count sign is a firmware constant); the option bytes set
+nSWBOOT0 = 0 / nBOOT0 = 1 (RM0440 2.6.1: BOOT0 then comes from the option bit, PB8 is a GPIO; a blank chip boots
+the ROM bootloader through R12's pull-up, SWD programming is unaffected), programmed with the BOR level (§9 step 2).
+PB4 still has the UCPD dead-battery pull-down until firmware disables it: harmless on a buffered input.

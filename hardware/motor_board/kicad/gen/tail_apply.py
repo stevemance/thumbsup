@@ -187,6 +187,32 @@ for e in tail_edits.EDITS:
             for i in range(so.Outline(0).PointCount()):
                 q = so.Outline(0).CPoint(i); ol.Append(q.x, q.y)
         b.Add(z)
+    elif op == "swap_pin":              # MCU pin swap: the pad and its own fan-out (copper of its old net chained to it,
+        # both ends inside `box`) take the new net; copper beyond the box must be ripped by the caller
+        pd = [q for q in fps[e["ref"]].Pads() if q.GetNumber() == e["pad"]][0]
+        old = pd.GetNetname()
+        items = [x for x in b.GetTracks() if x.GetNetname() == old and
+                 all(inbox(loc(p), e["box"]) for p in ([x.GetPosition()] if x.GetClass() == "PCB_VIA" else [x.GetStart(), x.GetEnd()]))]
+        pts = {(pd.GetPosition().x, pd.GetPosition().y)}
+        chain, took, grew = [], set(), True
+        while grew:
+            grew = False
+            for k_, x in enumerate(items):
+                if k_ in took:
+                    continue
+                ends = [x.GetPosition()] if x.GetClass() == "PCB_VIA" else [x.GetStart(), x.GetEnd()]
+                if any((p.x, p.y) in pts for p in ends) or (x.GetClass() == "PCB_TRACK" and any(pd.HitTest(p) for p in ends)):
+                    chain.append(x); took.add(k_); grew = True
+                    pts |= {(p.x, p.y) for p in ends}
+        if e["net"] not in nets:                          # e.g. KiCad's "unconnected-(U1-PC6-Pad38)" for a freed pin
+            ni = pcbnew.NETINFO_ITEM(b, e["net"]); b.Add(ni)
+            nets[e["net"]] = b.FindNet(e["net"])
+        pd.SetNet(nets[e["net"]])
+        for x in chain:
+            x.SetNet(nets[e["net"]])
+        print(f"swap {e['ref']}.{e['pad']}: {old} -> {e['net']} ({len(chain)} fan-out items)")
+    elif op == "del_fp":                # a part removed from the design (its pads' stubs: rip_ref first)
+        b.Remove(fps[e["ref"]])
     elif op == "vip":                   # via in pad (filled + capped, FAB.md): a boxed-in passive pad straight to a plane/pour
         pd = [q for q in fps[e["pad"][0]].Pads() if q.GetNumber() == e["pad"][1]][0]
         x = pcbnew.PCB_VIA(b)

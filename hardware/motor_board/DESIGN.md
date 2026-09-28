@@ -107,7 +107,7 @@ Path: **BAT+ (BAT_IN) → Q7 → PSW_S → Q8 → VBAT_SW → RS4 (1 mΩ) → VB
 | R1 / D10 / C13 / R32 / D4 | 4.7 k / 1N4148W / 22 nF (Cdvdt) / 1 M / 12 V zener gate–source | Soft-start: VBAT ramps at ~(I_GATE − R32 bleed) / C13 ≈ 2.2 V/ms (sim; ~3.0 V/ms at the 77 µA max gate current), ~0.8 A into ~380 µF.  R1 isolates C13 so turn-off stays fast.  D10 lets C13 only *slow the gate's rise*: with a reversed pack GND is the most positive node and C13 would otherwise push the gate up and turn Q7/Q8 on (sim: 102–147 A without D10 if U13's unpowered gate hold is weak; only the C14 charge spike with it).  R32 resets C13 between power-ups (22 ms); it draws ~20–28 µA of the gate drive, so the ramp is 1.3–3.0 V/ms over the gate-current spread.  After a UVLO trip C13 stays charged for ~20–40 ms (D10 blocks its discharge through the gate); a re-close in that window is not slowed by C13 but is still benign (≤ 0.06 V/µs).  D4 clamps Vgs at 12 V (U13 GATE–SRC abs max 15 V) at full charge-pump voltage and through sag/recovery transients.  |
 | R13 / R14 / C18 | 100 k / 15 k / 100 nF on EN/UVLO | Switch off below ~9.0 V (7.7–10.1 V with 1 % resistors and the 0–5 µA EN sink), on above ~9.8 V (worst 10.8 V).  C18 (1.3 ms) filters the weapon's 24 kHz bus ripple so it cannot trip the UVLO early.  Stays below a tired 4S pack under load (~11.5 V average) **provided firmware folds current back at ~12 V** (§8); limits an *unloaded* quick re-close step to ~9 V (under load the bus can fall further before the filtered UVLO opens: §7.2) |
 | R15 | 6.8 k 0805 bleeder | After the switch opens the bus decays (τ ≈ 2.3 s with the DC dividers and ~374 µF); the switch UVLO opens the FETs about when the buck stops (~9 V: within ~0.1 s with typical thresholds, ~0.4 s at the minimum threshold), and any re-close after that ramps softly again.  A re-close before that finds the FETs on: at the DRV8316 VM pins (behind R302/R402) 0.06–0.7 V/µs typical, 2.09 V/µs worst (minimum UVLO, C1 at its −40 °C ESR), under 4 V/µs.  A drum still spinning keeps the bus (and the FETs) up longer |
-| RS4, U7 | 1 mΩ 2512 + INA239 | **Pack monitor**, after the switch FETs (the INA239 inputs must stay ≥ −0.3 V, so a reversed pack must not reach them).  Kelvin to U7 through R2/R3 10 Ω with C2 100 nF.  VBUS = VBAT.  ±41 A at 1.25 mA/LSB, plus power and die temperature; firmware integrates mAh.  SPI (CS = PA11, R12 100 k pull-up).  ALERT (open drain) is wired onto W_nFAULT → TIM1 break.  **The INA239 has no per-limit mask**: only SOVL (38 A) and BOVL (19 V) are programmed; the rest stay at never-trip reset values (§8).  INA229AIDGSR is pin/footprint compatible but not register compatible (24-bit results, DEVICE_ID 2291h) |
+| RS4, U7 | 1 mΩ 2512 + INA239 | **Pack monitor**, after the switch FETs (the INA239 inputs must stay ≥ −0.3 V, so a reversed pack must not reach them).  Kelvin to U7 through R2/R3 10 Ω with C2 100 nF.  VBUS = VBAT.  ±41 A at 1.25 mA/LSB, plus power and die temperature; firmware integrates mAh.  SPI (CS = PB8, R12 100 k pull-up).  ALERT (open drain) is wired onto W_nFAULT → TIM1 break.  **The INA239 has no per-limit mask**: only SOVL (38 A) and BOVL (19 V) are programmed; the rest stay at never-trip reset values (§8).  INA229AIDGSR is pin/footprint compatible but not register compatible (24-bit results, DEVICE_ID 2291h) |
 | D1 | SMBJ20A on VBAT | Standoff 20 V > 16.8 V; clamps ≤ 32.4 V, below the DRV8316's 40 V abs max |
 | C1 | 330 µF 35 V hybrid polymer (EEHZK1V331P) | Bus bulk and weapon ripple current (2.8 A rms rating); 35 V so it survives the TVS clamp level.  Stake it with adhesive (the vibration-proof EEHZK1V331V is not stocked at JLC) |
 | R4 / R5 / C10 | 390 k / 51 k / 100 nF on U2 nSHDN | **Logic brown-out cutoff**: the 5 V buck (and so the MCU and compute board) switches off below ~9.2 V and back on above ~10.4 V (worst-case spread 7.4–10.3 V off).  2.3 V/cell: this keeps the logic sane in a sag; it does not protect the pack (§7.17) |
@@ -237,7 +237,8 @@ ground at the pad).
   with MT6701 ABZ), into U9/U10 SN74LVC3G17 Schmitt buffers powered from +3V3 (C47/C50).  Their
   inputs tolerate 5.5 V, so 5 V push-pull sensors are safe and the MCU pins (two of them TT,
   3.6 V-only) never see more than 3.3 V; a cable short onto a motor phase kills a buffer, not the
-  MCU.  Outputs → TIM3_CH1/2/3 (PC6/PB5/PB0, left) and TIM2_CH1/2/3 (PA15/PB3/PB10, right):
+  MCU.  Outputs → TIM3 (left: L_S1 = PB5 CH2, L_S2 = PB4 CH1, L_S3 = PB0 CH3; A/B land on CH2/CH1, so
+  the left count sign is the opposite of the right's: a firmware constant) and TIM2_CH1/2/3 (PA15/PB3/PB10, right):
   **MT6701 in ABZ (encoder mode) or UVW mode**, or Hall sensors.  Z (index) is handled with a CH3
   capture interrupt.  The MT6701's EEPROM is programmed off-board (its I²C is not on the
   connector).
@@ -254,9 +255,11 @@ ground at the pad).
 * VDD × 4: C60–C63 100 nF + C64 4.7 µF 0603.  +3V3A via R60 0 Ω (ferrite option): VDDA pin 29
   C65 100 nF; VREF+ pin 28 C71 100 nF + C66 4.7 µF.  VBAT pin 1 to +3V3 with C74 100 nF.
 * NRST: C67 100 nF + R16 10 k pull-up (an RP2040 pin in reset has a ~50 k pull-down, which
-  would otherwise hold NRST mid-level).  BOOT0 (PB8) R61 10 k to GND.  No crystal: HSI16 is
+  would otherwise hold NRST mid-level).  PB8-BOOT0 carries INA_nCS (R12 100 k pull-up, so a
+  blank chip boots the ROM bootloader, which SWD programming does not need); the option bytes set nSWBOOT0 = 0 and
+  nBOOT0 = 1 (boot from main flash, the pin is a plain GPIO).  No crystal: HSI16 is
   −1.85/+1.55 % at 0–85 °C including initial spread; fine for 2 Mbaud.
-* SPI3 (PC10/11/12) shared by U3/U4/U7, all SPI mode 1; chip selects PC9 (L), PB4 (R), PA11 (INA,
+* SPI3 (PC10/11/12) shared by U3/U4/U7, all SPI mode 1; chip selects PC9 (L), PA11 (R), PB8 (INA,
   R12 pull-up).  MISO floats between transfers (enable the PC11 internal pull-down).  SCLK ≤
   5.3 MHz (/32).
 * USART1 PC4 (TX) / PC5 (RX, TT pin, R17 10 k pull-up; the compute board drives 3.3 V).
@@ -641,7 +644,8 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    seen since this reset (the heartbeat carries "ARM edge required" until then) **and** the weapon
    command has been seen at zero.
 
-BOR level is an option byte: program it once over SWD (level 4, ~2.8 V).
+BOR level, nSWBOOT0 = 0 and nBOOT0 = 1 are option bytes: program them once over SWD (BOR level 4, ~2.8 V; the
+boot bits make PB8-BOOT0 = INA_nCS a plain GPIO and boot from main flash, §3.4).
 
 | Device | Setting |
 |---|---|
@@ -815,7 +819,7 @@ calibration that §8 needs (marked **store**).
 
 2. **MCU, drivers, monitors (bench supply, no motors or sensors).**
    * **MCU:** SWD flash; read the STM32 device ID/UID/revision (§7.12; reject rev Z); program the
-     BOR option byte (level 4).
+     option bytes (BOR level 4, nSWBOOT0 = 0, nBOOT0 = 1).
    * **U2 strap pins** against AGND (§7.16): MODE ~1.2 V, IDRIVE ~1.1 V, VDS ~0.5 V, GAIN ~2.0 V
      (open).  An open IDRIVE/VDS strap reads ~1.65 V, an open MODE strap ~2.0 V.
    * **DRV8316, U3 then U4:** write the §8 sequence and read it back: BUCK_UV clear and NPOR = 1
