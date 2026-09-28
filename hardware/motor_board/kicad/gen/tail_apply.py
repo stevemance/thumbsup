@@ -8,9 +8,8 @@ from pathlib import Path
 import pcbnew
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import tail_edits  # noqa: E402
-
 src, dst, reqf = sys.argv[1:4]
+tail_edits = __import__(sys.argv[4] if len(sys.argv) > 4 else "tail_edits")
 b = pcbnew.LoadBoard(src)
 t, F = pcbnew.ToMM, pcbnew.FromMM
 bb = b.GetBoardEdgesBoundingBox()

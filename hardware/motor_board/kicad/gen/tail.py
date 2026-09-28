@@ -30,6 +30,12 @@ PROJ = HERE.parent / "motor_board"
 PCB, PRO = PROJ / "motor_board.kicad_pcb", PROJ / "motor_board.kicad_pro"
 FROZEN = HERE / "frozen" / "board.kicad_pcb"
 W = HERE / "out" / "tail"
+EXP = __import__("os").environ.get("TAIL_EXP")      # experiment: edits from <EXP>.py, own work dir and board copy
+if EXP:
+    W = HERE / "out" / "exp" / EXP
+    (W / "proj").mkdir(parents=True, exist_ok=True)
+    shutil.copy(PRO, W / "proj" / PRO.name)
+    PCB, PRO = W / "proj" / PCB.name, W / "proj" / PRO.name
 W.mkdir(parents=True, exist_ok=True)
 T0 = time.time()
 
@@ -55,7 +61,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "freeze":
 pro = PRO.read_text()
 work = W / "work.kicad_pcb"
 # 1. board edits (pcbnew, own process)
-print(run(["/usr/bin/python3", str(HERE / "tail_apply.py"), str(FROZEN), str(work), str(W / "requests.json")]))
+print(run(["/usr/bin/python3", str(HERE / "tail_apply.py"), str(FROZEN), str(work), str(W / "requests.json")] + ([EXP] if EXP else [])))
 lap("board edits")
 reqs = json.load(open(W / "requests.json"))
 if reqs:
@@ -112,7 +118,7 @@ PRO.write_text(pro)
 lap("applied + zones filled")
 if "--no-drc" in sys.argv:
     sys.exit(0)
-subprocess.run(["kicad-cli", "pcb", "drc", "--schematic-parity", "--format", "json", "-o", str(W / "drc.json"), str(PCB)],
+subprocess.run(["kicad-cli", "pcb", "drc"] + ([] if EXP else ["--schematic-parity"]) + [ "--format", "json", "-o", str(W / "drc.json"), str(PCB)],
                capture_output=True)
 r = json.loads((W / "drc.json").read_text())
 err = Counter(v["type"] for v in r["violations"] if v["severity"] == "error")

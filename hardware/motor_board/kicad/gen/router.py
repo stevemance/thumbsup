@@ -18,7 +18,7 @@ from matplotlib.path import Path as MPath
 from scipy import ndimage
 
 RES = 0.05
-MARGIN = 0.045              # rasterisation error allowance on every clearance
+MARGIN = 0.05               # rasterisation error allowance on every clearance
 EDGE_CLR = 0.3              # copper to board edge
 RL = ["F.Cu", "In2.Cu", "In3.Cu", "B.Cu"]
 
