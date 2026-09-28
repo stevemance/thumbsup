@@ -242,6 +242,18 @@ What the last 20 are stuck on:
 - U1 pins without escape: 6 (R_MTEMP), 21 (W_INLA_M), 41 (L_nCS).
 - +5V at R20 (buck FB top, needs a +5V sense 12 mm away) and JP2; SPI_MOSI to U7; SWDIO to TP2; R_SOC (R82).
 
+Rounds 38-40 (to 17 open), no board growth:
+- L_H1: vias at the J2.3 / R54.1 pad edges (filled + capped, FAB.md) after lifting one W_EN B run and one W_INLB_M
+  L4 run; 6.4 mm L5 jumper.
+- L_VSRC: U11.5 via in pad, JP1.2 via, 2.7 mm L5 jumper.
+- R117 (2.2k series R, motor-R NTC) moved from U1's east side into the rear band beside D8 / R53 (its R_MTEMP
+  node), R_TEMPJ from J3.6 over L5.  R117 is now 8.6 mm from J3.6 and sits right at the clamp, which is where a
+  series protection resistor belongs.  Same nets, no firmware change.
+- Tooling: `genl5.py` (scratchpad) = for each open, via spots at both ends that are clear or behind <= 2 liftable
+  non-power runs, the lifts (re-routed), router-drawn stubs, an L5 jumper.  pcbnew's SaveBoard re-nets a lone new via
+  that overlaps a fill to the fill's net; `via` / `vip` now drop a 0.02 mm L5 anchor stub of the via's own net.
+- The other GND opens (C111, C45) went with these rounds; 2 GND fill-island items remain.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
