@@ -270,6 +270,22 @@ relocation tried; nothing left that closes without breaking another net):
 - Levers left: grow the rear band by ~6-8 mm (room for the left front end), or 8 layers, or re-lay the U1 east /
   W_* lane fan-out by hand to open via columns.
 
+Rounds 43-45 (to 15 open), 2026-09-28:
+- 43: the grow's straight cut had split the weapon bridge, leaving 10 x 19 mm of dead space between cells C and B.
+  Weapon cell C (Q5, Q6, RS3, C31, JW3, NT3, R26, R27) moved +10 mm back beside cell B, which restores the pre-grow
+  bridge.  JW3 is still in front of its own cell at the front edge.  Its pours, keep-outs and stitching vias moved
+  with it (tail op `shift`).  Its gate / sense / phase nets (W_GHC, W_GLC, W_C, W_SLC, W_SNC) took their pre-grow
+  copper back, translated +10 mm (tail op `copy_nets`, from frozen/pregrow_cellc.json, dumped by netcopper.py from
+  the board before 0d00345): cell C and U2 sit in exactly their pre-grow relative positions again.  Lanes laid
+  through the gap after the grow (W_SOB, W_NTC, W_VB, W_VA) were lifted and re-routed; W_VC re-laid.  The free area
+  is now at x 31-44, y 0-19, against U1's north side.
+- 44: R_MTEMP (U1.6) escapes inward under U1: pins 5 / 6 get staggered vias (pin 5's L_MTEMP via moved 21.55 ->
+  22.0, its F clamp branch re-joined), pin 6 -> L4 to the R_MTEMP node.
+- 45: W_INLA_M (U1.21): via just outside the pad, mostly L5 through the freed north area to U6.
+- Caution: L5 now carries many long jumpers (R_TEMPJ, W_INLA_M, W_VA, W_VB, SWDIO, +3V3 ...).  L2 stays a solid
+  plane under F, but L5 under B is getting cut up; the next steps should prefer part moves over more L5 runs, and
+  the L5 cuts want a review (stitching vias along long L5 runs, or moving some back to L4) before release.
+
 ## Conventions
 
 - Signals 0.2 mm (Default 0.15 allowed in fan-out), gates 0.25, rails 0.3-0.4 in trunks, VM/SW per class.
