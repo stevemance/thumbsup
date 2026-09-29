@@ -68,19 +68,19 @@ EXPLICIT.update({
     "JL3": (2.5, 27.6, 0, T, "drive L phase C wire: left edge"),
     "J2": (10.5, 32.3, 0, T, "drive L sensor connector (vertical SH): rear edge behind U3"),
     # drive right: U4 next to U3, outputs west to the JR column between the cells
-    "U4": (23.3, 24.3, 270, T, "drive R DRV8316: same orientation as U3; outputs face the JR column (west), VM pins face R402 (front), SPI/CSA pins face the MCU (east); hot, top"),
+    "U4": (22.5, 23.5, 0, T, "drive R DRV8316: control pins (INH, nFAULT, DRVOFF) face the MCU (east), outputs face the JR holes on the rear edge, VM pins face the gap to U3 where its VM caps sit, SPI/CSA pins face the front; hot, top"),
     "R402": (21.5, 13.9, 180, T, "drive R VM feed 0.1R: in the front band (U4's front free for its decoupling); VM pad (left) toward U4's VM pins, VBAT pad (right) on the VBAT feed from C1"),
-    "JR1": (16.35, 20.4, 0, T, "drive R phase A wire: column between the drive cells (floorplan: right motor cable crosses the robot, user OK 2026-09-29)"),
-    "JR2": (16.35, 24.0, 0, T, "drive R phase B wire"),
-    "JR3": (16.35, 27.6, 0, T, "drive R phase C wire"),
-    "J3": (21.5, 32.3, 0, T, "drive R sensor connector (vertical SH): rear edge behind U4"),
+    "JR1": (18.6, 31.3, 0, T, "drive R phase A wire: rear edge behind U4 (right motor cable crosses the robot, user OK 2026-09-29)"),
+    "JR2": (22.5, 31.3, 0, T, "drive R phase B wire: rear edge"),
+    "JR3": (26.4, 31.3, 0, T, "drive R phase C wire: rear edge"),
+    "J3": (80.5, 23.5, 90, T, "drive R sensor connector (vertical SH): rear-right edge, off the drive cells (their fan-out is the congested part); nearer the right motor"),
     # MCU and weapon driver
-    "U1": (40.5, 26.25, 180, T, "STM32G474: rear centre, rotated 180 (pins 33-48 face the drives, pins 1-16 face U2/J1; kicad/v2/pinsolve.py)"),
+    "U1": (43.5, 26.25, 180, T, "STM32G474: rear centre, rotated 180 (pins 33-48 face the drives, pins 1-16 face U2/J1; kicad/v2/pinsolve.py)"),
     "U2": (63.5, 23.0, 180, T, "DRV8323RH: behind the middle bridge cell, rotated 180: B/C gate pins face the bridge, A pins face cell A, CSA/straps face the MCU, buck pins at its rear-right corner; hot, top"),
     # header and balance lead
     "J1": (75.3, 23.0, 90, B, "header to the compute board (bottom, rear-right): beside U2's thermal-via field, under the buck; +5V close, MCU nets west"),
     "U5": (76.0, 33.0, 0, T, "3.3 V LDO: rear-right corner beside the buck output (+5V) and over J1"),
-    "J4": (55.5, 31.6, 0, T, "balance lead (vertical XH): rear edge behind the MCU/U2 gap, so U2's rear-right corner stays free for the buck input loop (DESIGN 6.7); BMS parts under it on the bottom"),
+    "J4": (58.5, 31.6, 0, T, "balance lead (vertical XH): rear edge behind the MCU/U2 gap, so U2's rear-right corner stays free for the buck input loop (DESIGN 6.7); BMS parts under it on the bottom"),
 })
 
 # ------------------------------------------------------------------ regions for the anchored parts (per block, side)
@@ -88,7 +88,7 @@ REGION = {
     (T, "PSW"): (0.0, 0.0, 31.0, 13.6), (T, "BUS"): (24.0, 0.0, 44.6, 18.5), (T, "INA"): (22.0, 0.0, 44.6, 18.5),
     (T, "BRIDGE"): (44.5, 0.0, 85.0, 18.7), (T, "PDIV"): (44.5, 0.0, 85.0, 20.0),
     (T, "U3"): (0.0, 13.5, 15.0, 35.0), (T, "VML"): (0.0, 13.5, 15.0, 35.0), (T, "SENL"): (0.0, 13.5, 15.5, 35.0),
-    (T, "U4"): (13.5, 13.5, 31.0, 35.0), (T, "VMR"): (13.5, 13.5, 31.0, 35.0), (T, "SENR"): (13.5, 13.5, 31.0, 35.0),
+    (T, "U4"): (13.5, 13.5, 31.0, 35.0), (T, "VMR"): (13.5, 13.5, 31.0, 35.0), (T, "SENR"): (64.0, 18.5, 85.0, 35.0),
     (T, "DRVOFF"): (13.5, 13.5, 33.0, 35.0),
     (T, "MCU"): (31.0, 18.0, 52.0, 35.0), (T, "LDO"): (31.0, 18.0, 58.0, 35.0), (T, "CSAF"): (31.0, 18.0, 52.0, 35.0),
     (T, "WANA"): (31.0, 18.0, 58.0, 35.0), (T, "LED"): (31.0, 18.0, 85.0, 35.0),
@@ -96,7 +96,7 @@ REGION = {
     (T, "BUCK"): (58.0, 18.5, 80.0, 35.0), (T, "BMS"): (44.0, 24.0, 68.0, 35.0), (T, "ARM"): (48.0, 18.5, 85.0, 35.0),
     (T, "J1"): (48.0, 18.5, 85.0, 35.0), (T, "TP"): (0.0, 18.5, 85.0, 35.0),
     (B, "SENL"): (0.0, 18.5, 15.5, 35.0), (B, "U3"): (0.0, 18.5, 15.5, 35.0),
-    (B, "SENR"): (14.5, 18.5, 31.0, 35.0), (B, "U4"): (14.5, 18.5, 31.0, 35.0), (B, "DRVOFF"): (14.5, 18.5, 33.0, 35.0),
+    (B, "SENR"): (56.0, 18.5, 85.0, 35.0), (B, "U4"): (14.5, 18.5, 31.0, 35.0), (B, "DRVOFF"): (14.5, 18.5, 33.0, 35.0),
     (B, "MCU"): (31.0, 18.5, 50.0, 35.0), (B, "CSAF"): (31.0, 18.5, 50.0, 35.0), (B, "WANA"): (31.0, 18.5, 52.0, 35.0),
     (B, "LDO"): (31.0, 18.5, 52.0, 35.0), (B, "LED"): (31.0, 18.5, 85.0, 35.0), (B, "INA"): (31.0, 18.5, 50.0, 35.0),
     (B, "AND"): (48.0, 18.5, 70.0, 30.0), (B, "WNF"): (48.0, 18.5, 70.0, 35.0), (B, "PDIV"): (44.0, 18.5, 70.0, 30.0),

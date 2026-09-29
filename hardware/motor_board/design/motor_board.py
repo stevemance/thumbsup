@@ -234,7 +234,7 @@ for ph, hi, lo, shunt, nt in (("A", "Q1", "Q2", "RS1", "NT1"), ("B", "Q3", "Q4",
     two(f"R{k}", "68k 1%", R0402, f"W_{ph}", f"W_V{ph}", LCSC["R68k"], f"phase {ph} divider top (25.2 V -> 3.23 V)")
     two(f"R{k+1}", "10k 1%", R0402, f"W_V{ph}", "GND", LCSC["R10k"], f"phase {ph} divider bottom")
     two(f"C{41 + ord(ph) - 65}", "1nF 50V", C0402, f"W_V{ph}", "GND", LCSC["1n_50V_0402"],
-        f"phase {ph} divider filter at the MCU (8.8 us; ADC sample kickback, ring suppression, keeps a TVS-level spike below the 4 V abs max of PA4/PA5 (TT_a); PA2 is FT_a)")
+        f"phase {ph} divider filter at the MCU (8.8 us; ADC sample kickback, ring suppression, keeps a TVS-level spike below the 4 V abs max of PA5/PC3 (TT_a); PC4 is FT_fa)")
 
 # weapon interlock: each phase enable INLx = TIM1_CHxN AND W_ARM_S (dynamic ARM from the compute board, below).  In 3x PWM mode
 # INLx = 0 puts the phase Hi-Z whatever INHx does, so without ARM the weapon coasts and cannot be driven, and the
@@ -355,27 +355,29 @@ for s, jref, jp, rt, ub, us, rp, cn, sr, dt in (("L", "J2", "JP1", "R52", "U9", 
 # ============================================================== MCU (U1) and logic power
 MCU_PINS = {
     # pin: (name, net, required alternate function or '' for GPIO/analog-only)
-    "1": ("VBAT", "+3V3", ""), "2": ("PC13", "W_nFAULT", "TIM1_BKIN"), "3": ("PC14", "DRV_OFF", ""),
-    "4": ("PC15", "R_nFAULT", ""), "5": ("PF0", "L_MTEMP", "ADC1_IN10"), "6": ("PF1", "R_MTEMP", "ADC2_IN10"),
-    "7": ("PG10-NRST", "NRST", ""), "8": ("PC0", "W_INHA", "TIM1_CH1"), "9": ("PC1", "W_INHB", "TIM1_CH2"),
-    "10": ("PC2", "R_INHB", "TIM20_CH2"), "11": ("PC3", "L_SOC_F", "OPAMP5_VINP"), "12": ("PA0", "W_SOA", "ADC1_IN1"),
-    "13": ("PA1", "W_SOB", "ADC2_IN2"), "14": ("PA2", "W_VC", "ADC1_IN3"), "15": ("VSS", "GND", ""),
-    "16": ("VDD", "+3V3", ""), "17": ("PA3", "VBAT_SNS", "ADC1_IN4"), "18": ("PA4", "W_VA", "ADC2_IN17"),
-    "19": ("PA5", "W_VB", "ADC2_IN13"), "20": ("PA6", "W_NTC", "ADC2_IN3"), "21": ("PA7", "W_INLA_M", "TIM1_CH1N"),
-    "22": ("PC4", "MB_TX", "USART1_TX"), "23": ("PC5", "MB_RX", "USART1_RX"), "24": ("PB0", "L_S3", "TIM3_CH3"),
-    "25": ("PB1", "R_SOC_F", "ADC3_IN1"), "26": ("PB2", "R_INHA", "TIM20_CH1"), "27": ("VSSA", "GND", ""),
+    # co-assigned with the v2 placement (kicad/v2/pinsolve.py, 2026-09-29); U1 at (43.5, 26.25), rotated 180
+    "1": ("VBAT", "+3V3", ""), "2": ("PC13", "NC", ""), "3": ("PC14", "W_EN", ""),
+    "4": ("PC15", "W_ARM_S", ""), "5": ("PF0", "R_MTEMP", "ADC1_IN10"), "6": ("PF1", "L_MTEMP", "ADC2_IN10"),
+    "7": ("PG10-NRST", "NRST", ""), "8": ("PC0", "W_INHC", "TIM1_CH1"), "9": ("PC1", "W_INHB", "TIM1_CH2"),
+    "10": ("PC2", "R_INHB", "TIM20_CH2"), "11": ("PC3", "W_VC", "ADC1_IN9"), "12": ("PA0", "W_SOA", "COMP3_INP"),
+    "13": ("PA1", "W_SOC", "COMP1_INP"), "14": ("PA2", "VBAT_SNS", "ADC1_IN3"), "15": ("VSS", "GND", ""),
+    "16": ("VDD", "+3V3", ""), "17": ("PA3", "W_SOB", "COMP2_INP"), "18": ("PA4", "W_NTC", "ADC2_IN17"),
+    "19": ("PA5", "W_VB", "ADC2_IN13"), "20": ("PA6", "W_nFAULT", "TIM1_BKIN"), "21": ("PA7", "W_INLC_M", "TIM1_CH1N"),
+    "22": ("PC4", "W_VA", "ADC2_IN5"), "23": ("PC5", "INA_nCS", ""), "24": ("PB0", "L_S3", "TIM3_CH3"),
+    "25": ("PB1", "R_SOA_F", "ADC3_IN1"), "26": ("PB2", "R_INHC", "TIM20_CH1"), "27": ("VSSA", "GND", ""),
     "28": ("VREF+", "+3V3A", ""), "29": ("VDDA", "+3V3A", ""), "30": ("PB10", "R_S3", "TIM2_CH3"),
-    "31": ("VSS", "GND", ""), "32": ("VDD", "+3V3", ""), "33": ("PB11", "W_SOC", "COMP6_INP"),
-    "34": ("PB12", "R_SOA_F", "ADC4_IN3"), "35": ("PB13", "R_SOB_F", "ADC3_IN5"), "36": ("PB14", "W_INLB_M", "TIM1_CH2N"),
-    "37": ("PB15", "W_INLC_M", "TIM1_CH3N"), "38": ("PC6", "NC", ""), "39": ("PC7", "L_INHB", "TIM8_CH2"),
-    "40": ("PC8", "R_INHC", "TIM20_CH3"), "41": ("PC9", "L_nCS", ""), "42": ("PA8", "L_SOA_F", "ADC5_IN1"),
-    "43": ("PA9", "L_SOB_F", "ADC5_IN2"), "44": ("PA10", "W_INHC", "TIM1_CH3"), "45": ("PA11", "R_nCS", ""),
-    "46": ("PA12", "W_EN", ""), "47": ("VSS", "GND", ""), "48": ("VDD", "+3V3", ""),
+    "31": ("VSS", "GND", ""), "32": ("VDD", "+3V3", ""), "33": ("PB11", "R_nCS", ""),
+    "34": ("PB12", "R_SOB_F", "ADC4_IN3"), "35": ("PB13", "R_SOC_F", "ADC3_IN5"), "36": ("PB14", "L_SOA_F", "OPAMP5_VINP"),
+    "37": ("PB15", "W_INLA_M", "TIM1_CH3N"), "38": ("PC6", "L_INHA", "TIM8_CH1"), "39": ("PC7", "L_INHB", "TIM8_CH2"),
+    "40": ("PC8", "R_INHA", "TIM20_CH3"), "41": ("PC9", "R_nFAULT", ""), "42": ("PA8", "L_SOB_F", "ADC5_IN1"),
+    "43": ("PA9", "L_SOC_F", "ADC5_IN2"), "44": ("PA10", "W_INHA", "TIM1_CH3"), "45": ("PA11", "DRV_OFF", ""),
+    "46": ("PA12", "W_INLB_M", "TIM1_CH2N"), "47": ("VSS", "GND", ""), "48": ("VDD", "+3V3", ""),
     "49": ("PA13", "SWDIO", "SYS_JTMS-SWDIO"), "50": ("PA14", "SWCLK", "SYS_JTCK-SWCLK"), "51": ("PA15", "R_S1", "TIM2_CH1"),
     "52": ("PC10", "SPI_SCK", "SPI3_SCK"), "53": ("PC11", "SPI_MISO", "SPI3_MISO"), "54": ("PC12", "SPI_MOSI", "SPI3_MOSI"),
-    "55": ("PD2", "W_ARM_S", ""), "56": ("PB3", "R_S2", "TIM2_CH2"), "57": ("PB4", "L_S2", "TIM3_CH1"),
-    "58": ("PB5", "L_S1", "TIM3_CH2"), "59": ("PB6", "L_INHA", "TIM8_CH1"), "60": ("PB7", "L_nFAULT", "TIM8_BKIN"),
-    "61": ("PB8-BOOT0", "INA_nCS", ""), "62": ("PB9", "L_INHC", "TIM8_CH3"), "63": ("VSS", "GND", ""), "64": ("VDD", "+3V3", ""),
+    "55": ("PD2", "L_nFAULT", "TIM8_BKIN"), "56": ("PB3", "R_S2", "TIM2_CH2"), "57": ("PB4", "L_S2", "TIM3_CH1"),
+    "58": ("PB5", "L_S1", "TIM3_CH2"), "59": ("PB6", "MB_TX", "USART1_TX"), "60": ("PB7", "MB_RX", "USART1_RX"),
+    "61": ("PB8-BOOT0", "L_nCS", ""), "62": ("PB9", "L_INHC", "TIM8_CH3"), "63": ("VSS", "GND", ""),
+    "64": ("VDD", "+3V3", ""),
 }
 part("U1", "STM32G474RET6", "Package_QFP:LQFP-64_10x10mm_P0.5mm", {p: (n, net) for p, (n, net, _) in MCU_PINS.items()},
      LCSC["STM32G474RET6"], "170 MHz M4F; TIM1 weapon, TIM8 drive L, TIM20 drive R, TIM3/TIM2 drive sensors, SPI3 to U3/U4/U7, USART1 to compute")

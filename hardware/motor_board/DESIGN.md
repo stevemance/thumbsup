@@ -1,4 +1,4 @@
-# ThumbsUp motor board — design (rev L2, 2026-09-29: v2 package swaps, review/CHANGES.md)
+# ThumbsUp motor board — design (rev L3, 2026-09-29: MCU pin map co-assigned with the v2 placement, review/CHANGES.md)
 
 The power half of the two-board stack: battery in, three motor channels out, 5 V down to the
 compute board through one header.  This is the brushless variant: **sensorless weapon + two
@@ -107,7 +107,7 @@ Path: **BAT+ (BAT_IN) → Q7 → PSW_S → Q8 → VBAT_SW → RS4 (1 mΩ) → VB
 | R1 / D10 / C13 / R32 / D4 | 4.7 k / 1N4148W / 22 nF (Cdvdt) / 1 M / 12 V zener gate–source | Soft-start: VBAT ramps at ~(I_GATE − R32 bleed) / C13 ≈ 2.2 V/ms (sim; ~3.0 V/ms at the 77 µA max gate current), ~0.8 A into ~380 µF.  R1 isolates C13 so turn-off stays fast.  D10 lets C13 only *slow the gate's rise*: with a reversed pack GND is the most positive node and C13 would otherwise push the gate up and turn Q7/Q8 on (sim: 102–147 A without D10 if U13's unpowered gate hold is weak; only the C14 charge spike with it).  R32 resets C13 between power-ups (22 ms); it draws ~20–28 µA of the gate drive, so the ramp is 1.3–3.0 V/ms over the gate-current spread.  After a UVLO trip C13 stays charged for ~20–40 ms (D10 blocks its discharge through the gate); a re-close in that window is not slowed by C13 but is still benign (≤ 0.06 V/µs).  D4 clamps Vgs at 12 V (U13 GATE–SRC abs max 15 V) at full charge-pump voltage and through sag/recovery transients.  |
 | R13 / R14 / C18 | 100 k / 15 k / 100 nF on EN/UVLO | Switch off below ~9.0 V (7.7–10.1 V with 1 % resistors and the 0–5 µA EN sink), on above ~9.8 V (worst 10.8 V).  C18 (1.3 ms) filters the weapon's 24 kHz bus ripple so it cannot trip the UVLO early.  Stays below a tired 4S pack under load (~11.5 V average) **provided firmware folds current back at ~12 V** (§8); limits an *unloaded* quick re-close step to ~9 V (under load the bus can fall further before the filtered UVLO opens: §7.2) |
 | R15 | 6.8 k 0603 bleeder | After the switch opens the bus decays (τ ≈ 2.3 s with the DC dividers and ~374 µF); the switch UVLO opens the FETs about when the buck stops (~9 V: within ~0.1 s with typical thresholds, ~0.4 s at the minimum threshold), and any re-close after that ramps softly again.  A re-close before that finds the FETs on: at the DRV8316 VM pins (behind R302/R402) 0.06–0.6 V/µs typical, 1.77 V/µs worst (minimum UVLO, C1 at its −40 °C ESR), under 4 V/µs.  A drum still spinning keeps the bus (and the FETs) up longer |
-| RS4, U7 | 1 mΩ 2512 + INA239 | **Pack monitor**, after the switch FETs (the INA239 inputs must stay ≥ −0.3 V, so a reversed pack must not reach them).  Kelvin to U7 through R2/R3 10 Ω with C2 100 nF.  VBUS = VBAT.  ±41 A at 1.25 mA/LSB, plus power and die temperature; firmware integrates mAh.  SPI (CS = PB8, R12 100 k pull-up).  ALERT (open drain) is wired onto W_nFAULT → TIM1 break.  **The INA239 has no per-limit mask**: only SOVL (38 A) and BOVL (19 V) are programmed; the rest stay at never-trip reset values (§8).  INA229AIDGSR is pin/footprint compatible but not register compatible (24-bit results, DEVICE_ID 2291h) |
+| RS4, U7 | 1 mΩ 2512 + INA239 | **Pack monitor**, after the switch FETs (the INA239 inputs must stay ≥ −0.3 V, so a reversed pack must not reach them).  Kelvin to U7 through R2/R3 10 Ω with C2 100 nF.  VBUS = VBAT.  ±41 A at 1.25 mA/LSB, plus power and die temperature; firmware integrates mAh.  SPI (CS = PC5, R12 100 k pull-up).  ALERT (open drain) is wired onto W_nFAULT → TIM1 break.  **The INA239 has no per-limit mask**: only SOVL (38 A) and BOVL (19 V) are programmed; the rest stay at never-trip reset values (§8).  INA229AIDGSR is pin/footprint compatible but not register compatible (24-bit results, DEVICE_ID 2291h) |
 | D1 | SMBJ20A on VBAT | Standoff 20 V > 16.8 V; clamps ≤ 32.4 V, below the DRV8316's 40 V abs max |
 | C1 | 330 µF 35 V hybrid polymer (EEHZK1V331P) | Bus bulk and weapon ripple current (2.8 A rms rating); 35 V so it survives the TVS clamp level.  Stake it with adhesive (the vibration-proof EEHZK1V331V is not stocked at JLC) |
 | R4 / R5 / C10 | 390 k / 51 k / 100 nF on U2 nSHDN | **Logic brown-out cutoff**: the 5 V buck (and so the MCU and compute board) switches off below ~9.2 V and back on above ~10.4 V (worst-case spread 7.4–10.3 V off).  2.3 V/cell: this keeps the logic sane in a sag; it does not protect the pack (§7.17) |
@@ -167,25 +167,25 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
   latched fault (cleared by a short ENABLE pulse).  nFAULT is a single bit shared with U7 ALERT.
 * **Charge pump:** C20 47 nF 50 V (CPH–CPL), C21 1 µF 50 V 0603 (VCP–VM).  DVDD C22 1 µF.
   VREF pin 26 = +3V3 with C23 (the CSAs reference the same 3.3 V as the ADC).
-* **Control:** INHA/B/C ← TIM1_CH1/2/3 (PC0/PC1/PA10).  INLA/B/C ← U6 (74LVC08) =
-  TIM1_CH1N/2N/3N (PA7/PB14/PB15) AND **W_ARM_S** (U14's output, below); R47–R49 100 k keep the MCU side low in reset; the
-  fourth gate's inputs are grounded.  ENABLE = W_EN (PA12, R40 100 k pull-down): low = sleep.
-  nFAULT → PC13 (TIM1_BKIN, hardware PWM kill) with R42 pull-up and C19 1 nF (analog glitch filter: BKF must be 0 for the comparator trip); U7 ALERT is wire-ORed onto it.
+* **Control:** INHA/B/C ← TIM1_CH3/2/1 (PA10/PC1/PC0).  INLA/B/C ← U6 (74LVC08) =
+  TIM1_CH3N/2N/1N (PB15/PA12/PA7) AND **W_ARM_S** (U14's output, below); R47–R49 100 k keep the MCU side low in reset; the
+  fourth gate's inputs are grounded.  ENABLE = W_EN (PC14, R40 100 k pull-down): low = sleep.
+  nFAULT → PA6 (TIM1_BKIN, hardware PWM kill; TT_a, fine: R42 pulls to +3V3 and every source on the net is open drain) with R42 pull-up and C19 1 nF (analog glitch filter: BKF must be 0 for the comparator trip); U7 ALERT is wire-ORed onto it.
 * **Dynamic ARM:** J1 pin 19 W_ARM_CLK (R18 100 k pull-down) → C15 470 nF → D9 BAT54S (clamp to
   GND + rectifier) → W_ARM, held by C16 2.2 µF and bled by R41 47 k → U14 74LVC1G17 Schmitt
   buffer (VT+ ≤ ~2.15 V, VT− ~0.9–1.45 V at 3.3 V; 0.8–1.33 V is the 3.0 V spec) → W_ARM_S (R19 10 k pull-down, in case U14's
-  output opens: beats 3 × 5 µA worst-case input leakage) → U6 (all three AND gates) and the MCU (PD2).  `spice/sim_arm.py`
+  output opens: beats 3 × 5 µA worst-case input leakage) → U6 (all three AND gates) and the MCU (PC15).  `spice/sim_arm.py`
   (`spice/arm.out`), nominal parts, 25 and 85 °C including the BAT54S's hot leakage: toggling at
   250 Hz–10 kHz gives W_ARM = 2.50–2.95 V and arms after 7–10 rising edges (12 ms at 500 Hz: one
   stray edge cannot arm); a stuck-low, stuck-high or floating W_ARM_CLK disarms in 52–164 ms
   (~30–200 ms with part tolerances); a gap in the toggling of ~50 ms is tolerated with nominal parts, ~30 ms worst case.  C15 < C16
   so a clock stuck high cannot hold W_ARM up.
-* **Phase voltage sense:** R22–R27 68k/10k dividers + C41–C43 1 nF → PA4/PA5/PA2.  Catches a
+* **Phase voltage sense:** R22–R27 68k/10k dividers + C41–C43 1 nF → PC4/PA5/PC3 (W_VA/W_VB/W_VC).  Catches a
   coasting drum (restart after a reset) and six-step BEMF.  The 1 nF also keeps a short (≪ ~9 µs) TVS-level spike
-  below the 4 V abs max of PA4/PA5 (TT); PA2 is FT.  A *sustained* D1 clamp is limited by the §8
-  regen current limit (≤ ~10 A → ≤ ~3.75 V at the pins: inside the 4.0 V abs max, briefly above the
+  below the 4 V abs max of PA5/PC3 (TT_a); PC4 is FT_fa (5 V tolerant).  A *sustained* D1 clamp is limited by the §8
+  regen current limit (≤ ~10 A → ≤ ~3.75 V at the pins: inside the TT_a 4.0 V abs max, briefly above their
   VDD + 0.3 V operating limit, §7.4).
-* **FET temperature:** TH1 10 k NTC at the FETs, R43 pull-up, C44 100 nF → PA6.
+* **FET temperature:** TH1 10 k NTC at the FETs, R43 pull-up, C44 100 nF → PA4.
 * **5 V buck (inside U2):** VIN pin 47 from VBAT (C27 2.2 µF 50 V X5R); L1 ZEMS404030-220M 22 µH
   4.1 × 4.1 mm molded, Isat 3.1 A min / 3.5 typ (−30 % L), above TI's 1.6 A recommendation and the current
   limit (1.2 A typ / 1.7 A max) even into a hard +5V short.  D2 PMEG4030ER (40 V 3 A, SOD-123W, Tj 150 °C).
@@ -214,12 +214,12 @@ Per channel (U3 values shown; U4 is identical with 4xx designators):
 | AVDD 25 | C305 1 µF 50 V 0603 (TI wants 0.7–1.3 µF effective at 3.3 V; worst case sits at 0.7: check at bring-up) |
 | VREF/ILIM 37 | tied to the chip's own AVDD (pin 25), C306 100 nF.  VREF must stay ≤ AVDD (3.1–3.465 V), so it cannot come from the external LDO.  Consequence: the cycle-by-cycle current-limit modes are **not usable** (they need VREF/ILIM near AVDD/2 and disable SOx); current limiting is done by the MCU's FOC loop |
 | SW_BK 5 / FB_BK 3 / GND_BK 4 | **buck unused but must be populated** (SLVSH07 8.3.4.2 / 9.2.1.1.5): R300 22 Ω **0603 anti-surge 250 mW** (ROHM ESR03) SW→FB, C307 22 µF **25 V** 0805 FB→GND (TI: ≥ 10 V); firmware disables it first thing (§8) |
-| INHA/B/C 27/29/31 | TIM8_CH1/2/3 = PB6/PC7/PB9 (left); TIM20_CH1/2/3 = PB2/PC2/PC8 (right) |
+| INHA/B/C 27/29/31 | TIM8_CH1/2/3 = PC6/PC7/PB9 (left); TIM20_**CH3/2/1** = PC8/PC2/PB2 (right: phase A on CH3, C on CH1) |
 | INLA/B/C 28/30/32 | +3V3 (3x PWM: INL = phase enable; Hi-Z is done with the shared DRVOFF pin, or per chip with the CTRL4 DRV_OFF bit, §8.1) |
-| DRVOFF 21 | shared DRV_OFF net (PC14), R50 10 k pull-**up**: both drive bridges are off until firmware drives it low.  This is the drives' coast path (a timer break brakes: with TIM8/TIM20 OISx = 1 and OSSI = 1 it forces the high sides on in 3x mode, and gives Hi-Z for a chip that has reset into 6x mode, §8.1) |
+| DRVOFF 21 | shared DRV_OFF net (PA11), R50 10 k pull-**up**: both drive bridges are off until firmware drives it low.  This is the drives' coast path (a timer break brakes: with TIM8/TIM20 OISx = 1 and OSSI = 1 it forces the high sides on in 3x mode, and gives Hi-Z for a chip that has reset into 6x mode, §8.1) |
 | nSLEEP 23 | +3V3 (fault clear via SPI CLR_FLT, after unlocking the registers: §8) |
-| nFAULT 22 | R301 10 k pull-up to the chip's **own AVDD** (TI: pulled > 2.2 V at power-up or test mode) → PB7 (left, TIM8_BKIN) / PC15 (right, EXTI; no TIM20 break pin exists on LQFP-64).  Over-temperature *warnings* are not routed to nFAULT (polled over SPI) |
-| SOA/SOB/SOC 40/39/38 | through R70–R72 330 Ω with C80–C82 22 pF C0G at the MCU (TI §9.2.1.1.6) → left PA8/PA9 (ADC5_IN1/IN2) and PC3 (OPAMP5 follower → ADC5); right (R80–R82, C90–C92) PB12 (ADC4_IN3), PB13 (ADC3_IN5), PB1 (ADC3_IN1).  0.15 V/A → ±8.7–9.9 A over the AVDD range (accuracy specified to 6 A) |
+| nFAULT 22 | R301 10 k pull-up to the chip's **own AVDD** (TI: pulled > 2.2 V at power-up or test mode) → PD2 (left, TIM8_BKIN) / PC9 (right, EXTI9; no TIM20 break pin exists on LQFP-64).  Over-temperature *warnings* are not routed to nFAULT (polled over SPI) |
+| SOA/SOB/SOC 40/39/38 | through R70–R72 330 Ω with C80–C82 22 pF C0G at the MCU (TI §9.2.1.1.6) → left PB14 (A: OPAMP5 VINP0 follower → ADC5), PA8/PA9 (B/C: ADC5_IN1/IN2); right (R80–R82, C90–C92) PB1 (A: ADC3_IN1), PB12 (B: ADC4_IN3), PB13 (C: ADC3_IN5).  0.15 V/A → ±8.7–9.9 A over the AVDD range (accuracy specified to 6 A) |
 | OUTA/B/C | motor wire holes JL1..JL3 / JR1..JR3 (`SolderWire-0.5sqmm…`: 1.15 mm drill; 2 pins each on the IC) |
 
 **Footprint:** the RGF0040E land (EP 3.7 × 5.7 mm) is not in the KiCad library; draw
@@ -246,8 +246,9 @@ ground at the pad).
   capture interrupt.  The MT6701's EEPROM is programmed off-board (its I²C is not on the
   connector).
 * **Motor NTC** (if the motor has one): J pin 6 → R113/R117 2.2 k 0603 series → L_MTEMP/R_MTEMP
-  with R52/R53 10 k pull-ups, C72/C73 100 nF and D7/D8 BAV99 clamps to GND/+3V3 → PF0/PF1.  A
-  cable chafed onto a motor phase injects ≤ 6 mA into the clamp instead of 16.8 V into the MCU;
+  with R52/R53 10 k pull-ups, C72/C73 100 nF and D7/D8 BAV99 clamps to GND/+3V3 → PF1 (L_MTEMP, FT_a) / PF0 (R_MTEMP, FT_fa).  A
+  cable chafed onto a motor phase injects ≤ 6 mA into the clamp instead of 16.8 V into the MCU (the clamped
+  ~4.1 V is well inside these 5 V-tolerant pins' min(VDD, VDDA) + 4.0 V abs max, DS12288 Table 14);
   firmware subtracts the known 2.2 k.  The Mk4.1 has no NTC: pin 6 can carry one glued to the
   motor can.
 * **Residual:** a motor phase shorted onto the **VS** wire back-feeds the sensor supply (§7).
@@ -258,19 +259,27 @@ ground at the pad).
 * VDD × 4: C60–C63 100 nF + C64 4.7 µF 0603.  +3V3A via R60 0 Ω (ferrite option): VDDA pin 29
   C65 100 nF; VREF+ pin 28 C71 100 nF + C66 4.7 µF.  VBAT pin 1 to +3V3 with C74 100 nF.
 * NRST: C67 100 nF + R16 10 k pull-up (an RP2040 pin in reset has a ~50 k pull-down, which
-  would otherwise hold NRST mid-level).  PB8-BOOT0 carries INA_nCS (R12 100 k pull-up, so a
-  blank chip boots the ROM bootloader, which SWD programming does not need); the option bytes set nSWBOOT0 = 0 and
-  nBOOT0 = 1 (boot from main flash, the pin is a plain GPIO).  No crystal: HSI16 is
+  would otherwise hold NRST mid-level).  PB8-BOOT0 carries L_nCS (rev L3): U3's nSCS internal pull-up
+  (80–130 kΩ to U3's AVDD, SLVSH07) holds it high through reset whenever U3 is powered, so a blank chip
+  (nSWBOOT0 = 1 from the factory) boots the ROM bootloader, which SWD programming does not need; the option bytes
+  set nSWBOOT0 = 0 and nBOOT0 = 1 (boot from main flash, the pin is a plain GPIO).  R12 stays the INA_nCS pull-up
+  on PC5.  No crystal: HSI16 is
   −1.85/+1.55 % at 0–85 °C including initial spread; fine for 2 Mbaud.
-* SPI3 (PC10/11/12) shared by U3/U4/U7, all SPI mode 1; chip selects PC9 (L), PA11 (R), PB8 (INA,
+* SPI3 (PC10/11/12) shared by U3/U4/U7, all SPI mode 1; chip selects PB8 (L), PB11 (R), PC5 (INA,
   R12 pull-up).  MISO floats between transfers (enable the PC11 internal pull-down).  SCLK ≤
   5.3 MHz (/32).  Through reset every chip select is held high by a pull-up (U3/U4 nSCS internal, INA_nCS R12):
   none of them sits on a UCPD dead-battery pin (PB4/PB6).
-* PC6 (pin 38) is not connected: leave it in its reset state (analog), like every unused pin (rev L1,
+* PC13 (pin 2) is not connected: leave it in its reset state (analog), like every unused pin (rev L3,
   review/CHANGES.md).
-* USART1 PC4 (TX) / PC5 (RX, TT pin, R17 10 k pull-up; the compute board drives 3.3 V).
-* PD2 = W_ARM_S input (FT, EXTI; clean Schmitt edges from U14; R19 10 k pull-down).  PA12 = W_EN.  PC14 = DRV_OFF.
-* VBAT_SNS: R63 68 k / R64 10 k / C68 100 nF (0.87 ms) → PA3.  The header gets it only through
+* USART1 PB6 (TX) / PB7 (RX, FT_f, R17 10 k pull-up; the compute board drives 3.3 V).  **PB6 is UCPD1_CC1**:
+  its USB Type-C dead-battery pull-down (Rd) is enabled out of reset until firmware sets PWR_CR3.UCPD1_DBDIS
+  (RM0440 PWR_CR3; §46.4.6 asks for UCPD1_DBCC1/2 = PA9/PA10 to be grounded when the dead-battery Rd is not
+  wanted, and here PA9 is L_SOC_F, idling at ~AVDD/2).  So MB_TX is pulled **low** while the MCU is in reset and until boot step 2 (§8): the compute
+  board sees a UART break, never a valid frame, in that time (§3.5 item 5).
+* PC15 = W_ARM_S input (FT, EXTI15; clean Schmitt edges from U14; R19 10 k pull-down).  PC14 = W_EN: one of the
+  weak PC13–PC15 drivers (≤ 2 MHz, ≤ 30 pF, 3 mA sink, never a current source: DS12288 Table 12 note 2), enough for a
+  static enable and the 8–40 µs t_RST pulse into U2 ENABLE + R40 100 k.  PA11 = DRV_OFF (a normal FT_u pin).
+* VBAT_SNS: R63 68 k / R64 10 k / C68 100 nF (0.87 ms) → PA2 (FT_a).  The header gets it only through
   R33 100 k (net VBAT_SNS_H, J1 pin 11), so a compute-board pin in reset cannot drag the MCU reading.
 * U5 AP2112K-3.3 from +5V: 3.3 V for the MCU, CSA reference, sensors, logic (~120 mA of 600).
 * Test pads TP1–TP12: 3V3, SWDIO, SWCLK, NRST, GND, W_ARM, W_EN, DRV_OFF, W_nFAULT, VBAT, 5V, GND.
@@ -291,22 +300,24 @@ period at a fixed weapon PWM phase placed inside t ∈ [3.34, 13.59] or [24.18, 
 period (for CCR6 ≈ 257–264; each window moves by CCR6/170 MHz if CCR6 is trimmed) so they never overlap an injected group.  12.5-cycle sampling for every injected rank
 (≥ 200 ns for the OPAMP5 channel, ≤ 680 Ω source behind the 330 Ω filters).  **Duty limits:**
 weapon ~86–88 %; drive L ~81 % (three sequential ranks); drive R ~86 % using the rank-2 pair (A on
-ADC4, B on ADC3) and C = −(A + B), because the DRV8316's CSA
+ADC3, B on ADC4) and C = −(A + B), because the DRV8316's CSA
 only reads while its low-side FET is on (not in dead time); use flat-bottom SVPWM to recover line
 voltage.  Start sequence: TIM1 MMS = update (TRGO), TIM8/TIM20 combined reset + trigger slave
 mode on ITR0, enable the slaves first, then TIM1.
 
 | ADC | Injected ranks 1 / 2 / 3 (simultaneous across ADCs) | Regular ranks 1–4 (same sampling time per rank on ADC1/ADC2) |
 |---|---|---|
-| ADC1 | W_SOA PA0 / W_SOC PB11 (ADC1_IN14, slow: 12.5 cycles allow ≤ 470 Ω, the CSA output is far lower) / W_SOC PB11 | W_VC PA2 / VBAT_SNS PA3 / L_MTEMP PF0 / VREFINT (247.5 cycles) |
-| ADC2 | W_SOB PA1 / W_SOA PA0 (ADC12_IN1) / W_SOB PA1 | W_VA PA4 / W_VB PA5 / W_NTC PA6 / R_MTEMP PF1 (247.5 cycles) |
-| ADC3 | R_SOC PB1 / R_SOB PB13 / R_SOC PB1 | — |
-| ADC4 | R_SOA PB12 / R_SOA / R_SOA | — |
-| ADC5 | L_SOA PA8 / L_SOB PA9 / L_SOC (PC3 → OPAMP5 → ch3) | — |
+| ADC1 | W_SOC PA1 (IN2) / W_SOB PA3 (IN4) / W_SOB PA3 | W_VC PC3 (IN9) / VBAT_SNS PA2 (IN3) / R_MTEMP PF0 (IN10) / VREFINT (247.5 cycles) |
+| ADC2 | W_SOA PA0 (IN1) / W_SOC PA1 (IN2) / W_SOA PA0 | W_VA PC4 (IN5) / W_VB PA5 (IN13) / W_NTC PA4 (IN17) / L_MTEMP PF1 (IN10, 247.5 cycles) |
+| ADC3 | R_SOC PB13 (IN5) / R_SOA PB1 (IN1) / R_SOC PB13 | — |
+| ADC4 | R_SOB PB12 (IN3) / R_SOB / R_SOB | — |
+| ADC5 | L_SOA (PB14 → OPAMP5 → IN3) / L_SOB PA8 (IN1) / L_SOC PA9 (IN2) | — |
 
-Weapon: rank 1 gives A+B, rank 2 C+A, rank 3 C+B simultaneously, with a fixed sequence (no
-per-sector JSQR rewrites; PA0 is never on both ADCs in the same rank).  Drive R: A is
-simultaneous with C and B.  Drive L: sequential (0.59 µs apart).  Regular ranks 1–3 run at
+Every current channel is a fast channel (ADCx_IN1–IN5, DS12288 §5.3.19) or the OPAMP5 internal channel.
+Weapon: rank 1 gives C+A, rank 2 B+C, rank 3 B+A simultaneously, with a fixed sequence (no
+per-sector JSQR rewrites; W_SOC (PA1, ADC12_IN2) is the phase on both ADCs and is never on both in the same
+rank; PA0 could also be ADC1_IN1 but is used on ADC2 only).  Drive R: B (the only phase on ADC4) is
+simultaneous with C and A.  Drive L: sequential (0.59 µs apart).  Regular ranks 1–3 run at
 12.5–24.5 cycles; the weapon phase voltages W_VC (ADC1) and W_VA (ADC2) convert together, W_VB
 one slot later, at a fixed PWM phase: what six-step BEMF and catch-spin need.  Each regular
 group takes ~8.7 µs (with 24.5-cycle ranks), inside the allowed windows.  Enable VREFEN for VREFINT.
@@ -380,6 +391,10 @@ two-sided fee).
      then stop resetting and report (a broken return line must not reset the motor MCU forever).
 5. SWDIO/SWCLK/NRST Hi-Z when not debugging (NRST open-drain only).  MB_RX at 3.3 V.  Firmware
    updates of the motor MCU go over SWD (the ROM UART bootloader is on PA9/PA10, not MB_TX/RX).
+   **MB_TX reads low (a UART break) while the motor MCU is in reset, including while the compute board holds
+   NRST, and from reset release until its boot step 2** (PB6's UCPD dead-battery pull-down, §3.4, §8): the
+   compute board's UART must treat a break or framing error as no data (not as a frame, not as a heartbeat) and
+   resynchronise on the next valid frame (CRC).  A weak pull-up on its RX pin cannot override the Rd (5.1 kΩ nominal, USB Type-C).
 6. A Pico W antenna must not sit under the motor board's copper, and its USB connector must stay
    reachable: keep both at the stack's edges (cut-outs in the motor board outline if needed).
 7. Mechanics: the standoff length must equal the mated header height (4.9–6.0 mm depending on the
@@ -469,13 +484,14 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 5. **DRV8316 thermal pads:** full via array to inner GND planes; copper area around each drive IC
    (RθJA 25.7 °C/W is the JEDEC 4-layer figure).  AGND/PGND partition per §3.3.  The 100 nF VM
    caps at pins 9 and 11 also serve pin 10 (adjacent); keep U11/U12 away from U3/U4 (85 °C parts).
-6. **R302/R402** (up to ~1 W in bursts) away from the DRV8316 thermal copper, on their own pour.  Keep the **DRV_OFF** trace (PC14, a 2 MHz / 30 pF pin) short.  **Power entry:** U13, C12, C14, C18 (at U13 pin 1), R1, D10, C13, R32, D4 next to Q7/Q8; the gate trace short.  Feed U3/U4's VM from C1 on their own branch (not through the weapon bridge's copper), so weapon switching ripple at the DRV8316 VM pins stays well under 4 V/µs (check in §9 step 6).  C1 close to the
+6. **R302/R402** (up to ~1 W in bursts) away from the DRV8316 thermal copper, on their own pour.  Keep the **W_EN** trace (PC14, a 2 MHz / 30 pF pin) short.  **Power entry:** U13, C12, C14, C18 (at U13 pin 1), R1, D10, C13, R32, D4 next to Q7/Q8; the gate trace short.  Feed U3/U4's VM from C1 on their own branch (not through the weapon bridge's copper), so weapon switching ripple at the DRV8316 VM pins stays well under 4 V/µs (check in §9 step 6).  C1 close to the
    switch output *and* the bridges; each DRV8316 gets its 2 × 100 nF + 2 × 10 µF 1210 within 2 mm, on the filtered side of R302/R402 (all DRV8316 VM current must pass through the resistor).
 7. **Buck:** SW node tiny; L1/D2/C29 loop tight per the LMR16006 layout guide; FB divider at
    pin 1 away from L1; R4/R5/C10 away from SW.
 8. **Analog:** CSA outputs and dividers routed away from phase nodes; the 330 Ω / 22 pF and 1 nF
    filters at the MCU pins.  The weapon INH traces (PC0/PC1) run beside analog pins: keep them
-   away from PA0, PA1, PB11 (weapon CSA inputs), PC3 (drive L CSA) and PA2.  Place U2 toward the MCU's left/bottom edge.  Keep W_ARM_CLK/C15/D9
+   away from PA0, PA1, PA3 (weapon CSA inputs), PC3 (W_VC) and PA2 (VBAT_SNS); likewise W_INLA_M (PB15) from
+   L_SOA (PB14, drive L CSA) and W_INLC_M (PA7) from W_VA (PC4).  Place U2 toward the MCU's left/bottom edge.  Keep W_ARM_CLK/C15/D9
    away from MB_TX and switching nodes.
 9. **Connectors:** J4 near the pack side, silkscreen "B−" at pin 1 and "B4+" at pin 5; cell-input
    R/C and D5 at U8; tap traces thin.  J2/J3 at the board edge near the drive ICs with U9–U12,
@@ -537,14 +553,18 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    The INA239 BOVL (19 V) trips the weapon break (coast) within ~0.3–0.45 ms; firmware also coasts
    above 18.5 V, never brakes the drum hard, and limits combined regen to a **current** of ~10 A
    (§8 Power budget).  Until the coast acts, D1 clamps: ~28.7 V at 10 A (SMBJ20A linear clamp
-   model).  That puts the 68 k/10 k sense pins PA3–PA5 at ~3.7 V (≤ 3.75 V with 1 % resistors).
-   * PA4/PA5 (1 nF, τ ≈ 9 µs) follow the clamp; PA3 (100 nF, τ 0.87 ms) follows only partly.
-   * **These are TT_a pins.**  3.7 V is inside the 4.0 V absolute maximum (DS12288 Table 14) but
-     above the VDD + 0.3 V ≈ 3.55–3.65 V operating limit (Table 17).  TT_a pins have no clamp
+   model).  That puts the 68 k/10 k sense pins (W_VA PC4, W_VB PA5, W_VC PC3, VBAT_SNS PA2) at ~3.7 V
+   (≤ 3.75 V with 1 % resistors).
+   * PC4/PA5/PC3 (1 nF, τ ≈ 9 µs) follow the clamp; PA2 (100 nF, τ 0.87 ms) follows only partly.
+   * **PA5 and PC3 are TT_a pins.**  3.7 V is inside their 4.0 V absolute maximum (DS12288 Table 14) but
+     above the VDD + 0.3 V ≈ 3.55–3.65 V operating limit (Table 17).  They have no clamp
      diode to VDD, so no current flows into them (positive injection "not possible", Table 15).
+   * PC4 (FT_fa) and PA2 (FT_a) are 5 V-tolerant: abs max min(VDD, VDDA) + 4.0 V (Table 14), operating up
+     to min(VDD, VDDA) + 3.6 V with the internal pulls off (Table 17 note 3): inside both.  (Rev L3 moved
+     VBAT_SNS off a TT_a pin and W_VC onto one: two TT_a sense pins, as before.)
    * **Accepted:** it only happens when the pack disconnects during a brake, lasts < ~0.5 ms, and
      the ADC just reads full scale meanwhile.
-   * The 4.0 V abs max is reached only at ≥ ~14 A of clamp current, which is why the regen limit is
+   * The TT_a 4.0 V abs max is reached only at ≥ ~14 A of clamp current, which is why the regen limit is
      a current limit, measured in §9 step 6.  Staying inside the operating range in every case
      would need ≤ ~6–8 A of regen (VDD and divider tolerance).
 5. **Power switch vs a coasting drum:** opening the switch while the drum spins leaves the board
@@ -619,7 +639,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
     off, the loop current dumps onto the shared bus: 6–36 V/µs at the DRV8316 VM pins without the
     R302/R402 filters (review round 9/10 sims, not in spice/).  So the weapon **requires the
     comparator fast trip** (§8).
-    * All three weapon CSA outputs reach a comparator (PA0 → COMP3, PA1 → COMP1, PB11 → COMP6)
+    * All three weapon CSA outputs reach a comparator (W_SOA PA0 → COMP3, W_SOB PA3 → COMP2, W_SOC PA1 → COMP1)
       feeding TIM1's main break.
     * The bridge turns off 0.7–1.0 µs after the current passes the threshold: CSA lag
       0.13–0.33 µs, comparator + break ~0.05 µs, driver 0.15 µs, gate discharge at 120 mA ~0.4 µs.
@@ -641,21 +661,22 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 1. Start the **IWDG** (~20 ms; frozen on debug halt in debug builds via DBG_IWDG_STOP); refresh it
    explicitly through the rest of boot.
 2. `HAL_PWREx_DisableUCPDDeadBattery()` before any GPIO init (PB4/PB6 dead-battery pull-downs: PB4 is
-   L_S2, a buffered encoder input, and PB6 is L_INHA, where a pull-down is the safe level anyway).
+   L_S2, a buffered encoder input; PB6 is MB_TX, which reads as a UART break at the compute board until this
+   step, §3.4, §3.5 item 5).  Then MB_TX (PB6) as USART1_TX so the line idles high.
 3. Clocks: HSI16 → PLL 170 MHz.
 4. USART1 and the first heartbeat (the compute board expects it within ~50 ms of reset, §3.5).
 5. DBGMCU: freeze TIM1/TIM8/TIM20 on core halt (a halted core then leaves the drives braking and
    the weapon coasting).
-6. GPIO (PC11 pull-down; never enable RTC_OUT/TAMP/LSE on PC13–15) → SPI3 → configure U3/U4
+6. GPIO (PC11 pull-down; never enable RTC_OUT/TAMP/LSE on PC13–15, nor HSE on PF0/PF1: they are the motor-NTC inputs) → SPI3 → configure U3/U4
    (DRV8316C row: they end coasted) and U7 → W_EN high → CSA offsets → the §7.16 strap boot test
    (drum stopped).
 7. Drives: DRV_OFF pin low only when the drives are commanded, always through §8.1 "drives resume".
-8. Weapon: TIM1 CHxN only while W_ARM_S (PD2) is high **and** a fresh low→high ARM edge has been
+8. Weapon: TIM1 CHxN only while W_ARM_S (PC15) is high **and** a fresh low→high ARM edge has been
    seen since this reset (the heartbeat carries "ARM edge required" until then) **and** the weapon
    command has been seen at zero.
 
 BOR level, nSWBOOT0 = 0 and nBOOT0 = 1 are option bytes: program them once over SWD (BOR level 4, ~2.8 V; the
-boot bits make PB8-BOOT0 = INA_nCS a plain GPIO and boot from main flash, §3.4).
+boot bits make PB8-BOOT0 = L_nCS a plain GPIO and boot from main flash, §3.4).
 
 | Device | Setting |
 |---|---|
@@ -664,14 +685,14 @@ boot bits make PB8-BOOT0 = INA_nCS a plain GPIO and boot from main flash, §3.4)
 | Watchdog / faults | IWDG ~20 ms, refreshed from the main loop only when every task has checked in (control ISRs, command-timeout handler, fault supervisor).  HardFault/NMI handler: DRV_OFF high, TIM1 MOE = 0, then wait for the IWDG.  SYSCFG_CFGR2.CLL = 1 so a core lockup breaks the timers in hardware; CLL acts only on timers with BKE = 1, so set BKE on TIM20 too (no break pin: BKINE = 0).  No flash erase/program while running (a page erase outlasts the IWDG).  U2's ~1 ms wake nFAULT and the INA239 ALERT both pull W_nFAULT (the TIM1 break) low: at boot clear TIM1's break flag only after U2 is awake and DIAG_ALRT has been read; TIM8/TIM20 break flags are cleared inside "drives resume" (§8.1).  Boot-time events are not faults.  Fault handling: §8.1 |
 | CPU budget | Two FOC loops at 48 kHz + one at 24 kHz + observers ≈ 60–80 % peak on the 170 MHz M4F: bare-metal ISRs in CCM SRAM, CORDIC for sin/cos, measure cycles at bring-up; fallback: keep 48 kHz PWM (the 2:1 timer lock and the sampling scheme depend on it) and run the drive current loops at 24 kHz (~5–6 updates per electrical cycle at top speed: acceptable only below top speed), or the weapon observer at 12 kHz |
 | Drive VM | the DRV8316 VM sits I × 0.1 Ω below VBAT (R302/R402): use VBAT − I_bus × 0.1 Ω for voltage feed-forward (the DRV8316 cannot report its VM) |
-| Power budget | One shared budget: weapon + drive current ≤ ~32 A (below the 38 A SOVL trip); **fold back drive and weapon current as VBAT sags toward ~12 V (required: the switch UVLO can open as high as 10.1 V and the logic cutoff at 9.2–10.3 V)**; combined regen limited by a **current** limit (≤ ~10 A: with the switch open during a brake the TVS then clamps ≤ ~28.7 V, keeping the TT_a sense pins PA3–PA5 at ≤ ~3.75 V: inside their 4.0 V abs max, briefly above VDD + 0.3 V, §7.4) sized so the bus stays below 18.5 V (not a bus-voltage regulator, which would hide an open switch) |
+| Power budget | One shared budget: weapon + drive current ≤ ~32 A (below the 38 A SOVL trip); **fold back drive and weapon current as VBAT sags toward ~12 V (required: the switch UVLO can open as high as 10.1 V and the logic cutoff at 9.2–10.3 V)**; combined regen limited by a **current** limit (≤ ~10 A: with the switch open during a brake the TVS then clamps ≤ ~28.7 V, keeping the sense pins at ≤ ~3.75 V: inside the 4.0 V abs max of the TT_a ones, PA5 and PC3, briefly above VDD + 0.3 V, §7.4) sized so the bus stays below 18.5 V (not a bus-voltage regulator, which would hide an open switch) |
 | DRV8323RH (U2) | No registers.  ENABLE (W_EN) high at boot and kept high; an 8–40 µs low pulse (t_RST) clears a latched fault without sleeping, a longer one is sleep.  Expect nFAULT low for ~1 ms (t_WAKE) after each wake.  Measure the CSA offsets (bridge idle, INLx = 0) after every wake.  FOC: hold TIM1 CHxN statically high (CCxNE = 0, OSSR = 1, polarity for high off-state); six-step: per-phase Hi-Z via CHxN.  Break (MOE = 0) with OISxN = 0 → INL low → coast.  **AOE = 0** (re-enabling is a firmware decision).  W_nFAULT is a wired-OR of U2's nFAULT and the INA239 ALERT (ALATCH = 1: held until DIAG_ALRT is read), so read and clear DIAG_ALRT before attributing a low W_nFAULT to U2 (§8.1) |
-| W_ARM_S (PD2) | EXTI both edges, high priority (U14 gives clean edges).  A **falling** edge acts at once: full weapon stop (CHxN low, current controllers reset) and sets the heartbeat's "W_ARM_S fell" flag (the compute board, which knows when it stopped toggling, does the timing).  A rising edge counts only after W_ARM_S has stayed high ≥ 5 ms.  Re-arm needs a new ARM edge and the weapon command at zero (§8.1 throttle-zero interlock) |
-| DRV8316C (U3, U4) | **SPI:** mode 1, ≤ 5.3 MHz, 16-bit frames with an even-parity bit (B8, computed by firmware, not copied from constants); one device selected at a time (never both CS low); one SPI3 owner task for U3/U4/U7.  SDO is Hi-Z while nCS is high (CTRL2 resets to push-pull, 0x60).  Registers reset on any sleep/UVLO: ignore reads before the configuration is written.  **Configuration** (after t_READY 1 ms; at boot with the DRV_OFF pin high; the same sequence is the "rewrite" after an NPOR or mismatch, for one chip with the pin left as it is): CTRL1 0x0603 (unlock) → **CTRL6 0x1019** (BUCK_DIS, BUCK_CL, BUCK_PS_DIS) → **CTRL3 0x0A4E** (OVP 22 V on, SPI faults off nFAULT, OTW *not* on nFAULT: poll it) → **CTRL4 0x0C90** (OCP 16 A latched, a short-circuit backstop; bit 7 DRV_OFF = 1: the chip stays coasted) → **CTRL5 0x0F00** (CSA 0.15 V/A) → **CTRL10 0x1818** (delay compensation on, DLY_TARGET 0x8 = 1.8 µs: covers the worst-case driver delay; TI's 1.2 µs cannot be held at the delay's upper spread) → CTRL2 0x087C (SLEW 200 V/µs, 3x PWM, push-pull SDO) → CTRL2 0x097D (CLR_FLT) → CTRL1 0x0606 (REG_LOCK).  CTRL4 and CTRL5 are written explicitly.  **Release** (only inside §8.1 "drives resume", with the timer already running FOC preset to the back-EMF): CTRL1 0x0603 → CTRL4 **0x0D10** → CTRL2 0x097D (CLR_FLT) → CTRL1 0x0606.  **Per-drive coast:** CTRL1 0x0603 → CTRL4 **0x0C90** → CTRL1 0x0606 (0x0D90 and 0x0C10 have odd parity and are rejected).  **Fault recovery** (a locked chip ignores CLR_FLT): CTRL1 0x0603 → CTRL2 0x097D → CTRL1 0x0606.  **Register check at ~100 Hz:** expect CTRL1 0x06, CTRL2 **0x7C** (CLR_FLT self-clears), CTRL3 0x4E, CTRL4 0x10 released / 0x90 coasted (0x14 / 0x94 inside a 24 A resume window, §8.1), CTRL5 0x00, CTRL6 0x19, CTRL10 0x18, IC_STAT NPOR = 1; also read IC_STAT FAULT (0 on a released chip with the DRV_OFF pin low) and the OTW bit (derate on OTW; a still-low nFAULT gives no new EXTI edge).  A mismatch or NPOR = 0 means the chip reset (it comes up in 6x PWM mode) → rewrite (it ends coasted), report, §8.1 drive events.  OVP 22 V trips at 20 V minimum.  Sample the CSAs in the centre of the low-side-on interval, ≥ 1 µs after it opens + DLY_TARGET; duty ≤ ~81 % (L) / ~86 % (R, rank-2 pair, C = −(A+B)), flat-bottom SVPWM (CTRL3 PWM_100_DUTY_SEL left 0 is fine at that cap).  Current limiting in the FOC loop (ILIM modes unusable with VREF = AVDD); starting limit ~1–1.5 A for the Mk4.1 (traction) |
-| STM32 timers/ADC | §3.4: TIM1 24 kHz (ARR 3542, PWM mode 1), TIM8/TIM20 48 kHz (ARR 1771, PWM mode 2) reset-slaved via ITR0 with URS = 1 (TIM8/TIM20 OISx = 1, OSSI = 1, §8.1); the timers never stop (ADC triggers ≤ 1 ms apart).  ADC clock asynchronous PLLP 42.5 MHz /1 for all ADCs; ADC1/ADC2 dual simultaneous; injected on TIM8_TRGO2 (OC6REF, 48 kHz), 3 ranks everywhere, 12.5 cycles, JQDIS = 1; regular (ADC1/ADC2) on TIM1_TRGO2 = OC6REF inside the non-overlap windows (relative to CCR6), 4 ranks with VREFINT (VREFEN) and R_MTEMP both at 247.5 cycles.  Circular DMA; never stop an ADC without disable/enable; set JQDIS before writing JSQR; discard the first samples after every start and debug halt (ES0430: > 1 ms without a trigger); reject rev Z silicon.  TIM1 MMS = update; TIM8/TIM20 combined reset + trigger mode, slaves enabled first.  Trigger details: TIM8 OC6 in PWM mode 2 (rising edge used as TRGO2 = OC6REF; PWM mode 1 would sample 1.5 µs before the valley); TIM1 OC6 for the regular trigger at CCR 568–2311 (PWM mode 2) or 1231–2974 (PWM mode 1); ADC1/ADC2 DUAL = 00001 (combined regular + injected simultaneous); the weapon uses the sample taken while TIM1 counts down near its peak (read TIM1 DIR).  OPAMP5: VM_SEL = follower, VP_SEL = VINP2 (PC3), OPAINTOEN = 1 **before** OPAEN (otherwise it drives PA8), high-speed mode; calibrate the L_SOC offset separately; **do not run HAL OPAMP self-calibration** (it clears OPAINTOEN and drives PA8 against U3's SOA for ~25 ms): use the factory trim.  VREFBUF off (VREF+ is tied to VDDA).  TIM1 BKIN (PC13) and TIM8 BKIN (PB7) active low; R_nFAULT (PC15) EXTI at top priority: record it; §8.1 drive events decide (the DRV8316 already Hi-Zs itself on its own faults).  DRV_OFF low only when the drives are commanded (§8 boot order) |
+| W_ARM_S (PC15) | EXTI15 both edges, high priority (U14 gives clean edges).  A **falling** edge acts at once: full weapon stop (CHxN low, current controllers reset) and sets the heartbeat's "W_ARM_S fell" flag (the compute board, which knows when it stopped toggling, does the timing).  A rising edge counts only after W_ARM_S has stayed high ≥ 5 ms.  Re-arm needs a new ARM edge and the weapon command at zero (§8.1 throttle-zero interlock) |
+| DRV8316C (U3, U4) | **SPI:** mode 1, ≤ 5.3 MHz, 16-bit frames with an even-parity bit (B8, computed by firmware, not copied from constants); one device selected at a time (never both CS low); one SPI3 owner task for U3/U4/U7.  SDO is Hi-Z while nCS is high (CTRL2 resets to push-pull, 0x60).  Registers reset on any sleep/UVLO: ignore reads before the configuration is written.  **Configuration** (after t_READY 1 ms; at boot with the DRV_OFF pin high; the same sequence is the "rewrite" after an NPOR or mismatch, for one chip with the pin left as it is): CTRL1 0x0603 (unlock) → **CTRL6 0x1019** (BUCK_DIS, BUCK_CL, BUCK_PS_DIS) → **CTRL3 0x0A4E** (OVP 22 V on, SPI faults off nFAULT, OTW *not* on nFAULT: poll it) → **CTRL4 0x0C90** (OCP 16 A latched, a short-circuit backstop; bit 7 DRV_OFF = 1: the chip stays coasted) → **CTRL5 0x0F00** (CSA 0.15 V/A) → **CTRL10 0x1818** (delay compensation on, DLY_TARGET 0x8 = 1.8 µs: covers the worst-case driver delay; TI's 1.2 µs cannot be held at the delay's upper spread) → CTRL2 0x087C (SLEW 200 V/µs, 3x PWM, push-pull SDO) → CTRL2 0x097D (CLR_FLT) → CTRL1 0x0606 (REG_LOCK).  CTRL4 and CTRL5 are written explicitly.  **Release** (only inside §8.1 "drives resume", with the timer already running FOC preset to the back-EMF): CTRL1 0x0603 → CTRL4 **0x0D10** → CTRL2 0x097D (CLR_FLT) → CTRL1 0x0606.  **Per-drive coast:** CTRL1 0x0603 → CTRL4 **0x0C90** → CTRL1 0x0606 (0x0D90 and 0x0C10 have odd parity and are rejected).  **Fault recovery** (a locked chip ignores CLR_FLT): CTRL1 0x0603 → CTRL2 0x097D → CTRL1 0x0606.  **Register check at ~100 Hz:** expect CTRL1 0x06, CTRL2 **0x7C** (CLR_FLT self-clears), CTRL3 0x4E, CTRL4 0x10 released / 0x90 coasted (0x14 / 0x94 inside a 24 A resume window, §8.1), CTRL5 0x00, CTRL6 0x19, CTRL10 0x18, IC_STAT NPOR = 1; also read IC_STAT FAULT (0 on a released chip with the DRV_OFF pin low) and the OTW bit (derate on OTW; a still-low nFAULT gives no new edge).  A mismatch or NPOR = 0 means the chip reset (it comes up in 6x PWM mode) → rewrite (it ends coasted), report, §8.1 drive events.  OVP 22 V trips at 20 V minimum.  Sample the CSAs in the centre of the low-side-on interval, ≥ 1 µs after it opens + DLY_TARGET; duty ≤ ~81 % (L) / ~86 % (R, rank-2 pair, C = −(A+B)), flat-bottom SVPWM (CTRL3 PWM_100_DUTY_SEL left 0 is fine at that cap).  Current limiting in the FOC loop (ILIM modes unusable with VREF = AVDD); starting limit ~1–1.5 A for the Mk4.1 (traction) |
+| STM32 timers/ADC | §3.4: TIM1 24 kHz (ARR 3542, PWM mode 1), TIM8/TIM20 48 kHz (ARR 1771, PWM mode 2) reset-slaved via ITR0 with URS = 1 (TIM8/TIM20 OISx = 1, OSSI = 1, §8.1); the timers never stop (ADC triggers ≤ 1 ms apart).  ADC clock asynchronous PLLP 42.5 MHz /1 for all ADCs; ADC1/ADC2 dual simultaneous; injected on TIM8_TRGO2 (OC6REF, 48 kHz), 3 ranks everywhere, 12.5 cycles, JQDIS = 1; regular (ADC1/ADC2) on TIM1_TRGO2 = OC6REF inside the non-overlap windows (relative to CCR6), 4 ranks with VREFINT (VREFEN) and L_MTEMP both at 247.5 cycles.  Circular DMA; never stop an ADC without disable/enable; set JQDIS before writing JSQR; discard the first samples after every start and debug halt (ES0430: > 1 ms without a trigger); reject rev Z silicon.  TIM1 MMS = update; TIM8/TIM20 combined reset + trigger mode, slaves enabled first.  Trigger details: TIM8 OC6 in PWM mode 2 (rising edge used as TRGO2 = OC6REF; PWM mode 1 would sample 1.5 µs before the valley); TIM1 OC6 for the regular trigger at CCR 568–2311 (PWM mode 2) or 1231–2974 (PWM mode 1); ADC1/ADC2 DUAL = 00001 (combined regular + injected simultaneous); the weapon uses the sample taken while TIM1 counts down near its peak (read TIM1 DIR).  OPAMP5: VM_SEL = follower, VP_SEL = VINP0 (PB14), OPAINTOEN = 1 **before** OPAEN (otherwise it drives PA8 = L_SOB_F), high-speed mode; calibrate the L_SOA offset separately; **do not run HAL OPAMP self-calibration** (it clears OPAINTOEN and drives PA8 against U3's SOB for ~25 ms): use the factory trim.  VREFBUF off (VREF+ is tied to VDDA).  TIM1 BKIN (PA6) and TIM8 BKIN (PD2) active low; R_nFAULT (PC9) EXTI9 at top priority: record it; §8.1 drive events decide (the DRV8316 already Hi-Zs itself on its own faults).  DRV_OFF low only when the drives are commanded (§8 boot order) |
 | Timer inputs | TIM3/TIM2 encoder mode on CH1/CH2 (MT6701 ABZ, 1024 PPR = 4096 counts/rev), Z via CH3 capture interrupt.  **Channel order differs per side** (rev L1 pin swap): right A (R_S1, PA15) → TIM2_CH1, B (R_S2, PB3) → CH2; left A (L_S1, PB5) → TIM3_**CH2**, B (L_S2, PB4) → TIM3_**CH1**.  The same motor and wiring therefore counts the opposite way on the left: the expected alignment sign (§9 step 5, §8.1 row 6a) and the velocity sign are per-drive constants, and the left one carries this inversion (set once from the pin map, not tuned at bring-up); input filter ICxF ≤ 0b0011; TIM3 extended to 32 bits in software.  Leave the MT6701 power-up absolute ABZ train **off** (the default).  The sensor is powered from +3V3 (TPS22945 ON = VIN): the MCU cannot re-power it.  **Start angle** (ABZ is incremental): whenever the angle is invalid (after a reset, or after ≥ ~20 ms without edges while the observer says the motor turns) and the rotor is still, align one drive at a time in **two steps** (~1 A at +90° electrical, then at 0°, ~100 ms each; a single vector has a dead zone at 180° error where gearbox friction holds the rotor).  Check that the encoder moved by the expected amount (~171 counts) **and sign** and that the other drive's encoder stayed still (catches swapped J2/J3 sensor cables or motor bundles).  Wrong sign on two clean alignments → wiring fault, latch that drive; the other encoder following → left/right crossed (§8.1 drive row 7); too little motion → retry at a higher current, then sensorless and report; a disturbed alignment (robot pushed) is repeated a few times, then sensorless and report.  Set an angle offset (never zero the count, so odometry stays continuous); the wheel moves ≤ ~0.4 mm through 28.5:1.  If the rotor is turning, take the angle from the next Z and the stored Z offset instead.  **Z reference:** Z's electrical offset is measured once at bring-up and stored (§9 step 5).  At the first Z after an alignment, > ~30° electrical from it → keep the alignment and report "Z offset stale" (re-run §9 step 5, e.g. after a magnet re-glue).  At every later Z compare the count (mod 4096; capture Z with the counter's direction bit, or set Z_PULSE_WIDTH = 1 LSB, so a reversal does not shift it): a few counts is drift (correct it); a larger error is lost or extra A/B edges → re-reference; a second one since reset marks the encoder suspect → sensorless and report.  **Encoder plausibility:** above a few thousand rpm compare the encoder angle with the sensorless observer; > ~30° electrical disagreement → that drive goes sensorless and reports.  This is also the only check for a slipped magnet (Z moves with it): an accepted residual.  **Lost encoder at standstill** cannot be told from a pushing stall (ABZ has no status; the pull-ups freeze the count): report "no encoder edges, torque commanded" with its duration in the heartbeat; once moving, the plausibility check catches it.  Return to encoder mode after edges resume and a Z matches the reference.  **Speed cap on the encoder:** ≤ ~50 k rpm motor (MT6701 rated 55 k rpm); field weakening only in sensorless mode |
-| Weapon fast trip (required) | The DRV8323 CSA **inverts**: shoot-through and phase-to-phase / phase-to-VBAT shorts pull SOx *low*, so each comparator trips when SOx < ~0.45 V (VREF/2 − 30 A × 40 mV/A; default **30 A**: at the 20 A limit the PWM ripple is ±3–5.5 A and nuisance trips would keep restarting the weapon (§8.1 row 6), so lower it only after measuring).  Inverting inputs from the internal-only DACs (DAC3_CH1, DAC4_CH2; DAC1_CH1/DAC2_CH1 would drive PA4/PA6).  With TIM1 BKP = 0 (active-low nFAULT on PC13) no inversion anywhere: COMPx POL = 0, BKCMPxP = 0.  Outputs to TIM1's **main break (BRK, BKCMPxE)**, not BRK2 (BRK2 would leave the INL enables high through the output polarity in FOC).  TIM1 dead time 0 (the DRV8323 inserts its own; the INL enable only falls after the timer dead time).  OSSI = 1 (otherwise R47–R49 add ~1.5–2 µs), BKF = 0, blanking off by default (the CSA slew already acts as ~120 ns of blanking; a TIM1_OC5 window would be a blind spot).  Comparators enabled only while U2 is awake; comparator interrupts to tell a comparator trip from nFAULT |
-| Weapon fast trip (wiring) | COMP3 (PA0, W_SOA), COMP1 (PA1, W_SOB), COMP6 (PB11, W_SOC); each CSA pin reaches only one comparator non-inverting input |
+| Weapon fast trip (required) | The DRV8323 CSA **inverts**: shoot-through and phase-to-phase / phase-to-VBAT shorts pull SOx *low*, so each comparator trips when SOx < ~0.45 V (VREF/2 − 30 A × 40 mV/A; default **30 A**: at the 20 A limit the PWM ripple is ±3–5.5 A and nuisance trips would keep restarting the weapon (§8.1 row 6), so lower it only after measuring).  Inverting inputs from the internal-only DAC3 (INMSEL = 100: DAC3_CH1 for COMP1/COMP3, DAC3_CH2 for COMP2; DAC1_CH1/CH2 would drive PA4/PA5).  With TIM1 BKP = 0 (active-low nFAULT on PA6) no inversion anywhere: COMPx POL = 0, BKCMPxP = 0.  Outputs to TIM1's **main break (BRK, BKCMP1E/2E/3E)**, not BRK2 (BRK2 would leave the INL enables high through the output polarity in FOC).  TIM1 dead time 0 (the DRV8323 inserts its own; the INL enable only falls after the timer dead time).  OSSI = 1 (otherwise R47–R49 add ~1.5–2 µs), BKF = 0, blanking off by default (the CSA slew already acts as ~120 ns of blanking; a TIM1_OC5 window would be a blind spot).  Comparators enabled only while U2 is awake; comparator interrupts to tell a comparator trip from nFAULT |
+| Weapon fast trip (wiring) | COMP3 (PA0, W_SOA, INPSEL = 0), COMP2 (PA3, W_SOB, **INPSEL = 1**: INPSEL = 0 is PA7 = W_INLC_M), COMP1 (PA1, W_SOC, INPSEL = 0); each CSA pin reaches only one comparator non-inverting input |
 | INA239 timing | shunt and bus conversion ≤ 150 µs each so SOVL/BOVL act within ~0.3–0.45 ms (the alert follows the conversion that sees the limit) |
 | Weapon safety | Coast if the bus exceeds 18.5 V (from the INA239 VBUS reading: the VBAT_SNS ADC can read low while a compute board holds its pin at reset), then restart as §8.1 row 1.  **Stall cut-out** (§8.1 row 10): at the current limit with no speed rise for > 0.5 s → coast ~1 s and retry; TH1 > ~100 °C → coast until < ~80 °C; report (a jammed drum otherwise dissipates continuously).  Weapon control at 24 kHz gives ~7–8 updates per electrical cycle at full speed (2822 = 14 poles, 7 pole pairs: confirm): use the sensorless observer with angle prediction there, six-step only at low speed.  **Never short-brake the drum** (all low sides on at 25 k rpm ≈ 14 V BEMF into tens of mΩ = hundreds of A) |
 | Braking and reversal | Regen returns to the pack through the switch FETs (bidirectional when on); the bus rises by I × R_pack (~1.4 V at 20 A).  **Weapon:** reverse (e.g. an invertible drum) by a controlled FOC deceleration inside the combined ~10 A regen limit (Power budget row; ≈ 0.5 s from full speed), then spin up; or coast down.  **Drives:** normal FOC braking/reversal inside the same limit.  If the pack is disconnected mid-spin, the INA239 BOVL break + the 18.5 V coast stop the drum from pumping the bus; the DRV8316 OVP Hi-Zs the drives.  INA239 current is signed: negative = regen |
@@ -875,7 +896,7 @@ calibration that §8 needs (marked **store**).
    * **Program each MT6701 off-board first:** ABZ mode, 1024 PPR, rotation direction, Z pulse
      width 1 LSB, power-up absolute ABZ output off.  Its EEPROM needs 4.5–5.5 V.
    * **Open-loop spin** at a 1 A limit: check encoder direction, pole pairs and the CSA offsets
-     (L_SOC through OPAMP5 separately).
+     (L_SOA through OPAMP5 separately).
    * **Store CCR6:** sweep it at a fixed drive current and take the middle of the flat plateau of
      the measured current (the sampling instant has no pin).  Confirm sampling still holds at the
      duty cap.

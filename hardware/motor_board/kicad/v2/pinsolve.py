@@ -72,9 +72,28 @@ DEST = {
 }
 
 
+GEOM = None
+if "--geom" in sys.argv:
+    # destinations from the real placement (render.py dump): every other pad on the net; the CSA filter nets (_F)
+    # use their source net (the DRV8316 SOx pin), since the filter sits at the MCU pin
+    import json as _json
+    GEOM = _json.load(open(sys.argv[sys.argv.index("--geom") + 1]))
+    _pads = {}
+    for p in GEOM["pads"]:
+        if p["ref"] != "U1":
+            _pads.setdefault(p["net"].split("/")[-1], []).append(tuple(p["c"]))
+    DESTPTS = {}
+    for n in DEST:
+        src = n[:-2] if n.endswith("_F") else n
+        pts = _pads.get(src, [])
+        if n.endswith("_F"):
+            pts = [q for q in pts if math.dist(q, MCU) > 9.0]   # the DRV8316 pin, not the filter resistor
+        DESTPTS[n] = pts or [A[d] for d in DEST[n]]
+
+
 def cost(net, pin):
     px, py, (lx, ly) = pin_xy(pin)
-    pts = [A[d] for d in DEST[net]]
+    pts = DESTPTS[net] if GEOM else [A[d] for d in DEST[net]]
     c = 0.0
     for dx, dy in pts:
         # outward normal of the pin's edge (rotated)
@@ -129,7 +148,7 @@ for ph in "ABC":
             if has(p, f"TIM1_CH{k}N"):
                 m.AddImplication(opt(f"W_INL{ph}_M", p, f"k{k}"), wch[ph, k])
 for p in USABLE:
-    if has(p, "TIM1_BKIN") or has(p, "TIM1_BKIN2"):
+    if has(p, "TIM1_BKIN"):          # BKIN, not BKIN2: break2 can only force the inactive level (RM0440 Table 260)
         opt("W_nFAULT", p, "bk")
 
 # ---- drives: timer per drive (TIM8/TIM20), channels any order
@@ -162,7 +181,7 @@ for d in "LR":
         if pname(p) in DB:
             continue
         for t in (8, 20):
-            if has(p, f"TIM{t}_BKIN") or has(p, f"TIM{t}_BKIN2"):
+            if has(p, f"TIM{t}_BKIN"):
                 m.AddImplication(opt(f"{d}_nFAULT", p, f"bk{t}"), dt[d, t])
         opt(f"{d}_nFAULT", p, "gpio")
 
@@ -276,10 +295,29 @@ for p in USABLE:
 for net, p in FIXED.items():
     opt(net, p, "fixed")
 
+# ---- pin I/O structure (DS12288 Table 12, out/io_types.json): cable-exposed motor-NTC inputs on 5 V-tolerant pins
+import json as _j
+IO = _j.load(open(Path(__file__).resolve().parent / "out" / "io_types.json"))
+IO.update({"PA9": "FT_da", "PA10": "FT_da", "PF0": "FT_fa", "PF1": "FT_a", "PC14": "FT", "PC15": "FT", "PB8": "FT_f"})
+for (n, p, t_), v in list(opts.items()):
+    if n in ("L_MTEMP", "R_MTEMP") and IO.get(pname(p), "TT").startswith("TT"):
+        m.Add(v == 0)
+# ---- EXTI: one port per line; these inputs need an interrupt
+EXTI_NETS = ("W_ARM_S", "L_nFAULT", "R_nFAULT")
+for line in range(16):
+    vs = [v for (n, p, t_), v in opts.items() if n in EXTI_NETS and (t_ == "gpio" or n == "W_ARM_S")
+          and int(re.sub(r"\D", "", pname(p)) or -1) == line]
+    if len(vs) > 1:
+        m.AddAtMostOne(vs)
+
 # ---- PB8-BOOT0: chip selects only
 for (n, p, t), v in list(opts.items()):
     if pname(p) == "PB8" and n not in ("L_nCS", "R_nCS", "INA_nCS"):
         m.Add(v == 0)
+# and PB8 must carry one of them: its pull-up (DRV8316 nSCS internal, or R12 on INA_nCS) sets BOOT0 through reset
+# (a blank chip boots the ROM loader; SWD programming does not care); the pin must not float (DS12288 is silent on
+# an internal pull)
+m.AddExactlyOne(v for (n, p, t), v in opts.items() if pname(p) == "PB8")
 
 # ---- one option per net, one net per pin
 nets = sorted({n for (n, p, t) in opts})
@@ -296,6 +334,8 @@ for (n, p, t), v in opts.items():
     c = cost(n, p)
     if n in ("L_nFAULT", "R_nFAULT") and t == "gpio":
         c += 6.0
+    if n in ("W_VA", "W_VB", "W_VC", "VBAT_SNS") and IO.get(pname(p), "TT").startswith("TT"):
+        c += 15.0                    # TVS-level spikes: prefer a 5 V-tolerant analog pin (DESIGN 7.4)
     terms.append(int(round(c * 10)) * v)
 # general-purpose timer on a drive: firmware change (no BKIN, not TIM8/TIM20), penalised
 for (d, tt), v in dt.items():

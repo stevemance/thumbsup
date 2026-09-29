@@ -596,3 +596,109 @@ gives 31 V / −6.5 V (not 39 / −9.2).  DESIGN §5, §7, §9 updated.
 **C25/C26/C31 → 10 µF 50 V X7R 1210 (C77102)** (user OK, 2026-09-29; was 1206 X5R C13585): the VDS-trip-only
 phase-to-phase kick at the DRV8316 VM pins drops from 7.7 to 4.3 V/µs, phase-to-GND from 3.7–4.4 to 2.5–2.8, the bus
 peak in those faults from ~30 to ~22 V; the comparator-trip kick from ≤ 1.9 to ≤ 1.2 V/µs (200 ns).  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).
+
+## Rev L3 (2026-09-29): MCU pin map co-assigned with the v2 placement
+
+The STM32G474 pins were re-assigned together with the v2 PCB placement (kicad/v2/pinsolve.py) so the nets reach
+their ICs without crossings.  The architecture is unchanged (TIM1 weapon, TIM8 drive L, TIM20 drive R, TIM3/TIM2
+sensors, SPI3, USART1, ADC5 + OPAMP5 drive L, ADC3/ADC4 drive R, ADC1/ADC2 dual simultaneous for the weapon, three
+comparators for the fast trip, TIM1_BKIN / TIM8_BKIN / EXTI for the three nFAULTs); every alternate function was
+re-checked against `ref/STM32G474RxTx_pins.xml` and every I/O structure against DS12288 Table 12.  No part added or
+removed; R12 stays on INA_nCS.  A first draft of this map put L_nFAULT on TIM8_BKIN2, R_nFAULT on EXTI15 (shared
+with W_ARM_S) and L_MTEMP on a TT_a pin; the solver was fixed instead of documenting around them.
+
+| Net | Rev L2 (pin, function) | Rev L3 (pin, function) |
+|---|---|---|
+| W_INHA | 8 PC0 TIM1_CH1 | 44 PA10 TIM1_CH3 |
+| W_INHC | 44 PA10 TIM1_CH3 | 8 PC0 TIM1_CH1 |
+| W_INLA_M | 21 PA7 TIM1_CH1N | 37 PB15 TIM1_CH3N |
+| W_INLB_M | 36 PB14 TIM1_CH2N | 46 PA12 TIM1_CH2N |
+| W_INLC_M | 37 PB15 TIM1_CH3N | 21 PA7 TIM1_CH1N |
+| W_nFAULT | 2 PC13 TIM1_BKIN | 20 PA6 TIM1_BKIN |
+| W_SOA | 12 PA0 ADC12_IN1 (both ADCs), COMP3 | 12 PA0 ADC2_IN1 (ADC2 only), COMP3 |
+| W_SOB | 13 PA1 ADC2_IN2, COMP1 | 17 PA3 ADC1_IN4, COMP2 (INPSEL 1) |
+| W_SOC | 33 PB11 ADC1_IN14 (slow), COMP6 | 13 PA1 ADC12_IN2 (both ADCs), COMP1 |
+| W_VA | 18 PA4 ADC2_IN17 | 22 PC4 ADC2_IN5 |
+| W_VC | 14 PA2 ADC1_IN3 | 11 PC3 ADC1_IN9 |
+| W_NTC | 20 PA6 ADC2_IN3 | 18 PA4 ADC2_IN17 |
+| VBAT_SNS | 17 PA3 ADC1_IN4 | 14 PA2 ADC1_IN3 |
+| W_EN | 46 PA12 GPIO | 3 PC14 GPIO |
+| W_ARM_S | 55 PD2 GPIO/EXTI2 | 4 PC15 GPIO/EXTI15 |
+| DRV_OFF | 3 PC14 GPIO | 45 PA11 GPIO |
+| L_INHA | 59 PB6 TIM8_CH1 | 38 PC6 TIM8_CH1 |
+| L_SOA_F | 42 PA8 ADC5_IN1 | 36 PB14 OPAMP5 VINP0 → ADC5_IN3 |
+| L_SOB_F | 43 PA9 ADC5_IN2 | 42 PA8 ADC5_IN1 |
+| L_SOC_F | 11 PC3 OPAMP5 VINP2 → ADC5_IN3 | 43 PA9 ADC5_IN2 |
+| L_nFAULT | 60 PB7 TIM8_BKIN | 55 PD2 TIM8_BKIN |
+| L_nCS | 41 PC9 GPIO | 61 PB8-BOOT0 GPIO |
+| L_MTEMP | 5 PF0 ADC1_IN10 | 6 PF1 ADC2_IN10 |
+| R_MTEMP | 6 PF1 ADC2_IN10 | 5 PF0 ADC1_IN10 |
+| R_INHA | 26 PB2 TIM20_CH1 | 40 PC8 TIM20_CH3 |
+| R_INHC | 40 PC8 TIM20_CH3 | 26 PB2 TIM20_CH1 |
+| R_SOA_F | 34 PB12 ADC4_IN3 | 25 PB1 ADC3_IN1 |
+| R_SOB_F | 35 PB13 ADC3_IN5 | 34 PB12 ADC4_IN3 |
+| R_SOC_F | 25 PB1 ADC3_IN1 | 35 PB13 ADC3_IN5 |
+| R_nFAULT | 4 PC15 GPIO/EXTI15 | 41 PC9 GPIO/EXTI9 |
+| R_nCS | 45 PA11 GPIO | 33 PB11 GPIO |
+| INA_nCS | 61 PB8-BOOT0 GPIO (R12) | 23 PC5 GPIO (R12) |
+| MB_TX | 22 PC4 USART1_TX | 59 PB6 USART1_TX |
+| MB_RX | 23 PC5 USART1_RX | 60 PB7 USART1_RX |
+| not connected | 38 PC6 | 2 PC13 |
+
+Unchanged: W_INHB (PC1 TIM1_CH2), W_VB (PA5), L_INHB/L_INHC (PC7/PB9), R_INHB (PC2), L_S1–L_S3 (PB5/PB4/PB0),
+R_S1–R_S3 (PA15/PB3/PB10), SPI3 (PC10–PC12), SWD, NRST.
+
+Firmware-visible consequences (DESIGN §3.2–§3.5, §8, §8.1):
+
+* **Weapon TIM1 channel per phase:** A = CH3/CH3N, B = CH2/CH2N, C = CH1/CH1N (was A = CH1, C = CH3).
+* **Drive R TIM20 channel per phase:** A = CH3, B = CH2, C = CH1 (was A = CH1, C = CH3).  Drive L is unchanged
+  (TIM8 CH1/2/3 = A/B/C).
+* **Weapon CSA ADC roles and ranks:** W_SOC is now the phase on both ADCs (PA1, ADC12_IN2), W_SOB on ADC1 only
+  (PA3, IN4), W_SOA on ADC2 only (PA0, IN1; PA0 could also be ADC1_IN1 but is not used there).  Injected ranks
+  ADC1 C/B/B, ADC2 A/C/A: rank 1 = C+A, rank 2 = B+C, rank 3 = B+A (was A+B, C+A, C+B); ranks 1–2 still give all
+  three phases and PA1 is never on both ADCs in one rank.  All three are now fast channels (the old PB11 slow channel
+  is gone).
+* **Drive R ADC roles:** R_SOB alone on ADC4 (PB12, IN3); R_SOA (PB1, IN1) and R_SOC (PB13, IN5) on ADC3.  Ranks
+  ADC3 C/A/C, ADC4 B/B/B; the duty-cap pair is still rank 2 (now A on ADC3, B on ADC4), C = −(A + B), ~86 %.
+* **Drive L ADC roles:** L_SOA through OPAMP5 (VP_SEL = VINP0 = PB14, internal output → ADC5_IN3), L_SOB PA8
+  (ADC5_IN1), L_SOC PA9 (ADC5_IN2).  The OPAMP5 VOUT pin PA8 now carries U3's SOB: OPAINTOEN before OPAEN, no HAL
+  self-calibration, as before.  The separately calibrated offset is L_SOA's.
+* **Regular groups:** ADC1 W_VC PC3 (IN9) / VBAT_SNS PA2 (IN3) / R_MTEMP PF0 (IN10) / VREFINT; ADC2 W_VA PC4 (IN5)
+  / W_VB PA5 (IN13) / W_NTC PA4 (IN17) / L_MTEMP PF1 (IN10).  Same structure and sampling times; the 247.5-cycle
+  slots are VREFINT (ADC1) and now L_MTEMP (ADC2).
+* **Comparators:** W_SOA → COMP3 (PA0, INPSEL 0), W_SOB → COMP2 (PA3, **INPSEL 1**; INPSEL 0 would be PA7 =
+  W_INLC_M), W_SOC → COMP1 (PA1, INPSEL 0); thresholds from DAC3_CH1 (COMP1, COMP3) and DAC3_CH2 (COMP2), INMSEL 100;
+  TIM1 BKCMP1E/2E/3E (was COMP3/COMP1/COMP6 with DAC3_CH1/DAC4_CH2).
+* **Fault inputs:** W_nFAULT PA6 (TIM1_BKIN, EXTI6), L_nFAULT PD2 (TIM8_BKIN, EXTI2), R_nFAULT PC9 (EXTI9), W_ARM_S
+  PC15 (EXTI15): no EXTI line shared.  Break behaviour as in rev L (main break, OISx).
+* **MB_TX on PB6 (UCPD1_CC1):** the USB Type-C dead-battery Rd pull-down is active out of reset until
+  PWR_CR3.UCPD1_DBDIS is set (RM0440; §46.4.6 asks for UCPD1_DBCC1/2 = PA9/PA10 to be grounded when the Rd is not
+  wanted, and PA9 is L_SOC_F here, idling at ~AVDD/2).  The compute board sees MB_TX low (a UART break) while the
+  motor MCU is in reset (including while it holds NRST) and until boot step 2; its UART must treat a break/framing
+  error as no data and resynchronise on the frame CRC (DESIGN §3.5 item 5).  MB_RX is now FT_f (was TT_a PC5); R17
+  unchanged.
+* **PB8-BOOT0 carries L_nCS:** BOOT0 is set by U3's nSCS internal pull-up (80–130 kΩ to U3's AVDD, SLVSH07) instead of
+  R12, so a blank chip boots the ROM bootloader only while U3 is powered.  Irrelevant once the option bytes set
+  nSWBOOT0 = 0 / nBOOT0 = 1 (§9 step 2, as before).  Every chip select still has a pull-up through reset (U3/U4 nSCS
+  internal, R12 on INA_nCS) and none sits on PB4/PB6.
+* **W_EN on PC14** (a PC13–PC15 low-drive pin: ≤ 2 MHz, ≤ 30 pF, 3 mA sink, no sourcing loads, DS12288 Table 12
+  note 2): fine for ENABLE and the 8–40 µs t_RST pulse; keep its trace short (DESIGN §6.6, moved from DRV_OFF, which is
+  now on PA11, a normal pin).  Never enable LSE/RTC_OUT/TAMP on PC13–15, nor HSE on PF0/PF1 (the motor-NTC inputs).
+
+Electrical re-checks (DS12288 Tables 12, 14, 15, 17):
+
+* **Phase-voltage dividers under the regen TVS clamp (§7.4):** W_VB PA5 and W_VC PC3 are TT_a (4.0 V abs max, VDD +
+  0.3 V operating); W_VA PC4 is FT_fa and VBAT_SNS PA2 is FT_a (abs max min(VDD, VDDA) + 4.0 V, operating + 3.6 V).
+  Two TT_a sense pins as before (were PA3/PA4/PA5 TT_a with PA2 FT_a for W_VC); ~3.7 V at a 10 A clamp stays inside
+  the TT_a abs max, briefly above VDD + 0.3 V: unchanged conclusion.  The motor_board.py C41–C43 description still
+  names PA4/PA5/PA2 and needs the same update.
+* **Motor NTCs** on PF0 (FT_fa) and PF1 (FT_a): the ~4.1 V BAV99-clamped level of a chafed-cable fault stays well
+  inside their min(VDD, VDDA) + 4.0 V abs max, as in rev L2.
+* **W_nFAULT on PA6 (TT_a, was FT PC13):** R42 pulls it to +3V3 and every source on the net (U2 nFAULT, U7 ALERT) is
+  open drain, so it never exceeds VDD: inside VDD + 0.3 V.
+* **R_nFAULT PC9 (FT_f), L_nFAULT PD2 (FT):** pulled up to the DRV8316's own AVDD (≤ 3.465 V); 5 V tolerant anyway.
+* **R_nCS on PB11 (TT_a):** U4's nSCS pull-up goes to its AVDD (≤ 3.465 V), inside VDD + 0.3 V.
+* **Drive CSA inputs** PB1/PB12/PB13/PB14 TT_a, PA8/PA9 FT_a; weapon CSA inputs PA0/PA1/PA3 TT_a: all driven from
+  ≤ 3.465 V sources, as before.  Sensor inputs unchanged (PB0/PB10 TT_a behind the 3.3 V buffers).
+* **Layout (§6.8):** W_INLA_M (PB15, 24 kHz) sits next to L_SOA (PB14, drive L CSA) and W_INLC_M (PA7) next to W_VA
+  (PC4): route them apart.

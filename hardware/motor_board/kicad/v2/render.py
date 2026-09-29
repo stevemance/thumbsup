@@ -16,7 +16,7 @@ if sys.argv[1] == "dump":
     import pcbnew
     sys.path.insert(0, str(HERE))
     from blocknets import blk
-    b = pcbnew.LoadBoard(str(HERE.parent / "motor_board" / "motor_board.kicad_pcb"))
+    b = pcbnew.LoadBoard(sys.argv[2] if len(sys.argv) > 2 else str(HERE.parent / "motor_board" / "motor_board.kicad_pcb"))
     t = pcbnew.ToMM
     parts, pads = [], []
     for f in b.GetFootprints():
@@ -31,7 +31,7 @@ if sys.argv[1] == "dump":
             pads.append(dict(ref=f.GetReference(), num=p.GetNumber(), net=p.GetNetname(), side="TB" if tht else side,
                              c=[t(p.GetPosition().x) - OX, t(p.GetPosition().y) - OY],
                              box=[t(pb.GetLeft()) - OX, t(pb.GetTop()) - OY, t(pb.GetRight()) - OX, t(pb.GetBottom()) - OY]))
-    json.dump(dict(parts=parts, pads=pads), open(OUT / "geom_place.json", "w"))
+    json.dump(dict(parts=parts, pads=pads), open(sys.argv[3] if len(sys.argv) > 3 else OUT / "geom_place.json", "w"))
     print(len(parts), "parts", len(pads), "pads")
     sys.exit(0)
 
