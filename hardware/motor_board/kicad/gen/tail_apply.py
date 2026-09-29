@@ -131,7 +131,9 @@ if rr_kill:
             pd = [q for q in fps[en[1]].Pads() if q.GetNumber() == en[2]][0]
             return loc(pd.GetPosition())
         return en[1], en[2]
-    for n, es in ends.items():
+    ORDER = getattr(tail_edits, "RR_ORDER", None)          # optional net order for the re-joins (ordering searches)
+    items = sorted(ends.items(), key=lambda kv: ORDER.index(kv[0]) if ORDER and kv[0] in ORDER else 999)
+    for n, es in items:
         done = [es[0]]; rest = es[1:]
         while rest:                                        # nearest-neighbour tree over the cut ends
             a_, b_ = min(((a, c) for a in done for c in rest), key=lambda ac: math.dist(xy(ac[0]), xy(ac[1])))
@@ -302,6 +304,8 @@ for e in tail_edits.EDITS:
     else:
         raise SystemExit(f"unknown op {op}")
 reqs += rr_reqs
+if getattr(tail_edits, "RR_ORDER", None):                   # ordering searches: every request of a listed net in list order
+    reqs.sort(key=lambda r: tail_edits.RR_ORDER.index(r["net"]) if r["net"] in tail_edits.RR_ORDER else -1)
 for ref_, num_ in dict.fromkeys(redrop):
     reqs.append(dict(tag=f"redrop {ref_}.{num_}", net="GND", a=("pad", ref_, num_), b=("drop",), layers=["F.Cu", "B.Cu"],
                      w=0.3, via=0.45, drill=0.25, margin=2.5, via_through_pours=True))
