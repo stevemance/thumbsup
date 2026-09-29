@@ -1,0 +1,148 @@
+Weapon fault-clear kick at the DRV8316 U3 VM pins (behind 10 nH + R302 0.1 ohm + local caps).  Limits 4 V/us ramp, 40 V.
+dV/dt columns: rise / fall, as 5 ns (near-instant), 50 ns and 200 ns moving averages.  Trip time = from fault onset
+to the start of the 100 ns conductance ramp (comparator: 0.7-1.0 us per round10_a; VDS-only: 4 us).
+
+== v2 real: VM 2x1210 C(V), bridge 3x1206 C(V)
+case                                                    Ipk   VM min-max VBAT max     5ns r/f    50ns r/f   200ns r/f
+pp  100nH trip 0.7us/100ns C1  20m nom                 112A  16.3-16.7V    18.4V  3.86/ 4.25  1.65/ 2.33  0.91/ 0.94
+pp  100nH trip 0.7us/100ns C1  40m stiff               112A  16.2-16.7V    18.5V  3.42/ 4.26  1.34/ 2.41  1.00/ 1.08
+pp  100nH trip 0.7us/100ns C1 100m stiff               111A  16.1-16.7V    18.6V  2.68/ 4.26  1.11/ 2.53  1.06/ 1.26
+pp  100nH trip 1.0us/100ns C1  20m nom                 147A  16.0-16.7V    19.5V  4.59/ 4.80  2.13/ 2.71  1.54/ 1.17
+pp  100nH trip 1.0us/100ns C1  40m stiff               146A  15.8-16.8V    19.8V  4.05/ 4.91  1.88/ 2.88  1.72/ 1.38
+pp  100nH trip 1.0us/100ns C1 100m stiff               144A  15.6-16.7V    20.0V  3.16/ 5.09  1.96/ 3.14  1.89/ 1.67
+pp  300nH trip 0.7us/100ns C1  20m nom                  42A  16.5-16.7V    17.4V  1.71/ 1.78  0.74/ 0.93  0.39/ 0.36
+pp  300nH trip 0.7us/100ns C1  40m stiff                42A  16.5-16.8V    17.5V  1.52/ 1.77  0.62/ 0.95  0.44/ 0.41
+pp  300nH trip 0.7us/100ns C1 100m stiff                42A  16.5-16.8V    17.6V  1.20/ 1.72  0.50/ 0.98  0.48/ 0.48
+pp  300nH trip 1.0us/100ns C1  20m nom                  57A  16.4-16.8V    17.9V  2.33/ 2.35  1.04/ 1.21  0.66/ 0.47
+pp  300nH trip 1.0us/100ns C1  40m stiff                57A  16.4-16.8V    18.1V  2.07/ 2.35  0.87/ 1.25  0.76/ 0.56
+pp  300nH trip 1.0us/100ns C1 100m stiff                56A  16.3-16.8V    18.2V  1.63/ 2.32  0.91/ 1.33  0.88/ 0.68
+pp 1000nH trip 0.7us/100ns C1  20m nom                  13A  16.6-16.7V    17.0V  0.52/ 0.54  0.23/ 0.28  0.13/ 0.11
+pp 1000nH trip 0.7us/100ns C1  40m stiff                13A  16.7-16.7V    17.0V  0.47/ 0.54  0.19/ 0.29  0.14/ 0.13
+pp 1000nH trip 0.7us/100ns C1 100m stiff                13A  16.6-16.7V    17.0V  0.37/ 0.52  0.17/ 0.30  0.16/ 0.15
+pp 1000nH trip 1.0us/100ns C1  20m nom                  18A  16.6-16.7V    17.1V  0.74/ 0.73  0.34/ 0.38  0.22/ 0.15
+pp 1000nH trip 1.0us/100ns C1  40m stiff                18A  16.6-16.8V    17.2V  0.66/ 0.73  0.28/ 0.39  0.25/ 0.18
+pp 1000nH trip 1.0us/100ns C1 100m stiff                18A  16.6-16.8V    17.3V  0.52/ 0.72  0.30/ 0.41  0.30/ 0.22
+pp  100nH trip 1.0us/ 50ns C1  40m stiff               141A  15.9-16.8V    19.7V  3.99/ 4.88  1.77/ 2.84  1.62/ 1.35
+pp  100nH trip 1.0us/100ns C1 300m stiff (-40C)        142A  15.5-16.7V    20.1V  2.66/ 5.45  2.06/ 3.52  2.01/ 1.87
+pp  100nH trip 1.0us/100ns C1  40m stiff, no R302/C ESL   146A  15.8-16.7V    19.8V  7.04/ 8.38  2.15/ 3.42  1.70/ 1.55
+pp  100nH VDS-only 4us     C1  40m stiff (residual)    368A  11.6-16.7V    29.5V  8.32/ 2.94  7.71/ 1.91  6.81/ 1.52  >4 V/us (50ns)
+pp  300nH VDS-only 4us     C1  40m stiff (residual)    181A  14.3-17.3V    23.0V  5.23/ 4.13  4.02/ 2.19  3.83/ 0.74  >4 V/us (50ns)
+pg  100nH VDS-only 4us     C1  40m stiff (residual)    397A  11.2-16.7V    19.9V  5.07/ 5.70  3.70/ 3.38  3.63/ 1.60
+pg  100nH VDS-only 4us     C1 100m stiff (residual)    363A  10.2-16.7V    20.4V  4.37/ 5.79  4.36/ 3.50  4.32/ 2.02  >4 V/us (50ns)
+mot 40uH trip at ~60A      C1  40m stiff                54A  15.1-17.6V    18.2V  2.49/ 1.75  1.44/ 0.69  1.40/ 0.04
+
+== v2 real, MLCC C0 x 0.81 (-10 % tol, cold, aging)
+case                                                    Ipk   VM min-max VBAT max     5ns r/f    50ns r/f   200ns r/f
+pp  100nH trip 0.7us/100ns C1  20m nom                 111A  16.2-16.7V    18.7V  3.76/ 4.22  1.74/ 2.35  1.31/ 1.10
+pp  100nH trip 0.7us/100ns C1  40m stiff               111A  16.1-16.8V    18.9V  3.26/ 4.31  1.60/ 2.50  1.41/ 1.29
+pp  100nH trip 0.7us/100ns C1 100m stiff               110A  16.0-16.8V    19.0V  2.46/ 4.40  1.63/ 2.71  1.56/ 1.56
+pp  100nH trip 1.0us/100ns C1  20m nom                 146A  15.8-16.7V    19.9V  4.60/ 4.65  2.64/ 2.62  2.08/ 1.28
+pp  100nH trip 1.0us/100ns C1  40m stiff               145A  15.7-16.8V    20.3V  4.00/ 4.86  2.60/ 2.87  2.36/ 1.57
+pp  100nH trip 1.0us/100ns C1 100m stiff               142A  15.4-16.8V    20.6V  3.02/ 5.17  2.80/ 3.26  2.68/ 1.98
+pp  300nH trip 0.7us/100ns C1  20m nom                  42A  16.5-16.8V    17.6V  1.66/ 1.76  0.75/ 0.93  0.56/ 0.42
+pp  300nH trip 0.7us/100ns C1  40m stiff                42A  16.5-16.8V    17.7V  1.45/ 1.78  0.68/ 0.98  0.62/ 0.49
+pp  300nH trip 0.7us/100ns C1 100m stiff                42A  16.4-16.8V    17.8V  1.11/ 1.76  0.74/ 1.04  0.70/ 0.60
+pp  300nH trip 1.0us/100ns C1  20m nom                  57A  16.4-16.8V    18.0V  2.31/ 2.27  1.13/ 1.17  0.90/ 0.51
+pp  300nH trip 1.0us/100ns C1  40m stiff                56A  16.3-16.9V    18.3V  2.03/ 2.31  1.13/ 1.24  1.05/ 0.63
+pp  300nH trip 1.0us/100ns C1 100m stiff                56A  16.2-16.9V    18.5V  1.56/ 2.33  1.28/ 1.36  1.23/ 0.80
+pp 1000nH trip 0.7us/100ns C1  20m nom                  13A  16.6-16.7V    17.0V  0.51/ 0.53  0.23/ 0.28  0.18/ 0.13
+pp 1000nH trip 0.7us/100ns C1  40m stiff                13A  16.6-16.7V    17.1V  0.45/ 0.54  0.22/ 0.30  0.21/ 0.15
+pp 1000nH trip 0.7us/100ns C1 100m stiff                13A  16.6-16.8V    17.1V  0.34/ 0.54  0.24/ 0.32  0.23/ 0.19
+pp 1000nH trip 1.0us/100ns C1  20m nom                  18A  16.6-16.7V    17.1V  0.74/ 0.71  0.36/ 0.36  0.29/ 0.16
+pp 1000nH trip 1.0us/100ns C1  40m stiff                18A  16.6-16.8V    17.3V  0.65/ 0.72  0.37/ 0.38  0.35/ 0.20
+pp 1000nH trip 1.0us/100ns C1 100m stiff                18A  16.6-16.8V    17.3V  0.50/ 0.72  0.42/ 0.42  0.41/ 0.26
+pp  100nH trip 1.0us/ 50ns C1  40m stiff               140A  15.7-16.8V    20.1V  3.93/ 4.84  2.46/ 2.86  2.23/ 1.55
+pp  100nH trip 1.0us/100ns C1 300m stiff (-40C)        140A  15.2-16.8V    20.7V  3.00/ 5.58  2.97/ 3.69  2.87/ 2.25
+pp  100nH trip 1.0us/100ns C1  40m stiff, no R302/C ESL   145A  15.6-16.8V    20.3V  6.95/ 8.29  2.43/ 3.41  2.33/ 1.75
+pp  100nH VDS-only 4us     C1  40m stiff (residual)    364A  11.1-16.7V    30.2V 10.15/ 2.69  9.57/ 1.68  7.91/ 1.68  >4 V/us (50ns)
+pp  300nH VDS-only 4us     C1  40m stiff (residual)    180A  14.0-17.5V    23.6V  5.92/ 3.84  5.20/ 1.94  4.92/ 0.80  >4 V/us (50ns)
+pg  100nH VDS-only 4us     C1  40m stiff (residual)    393A  10.7-16.7V    20.4V  5.25/ 5.50  4.88/ 3.21  4.77/ 1.76  >4 V/us (50ns)
+pg  100nH VDS-only 4us     C1 100m stiff (residual)    356A   9.5-16.7V    20.9V  5.78/ 5.56  5.76/ 3.30  5.68/ 2.27  >4 V/us (50ns)
+mot 40uH trip at ~60A      C1  40m stiff                54A  15.1-17.7V    18.3V  2.55/ 1.63  1.83/ 0.59  1.76/ 0.02
+
+== round-10 assumption: VM 16u, bridge 12u linear
+case                                                    Ipk   VM min-max VBAT max     5ns r/f    50ns r/f   200ns r/f
+pp  100nH trip 0.7us/100ns C1  20m nom                 114A  16.3-16.7V    17.6V  3.91/ 4.39  1.63/ 2.38  0.53/ 0.83
+pp  100nH trip 0.7us/100ns C1  40m stiff               114A  16.3-16.7V    17.6V  3.50/ 4.29  1.37/ 2.40  0.58/ 0.91
+pp  100nH trip 0.7us/100ns C1 100m stiff               114A  16.3-16.7V    17.6V  2.81/ 4.22  1.01/ 2.45  0.60/ 1.02
+pp  100nH trip 1.0us/100ns C1  20m nom                 150A  16.0-16.7V    18.3V  4.44/ 5.12  1.83/ 2.93  0.99/ 1.16
+pp  100nH trip 1.0us/100ns C1  40m stiff               149A  16.0-16.8V    18.5V  3.94/ 5.08  1.49/ 3.01  1.13/ 1.32
+pp  100nH trip 1.0us/100ns C1 100m stiff               148A  15.8-16.8V    18.4V  3.11/ 5.15  1.24/ 3.18  1.20/ 1.54
+pp  300nH trip 0.7us/100ns C1  20m nom                  42A  16.6-16.7V    17.1V  1.75/ 1.88  0.74/ 0.96  0.22/ 0.31
+pp  300nH trip 0.7us/100ns C1  40m stiff                42A  16.6-16.8V    17.2V  1.57/ 1.81  0.64/ 0.96  0.25/ 0.34
+pp  300nH trip 0.7us/100ns C1 100m stiff                42A  16.6-16.8V    17.2V  1.27/ 1.73  0.49/ 0.96  0.26/ 0.37
+pp  300nH trip 1.0us/100ns C1  20m nom                  57A  16.4-16.7V    17.4V  2.31/ 2.50  0.97/ 1.32  0.43/ 0.46
+pp  300nH trip 1.0us/100ns C1  40m stiff                57A  16.4-16.8V    17.6V  2.06/ 2.47  0.82/ 1.33  0.49/ 0.52
+pp  300nH trip 1.0us/100ns C1 100m stiff                57A  16.4-16.8V    17.6V  1.64/ 2.39  0.60/ 1.36  0.53/ 0.59
+pp 1000nH trip 0.7us/100ns C1  20m nom                  13A  16.6-16.7V    16.9V  0.53/ 0.57  0.23/ 0.29  0.07/ 0.09
+pp 1000nH trip 0.7us/100ns C1  40m stiff                13A  16.7-16.7V    16.9V  0.48/ 0.55  0.20/ 0.29  0.08/ 0.10
+pp 1000nH trip 0.7us/100ns C1 100m stiff                13A  16.7-16.7V    16.9V  0.39/ 0.53  0.15/ 0.30  0.09/ 0.11
+pp 1000nH trip 1.0us/100ns C1  20m nom                  18A  16.6-16.7V    17.0V  0.74/ 0.79  0.31/ 0.41  0.14/ 0.14
+pp 1000nH trip 1.0us/100ns C1  40m stiff                18A  16.6-16.7V    17.0V  0.66/ 0.77  0.27/ 0.42  0.16/ 0.16
+pp 1000nH trip 1.0us/100ns C1 100m stiff                18A  16.6-16.8V    17.1V  0.53/ 0.74  0.20/ 0.42  0.18/ 0.18
+pp  100nH trip 1.0us/ 50ns C1  40m stiff               145A  16.0-16.8V    18.3V  3.92/ 5.03  1.49/ 2.95  1.04/ 1.27
+pp  100nH trip 1.0us/100ns C1 300m stiff (-40C)        146A  15.7-16.8V    18.3V  2.65/ 5.49  1.27/ 3.53  1.23/ 1.69
+pp  100nH trip 1.0us/100ns C1  40m stiff, no R302/C ESL   149A  16.0-16.8V    18.5V  6.97/ 8.56  2.00/ 3.56  1.12/ 1.49
+pp  100nH VDS-only 4us     C1  40m stiff (residual)    369A  11.5-16.7V    23.8V  5.72/ 2.92  5.70/ 1.94  5.62/ 1.62  >4 V/us (50ns)
+pp  300nH VDS-only 4us     C1  40m stiff (residual)    182A  14.3-17.4V    21.0V  4.89/ 4.44  3.04/ 2.45  3.01/ 0.81
+pg  100nH VDS-only 4us     C1  40m stiff (residual)    398A  11.1-16.7V    18.6V  4.97/ 5.66  3.40/ 3.37  3.38/ 1.70
+pg  100nH VDS-only 4us     C1 100m stiff (residual)    362A   9.9-16.7V    18.9V  4.32/ 5.64  4.00/ 3.39  3.98/ 2.23  >4 V/us (50ns)
+mot 40uH trip at ~60A      C1  40m stiff                54A  15.1-17.6V    17.8V  2.43/ 1.90  1.27/ 0.81  1.17/ 0.07
+
+== pre-v2 real: VM 4x1206 C(V), bridge 3x1206 C(V)
+case                                                    Ipk   VM min-max VBAT max     5ns r/f    50ns r/f   200ns r/f
+pp  100nH trip 0.7us/100ns C1  20m nom                 112A  16.1-16.8V    18.3V  3.47/ 4.55  1.72/ 2.66  1.57/ 1.33
+pp  100nH trip 0.7us/100ns C1  40m stiff               112A  16.0-16.9V    18.5V  2.94/ 4.65  1.83/ 2.82  1.74/ 1.54
+pp  100nH trip 0.7us/100ns C1 100m stiff               111A  15.8-16.8V    18.4V  2.12/ 4.76  1.93/ 3.05  1.85/ 1.82
+pp  100nH trip 1.0us/100ns C1  20m nom                 147A  15.6-16.9V    19.4V  4.24/ 5.08  2.78/ 3.02  2.59/ 1.59
+pp  100nH trip 1.0us/100ns C1  40m stiff               146A  15.5-17.0V    19.7V  3.61/ 5.29  3.04/ 3.28  2.91/ 1.90
+pp  100nH trip 1.0us/100ns C1 100m stiff               143A  15.2-16.9V    19.8V  3.30/ 5.58  3.26/ 3.66  3.17/ 2.31
+pp  300nH trip 0.7us/100ns C1  20m nom                  42A  16.5-16.8V    17.4V  1.55/ 1.90  0.74/ 1.06  0.67/ 0.51
+pp  300nH trip 0.7us/100ns C1  40m stiff                42A  16.5-16.8V    17.5V  1.33/ 1.93  0.80/ 1.12  0.76/ 0.59
+pp  300nH trip 0.7us/100ns C1 100m stiff                42A  16.4-16.8V    17.6V  0.96/ 1.93  0.87/ 1.20  0.84/ 0.71
+pp  300nH trip 1.0us/100ns C1  20m nom                  57A  16.3-16.9V    17.9V  2.17/ 2.46  1.22/ 1.34  1.13/ 0.65
+pp  300nH trip 1.0us/100ns C1  40m stiff                56A  16.2-17.0V    18.1V  1.86/ 2.52  1.38/ 1.44  1.33/ 0.79
+pp  300nH trip 1.0us/100ns C1 100m stiff                56A  16.1-17.0V    18.2V  1.56/ 2.57  1.55/ 1.58  1.51/ 0.98
+pp 1000nH trip 0.7us/100ns C1  20m nom                  13A  16.6-16.7V    17.0V  0.47/ 0.58  0.24/ 0.32  0.22/ 0.16
+pp 1000nH trip 0.7us/100ns C1  40m stiff                13A  16.6-16.8V    17.0V  0.40/ 0.59  0.27/ 0.34  0.25/ 0.19
+pp 1000nH trip 0.7us/100ns C1 100m stiff                13A  16.6-16.8V    17.0V  0.30/ 0.59  0.29/ 0.37  0.28/ 0.22
+pp 1000nH trip 1.0us/100ns C1  20m nom                  18A  16.6-16.8V    17.1V  0.69/ 0.77  0.40/ 0.42  0.37/ 0.21
+pp 1000nH trip 1.0us/100ns C1  40m stiff                18A  16.6-16.8V    17.2V  0.59/ 0.79  0.46/ 0.45  0.44/ 0.25
+pp 1000nH trip 1.0us/100ns C1 100m stiff                18A  16.5-16.8V    17.2V  0.53/ 0.80  0.52/ 0.50  0.51/ 0.32
+pp  100nH trip 1.0us/ 50ns C1  40m stiff               141A  15.5-17.0V    19.5V  3.54/ 5.26  2.87/ 3.26  2.74/ 1.87
+pp  100nH trip 1.0us/100ns C1 300m stiff (-40C)        142A  14.9-16.9V    19.7V  3.35/ 6.00  3.34/ 4.09  3.29/ 2.57  >4 V/us (50ns)
+pp  100nH trip 1.0us/100ns C1  40m stiff, no R302/C ESL   146A  15.4-17.0V    19.7V  6.56/ 8.72  3.01/ 3.81  2.92/ 2.07
+pp  100nH VDS-only 4us     C1  40m stiff (residual)    364A  11.0-16.7V    29.2V  9.06/ 2.89  8.84/ 1.94  8.58/ 1.94  >4 V/us (50ns)
+pp  300nH VDS-only 4us     C1  40m stiff (residual)    180A  13.8-18.0V    22.9V  6.23/ 4.04  6.15/ 2.09  6.00/ 1.13  >4 V/us (50ns)
+pg  100nH VDS-only 4us     C1  40m stiff (residual)    393A  10.7-16.7V    19.7V  5.28/ 5.52  4.53/ 3.19  4.47/ 1.98  >4 V/us (50ns)
+pg  100nH VDS-only 4us     C1 100m stiff (residual)    357A   9.6-16.9V    20.2V  5.02/ 5.52  5.02/ 3.23  4.98/ 2.51  >4 V/us (50ns)
+mot 40uH trip at ~60A      C1  40m stiff                54A  15.1-17.7V    18.2V  2.52/ 1.69  2.18/ 0.64  2.13/ 0.03
+
+== option: bridge C25/C26/C31 as 1210 X7R
+case                                                    Ipk   VM min-max VBAT max     5ns r/f    50ns r/f   200ns r/f
+pp  100nH trip 0.7us/100ns C1  20m nom                 117A  16.4-16.7V    17.0V  4.09/ 4.44  1.76/ 2.33  0.27/ 0.69
+pp  100nH trip 0.7us/100ns C1  40m stiff               117A  16.4-16.7V    17.1V  3.70/ 4.23  1.54/ 2.30  0.29/ 0.71
+pp  100nH trip 0.7us/100ns C1 100m stiff               117A  16.4-16.7V    17.0V  3.06/ 4.09  1.22/ 2.29  0.28/ 0.73
+pp  100nH trip 1.0us/100ns C1  20m nom                 154A  16.2-16.7V    17.4V  4.54/ 5.27  1.88/ 2.93  0.57/ 0.98
+pp  100nH trip 1.0us/100ns C1  40m stiff               154A  16.1-16.7V    17.5V  4.07/ 5.01  1.59/ 2.93  0.63/ 1.06
+pp  100nH trip 1.0us/100ns C1 100m stiff               154A  16.0-16.7V    17.3V  3.31/ 4.97  1.20/ 2.99  0.61/ 1.15
+pp  300nH trip 0.7us/100ns C1  20m nom                  43A  16.6-16.7V    17.0V  1.82/ 1.91  0.79/ 0.95  0.12/ 0.26
+pp  300nH trip 0.7us/100ns C1  40m stiff                43A  16.6-16.7V    17.0V  1.66/ 1.81  0.70/ 0.93  0.13/ 0.27
+pp  300nH trip 0.7us/100ns C1 100m stiff                43A  16.6-16.7V    16.9V  1.37/ 1.70  0.57/ 0.91  0.13/ 0.27
+pp  300nH trip 1.0us/100ns C1  20m nom                  58A  16.5-16.7V    17.1V  2.38/ 2.59  1.01/ 1.33  0.25/ 0.40
+pp  300nH trip 1.0us/100ns C1  40m stiff                58A  16.5-16.8V    17.1V  2.16/ 2.49  0.88/ 1.32  0.28/ 0.42
+pp  300nH trip 1.0us/100ns C1 100m stiff                58A  16.5-16.8V    17.1V  1.76/ 2.37  0.69/ 1.30  0.28/ 0.45
+pp 1000nH trip 0.7us/100ns C1  20m nom                  13A  16.7-16.7V    16.8V  0.56/ 0.58  0.24/ 0.29  0.04/ 0.08
+pp 1000nH trip 0.7us/100ns C1  40m stiff                13A  16.7-16.7V    16.8V  0.51/ 0.55  0.21/ 0.28  0.04/ 0.08
+pp 1000nH trip 0.7us/100ns C1 100m stiff                13A  16.7-16.7V    16.8V  0.42/ 0.52  0.17/ 0.28  0.04/ 0.08
+pp 1000nH trip 1.0us/100ns C1  20m nom                  18A  16.6-16.7V    16.9V  0.76/ 0.82  0.32/ 0.42  0.08/ 0.12
+pp 1000nH trip 1.0us/100ns C1  40m stiff                18A  16.7-16.7V    16.9V  0.69/ 0.78  0.28/ 0.41  0.09/ 0.13
+pp 1000nH trip 1.0us/100ns C1 100m stiff                18A  16.6-16.7V    16.9V  0.56/ 0.73  0.22/ 0.41  0.10/ 0.14
+pp  100nH trip 1.0us/ 50ns C1  40m stiff               150A  16.2-16.7V    17.4V  4.07/ 4.95  1.61/ 2.86  0.57/ 1.00
+pp  100nH trip 1.0us/100ns C1 300m stiff (-40C)        153A  16.0-16.7V    17.3V  2.91/ 5.29  1.13/ 3.31  0.59/ 1.23
+pp  100nH trip 1.0us/100ns C1  40m stiff, no R302/C ESL   154A  16.1-16.7V    17.5V  6.99/ 8.36  2.08/ 3.48  0.63/ 1.22
+pp  100nH VDS-only 4us     C1  40m stiff (residual)    378A  11.8-16.8V    21.7V  4.29/ 3.29  4.29/ 2.42  4.26/ 1.66  >4 V/us (50ns)
+pp  300nH VDS-only 4us     C1  40m stiff (residual)    184A  14.4-17.5V    19.8V  4.67/ 4.79  2.36/ 2.77  2.35/ 0.88
+pg  100nH VDS-only 4us     C1  40m stiff (residual)    409A  11.4-16.7V    17.5V  4.72/ 6.10  2.45/ 3.77  2.44/ 1.74
+pg  100nH VDS-only 4us     C1 100m stiff (residual)    379A  10.2-16.7V    17.7V  3.96/ 6.30  2.76/ 3.99  2.76/ 2.15
+mot 40uH trip at ~60A      C1  40m stiff                54A  15.1-17.6V    17.7V  2.40/ 2.03  1.19/ 0.91  0.96/ 0.09

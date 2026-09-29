@@ -146,7 +146,7 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
 * **Bridge:** Q1/Q2 (A), Q3/Q4 (B), Q5/Q6 (C), HYG015N04LS1C2 (40 V, 1.4 mΩ typ / 1.7 max @ 10 V,
   PDFN 5×6; leads 1–3 = S, 4 = G, tab = D).  High-side drains on VBAT; U2 VDRAIN (pin 7) Kelvin
   to the drains.  No gate resistors (IDRIVE current-mode gate drive; FET internal RG ~2 Ω).
-  One 10 µF 1206 per half-bridge: C25 (A), C26 (B), C31 (C) (X5R: ~2.3 µF each at 16.8 V; `sim_weapon_bridge.py` assumes more, **to be re-checked**).
+  One 10 µF 1206 per half-bridge: C25 (A), C26 (B), C31 (C) (X5R: ~2.3 µF each at 16.8 V; enough: `sim_weapon_bridge.py` and `sim_fault_kick.py` model the DC bias, §5).
 * **Shunts:** RS1–RS3 2 mΩ 2512 low-side on a custom footprint (Milliohm's 1–4 mΩ land: 2.0 mm
   terminals).  SPx to the FET-source side (net W_SLx), SNx via net-tie NT1–NT3 to the shunt's
   ground pad.  CSA gain 20 V/V → 40 mV/A, ±35 A linear range, 20 mA/LSB, bidirectional (VREF/2).
@@ -209,7 +209,7 @@ Per channel (U3 values shown; U4 is identical with 4xx designators):
 
 | Pin(s) | Connection |
 |---|---|
-| VM 9/10/11 | **L_VM** (U4: R_VM), fed from VBAT through **R302 0.1 Ω 1 W 2512** (R402), with C300/C301 100 nF 50 V at the pins + C302/C308 2 × 10 µF 50 V X7R **1210** (~7.6 µF each at 16.8 V, ~15 µF per drive; v2 swap from 4 × 1206 X5R, which keep only ~2.3 µF each: review/v2_parts/adversarial/mlcc_dcbias.md).  The ~1.5 µs RC isolates the DRV8316's 4 V/µs VM abs max from bus events: loaded contact bounce 3.75 → 2.14 V/µs (0 °C bound), worst re-close 2.09 V/µs (spice/hotplug.out, voltage-dependent MLCC model), weapon fault-clear kick 9–11 → ~1–2 V/µs (review round 10 sims with 16 µF, not in spice/; **to be re-simulated with the real ~15 µF**).  Cost: the RC corner (~99 kHz) is above the 48 kHz PWM, so R302 carries most of the drive's switching ripple too: 0.11 / 0.24 / 0.52 W at 1 / 1.5 / 2 A rms, plus up to ~0.6 W of weapon ripple during a weapon burst (≤ ~1 W for ≤ 0.5 s; ~0.5 W continuous worst; the 1 W part derates to ~0.65 W at 100 °C); 0.8 V drop at an 8 A peak |
+| VM 9/10/11 | **L_VM** (U4: R_VM), fed from VBAT through **R302 0.1 Ω 1 W 2512** (R402), with C300/C301 100 nF 50 V at the pins + C302/C308 2 × 10 µF 50 V X7R **1210** (~7.6 µF each at 16.8 V, ~15 µF per drive; v2 swap from 4 × 1206 X5R, which keep only ~2.3 µF each: review/v2_parts/adversarial/mlcc_dcbias.md).  The ~1.5 µs RC isolates the DRV8316's 4 V/µs VM abs max from bus events: loaded contact bounce 3.75 → 2.14 V/µs (0 °C bound), worst re-close 2.09 V/µs (spice/hotplug.out, voltage-dependent MLCC model), weapon fault-clear kick 9–11 → ≤ ~2 V/µs (200 ns average), ≤ ~3.3 V/µs (50 ns), 3.7 V/µs with C1 at its −40 °C ESR (`spice/sim_fault_kick.py`, real parts with DC bias; the old 4 × 1206 would have reached 4.1 V/µs at −40 °C).  Cost: the RC corner (~99 kHz) is above the 48 kHz PWM, so R302 carries most of the drive's switching ripple too: 0.11 / 0.24 / 0.52 W at 1 / 1.5 / 2 A rms, plus up to ~0.6 W of weapon ripple during a weapon burst (≤ ~1 W for ≤ 0.5 s; ~0.5 W continuous worst; the 1 W part derates to ~0.65 W at 100 °C); 0.8 V drop at an 8 A peak |
 | CP 8 / CPH 7 / CPL 6 | C303 1 µF 50 V CP–L_VM; C304 47 nF 50 V CPH–CPL |
 | AVDD 25 | C305 1 µF 50 V 0603 (TI wants 0.7–1.3 µF effective at 3.3 V; worst case sits at 0.7: check at bring-up) |
 | VREF/ILIM 37 | tied to the chip's own AVDD (pin 25), C306 100 nF.  VREF must stay ≤ AVDD (3.1–3.465 V), so it cannot come from the external LDO.  Consequence: the cycle-by-cycle current-limit modes are **not usable** (they need VREF/ILIM near AVDD/2 and disable SOx); current limiting is done by the MCU's FOC loop |
@@ -441,7 +441,8 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 |---|---|
 | Power-switch closure (`sim_hotplug.py`, `hotplug.out`) | Behavioural LM74502 + Q7/Q8 model (charge pump, hysteretic EN/UVLO gating the 60 µA gate source and 2 Ω sink, C18, EN sink, D4, D10/C13/R32) with a realistic load (buck as constant power above its UVLO, ~66 kΩ of dividers, R15).  **Closure:** VBAT ramps ~2.2 V/ms (1.3–3.0 V/ms over the 40–77 µA gate current); VM dV/dt 0.002–0.005 V/µs in every case (stiff or 300 nH lead, C1 at 40 or 300 mΩ, 12 V pack) vs the 4 V/µs limit; Q7 16 W peak (22.0 W at max gate current), 54–57 mJ; the 9–23 A peak current is C14 ringing with the lead, upstream of the FETs.  **Reversed pack:** only the 13 A C14 spike with D10, whatever U13's unpowered gate hold; 102–147 A without D10 if that hold is weak.  **Re-close** (at the DRV8316 VM pins): typical thresholds 0.06–0.7 V/µs within ~0.1 s; minimum threshold with C1 at 300 mΩ 1.8–2.09 V/µs up to ~0.4 s; soft (≤ 0.005 V/µs) after that.  **Contact bounce, 20 A load, 0.1–0.8 ms:** 0.73–2.14 V/µs with C1 up to its aged 0 °C bound, 2.62 V/µs at its −40 °C ESR (v2: 2 × 1210 per drive, MLCCs modelled with their DC-bias curves; the worst dV/dt occurs at VM ≈ 6–9 V).  Longer bounces to ~1.3 ms were ≤ 2.33 / 2.82 V/µs with the old fixed 16 µF model (round 27/28, not rerun).  Without the R302/R402 filters these were up to ~3.75–4.3 V/µs |
 | Dynamic ARM (`sim_arm.py`, `arm.out`) | 250 Hz–10 kHz toggling, 25 and 85 °C (BAT54S leakage): armed 2.50–2.95 V vs U14 VT+ ≤ ~2.15 V; 7–10 rising edges to arm; disarm 52–134 ms stuck low, 67–164 ms stuck high (to VT− 1.33 / 0.8 V) |
-| Weapon bridge switching (`sim_weapon_bridge.py`) | At IDRIVE 400 mA the high-side VDS rings to 36–44 V and SHx undershoots past −7 V even with a 3 nH loop. At **60 mA** with a **3–6 nH** commutation loop: VDS ≤ 29 V (40 V part), SHx ≥ −4.6 V (−7 V limit).  At 12 nH, SHx reaches −7.3 V: the loop must stay short.  SPx peaks at +3.2 V for a few ns from the shunt ESL (limit ±3 V for 200 ns).  The FET model is calibrated to datasheet capacitances/gate charge, not a vendor model: read it as trends |
+| Weapon bridge switching (`sim_weapon_bridge.py`, rewritten 2026-09-29: the earlier RC gate model shot through on every edge, so its numbers are void) | IDRIVE as a current source (source/sink) with the DRV8323's gate handshake, real supply, bridge MLCCs with DC bias.  At **60/120 mA** with a **3–6 nH** commutation loop: VDS ≤ 26.1 V (40 V part), SHx ≥ −4.34 V (−7 V limit), SPx −1.5…+0.9 V (±3 V).  At 12 nH: VDS 30.7 V, SHx −5.8 V: keep the loop short.  At 260/520 mA (IDRIVE strap wrong): VDS up to 44 V, SHx −11 V.  Capacitor value/DC bias moves VDS ≤ 0.3 V.  The FET model is fitted to datasheet capacitances/gate charge and the handshake threshold is modelled: read it as trends |
+| Weapon fault-clear kick (`sim_fault_kick.py`) | Phase-to-phase short tripped by the comparator (bridge off 0.7–1.0 µs after onset), both DRV8316 VM branches with the real C(V): U3 VM ≤ 1.9 V/µs (200 ns avg; 2.7 with MLCCs at 0.81 × nominal, 2.9 with C1 at 300 mΩ), 50 ns avg ≤ 3.3 (3.7 at −40 °C), VM ≤ 16.8 V.  VDS-trip-only faults (no comparator): 7.7 V/µs phase-to-phase, 3.7–4.4 phase-to-GND (the §7.21 residual) |
 | Weapon spin-up (`sim_weapon_spinup.py`) | See §4; 15 A limit → 0.68 s, 25 A → 0.43 s, pack peak 27 A |
 
 ## 6. Layout and mechanical rules (what matters, in order)
@@ -594,7 +595,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
       * open R44 (MODE) → 1x PWM, where the disarm state (INL low) *brakes* instead of coasting;
       * shorted R44 → 6x PWM, where INH turns a high side on without ARM;
       * open R46 (VDS) → trip at 0.6 V, 250–430 A: the shoot-through backstop is gone;
-      * open R45 (IDRIVE) → 120/240 mA gate drive (sim: VDS 39 V, SHx −9.2 V, over the limits);
+      * open R45 (IDRIVE) → 120/240 mA gate drive (sim, 6 nH: VDS 31 V, SHx −6.5 V, close to the −7 V limit; 12 nH: 38 V / −8.6 V);
       * an open GAIN pin with leakage → CSA gain error.
 
       **Measure the four strap voltages at bring-up (§9 step 2).**  The firmware boot test (§8 boot
@@ -622,7 +623,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
       feeding TIM1's main break.
     * The bridge turns off 0.7–1.0 µs after the current passes the threshold: CSA lag
       0.13–0.33 µs, comparator + break ~0.05 µs, driver 0.15 µs, gate discharge at 120 mA ~0.4 µs.
-      With the filters, the DRV8316 VM then sees ~1–2 V/µs (round 10 sims).
+      With the filters, the DRV8316 VM then sees ≤ ~2 V/µs (200 ns average; ≤ 3.3 V/µs over 50 ns, 3.7 at −40 °C), `spice/sim_fault_kick.py`.
     * §9 step 4 scopes the trip.  Latching and restart rules: §8.1 rows 4–6 and 8.
 
     **Residual:** a phase-to-*ground* short bypasses the shunts, so only the 4 µs VDS trip acts.

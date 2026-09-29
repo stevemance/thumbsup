@@ -72,7 +72,7 @@
 | IDRIVE 120 mA source | dV/dt edge 71 ns, switching loss 0.57 W per switching FET at 20 A / 24 kHz | Qgd 8.5 nC |
 | IDRIVE 260 mA source | dV/dt edge 33 ns, switching loss 0.26 W per switching FET at 20 A / 24 kHz | Qgd 8.5 nC |
 | Charge pump budget | 3 x Qg x f = 4.2 mA at 24 kHz | DRV8323 VCP supplies 25 mA at VM >= 13 V: OK |
-| Chosen (DRV8323RH strap) | IDRIVE 75k to AGND = 60/120 mA (source/sink), loop <= 6 nH | see spice/sim_weapon_bridge.py: 400 mA overshoots, 50-100 mA stays in limits |
+| Chosen (DRV8323RH strap) | IDRIVE 75k to AGND = 60/120 mA (source/sink), loop <= 6 nH | see spice/sim_weapon_bridge.py: 60/120 mA stays in limits at <= 6 nH (VDS 26 V, SHx -4.3 V); 260 mA overshoots |
 | VDS OCP trip (18k to AGND = 0.13 V), cold typ | 93 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
 | VDS OCP trip (18k to AGND = 0.13 V), cold max | 76 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
 | VDS OCP trip (18k to AGND = 0.13 V), hot | 62 A | hard-short / shoot-through backstop only; below it the MCU limits phase current (FOC limit + comparator fast trip on all three CSAs) |
@@ -84,7 +84,7 @@
 | Weapon spin-up (20 A limit) | 22 A pack peak, bus sags to ~14.1 V, 0.52 s to 90 % | spice/sim_weapon_spinup.py |
 | Bus-capacitor ripple current at 20 A phase peak | ~8 A rms (SVPWM, M~0.5) | shared by C1 polymer and the weapon MLCCs C25/C26/C31; bursts < 1 s |
 | Switch-closure VM ramp (DRV8316 abs max 4 V/us) | <= 0.01 V/us with the U13/Q7/Q8 soft-start (see section 9) | without a limiter the ramp is set by C1 ESR x dI/dt: a stiff pack, short leads or an aged/cold C1 exceed 4 V/us (round-2 simulation) |
-| DRV8316 VM filter (R302/R402 0.1 ohm 1 W + 2 x 10 uF 50 V X7R 1210, ~15 uF at 16.8 V) | RC ~1.5 us (corner ~99 kHz, above the 48 kHz PWM); 0.11/0.24/0.52 W at 1/1.5/2 A rms incl. PWM ripple, <= ~1 W in weapon bursts; 0.8 V drop at 8 A | spice/sim_hotplug.py (voltage-dependent MLCCs): every switch/bounce event <= 2.14 V/us at the VM pins in the 0-50 C environment (re-close 2.09); 2.62 V/us with C1 at its -40 C ESR; weapon fault-clear kick ~1-2 V/us (review round 10 sims with 16 uF: to be re-simulated) |
+| DRV8316 VM filter (R302/R402 0.1 ohm 1 W + 2 x 10 uF 50 V X7R 1210, ~15 uF at 16.8 V) | RC ~1.5 us (corner ~99 kHz, above the 48 kHz PWM); 0.11/0.24/0.52 W at 1/1.5/2 A rms incl. PWM ripple, <= ~1 W in weapon bursts; 0.8 V drop at 8 A | spice/sim_hotplug.py (voltage-dependent MLCCs): every switch/bounce event <= 2.14 V/us at the VM pins in the 0-50 C environment (re-close 2.09); 2.62 V/us with C1 at its -40 C ESR; weapon fault-clear kick <= ~2 V/us (200 ns), <= 3.3 V/us (50 ns), 3.7 at -40 C (spice/sim_fault_kick.py) |
 | C1 voltage rating | 35 V vs SMBJ20A clamp 32.4 V max | the TVS protects the capacitor, not the other way round |
 | XT30 on the pack lead | 15 A continuous / 30 A burst | pack peak 22 A for 0.5 s is within the burst rating |
 

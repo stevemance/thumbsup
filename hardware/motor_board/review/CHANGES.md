@@ -587,6 +587,8 @@ pad 15 and the two removed capacitors per drive.
 | C14 | 100 nF 100 V 0805 (C28233) | 0603 (C15725) | keeps 100 V |
 | D10 | 1N4148W SOD-123 (C81598) | 1N4148WS SOD-323 (C2128) | µA steering |
 
-Open (to re-check): the weapon fault-clear kick at the DRV8316 VM pins (round 10 sims used 16 µF, now ~15 µF at
-16.8 V: about the same), and `sim_weapon_bridge.py`'s bridge-capacitor value (C25/C26/C31 are X5R 1206: ~2.3 µF
-each at 16.8 V).  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).
+Re-checked the same day (spice/sim_fault_kick.py, a rewritten spice/sim_weapon_bridge.py): the fault-clear kick is
+≤ ~2 V/µs (200 ns) / 3.3 (50 ns) / 3.7 at −40 °C with the 1210s (the old 4 × 1206 would have reached 4.1 V/µs at
+−40 °C); the old bridge sim's RC gate model shot through on every edge, so its numbers were void; with a current-source
+gate and the DRV8323 handshake, 60/120 mA at 3–6 nH gives VDS ≤ 26.1 V, SHx ≥ −4.34 V, no SPx exceedance; open R45
+gives 31 V / −6.5 V (not 39 / −9.2).  DESIGN §5, §7, §9 updated.  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).

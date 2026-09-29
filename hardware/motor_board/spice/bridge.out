@@ -1,22 +1,149 @@
-```
-Weapon half bridge, 16.8 V, +-20 A, 100 ns dead time.  (An RC snubber across each FET made no difference; run(snub=True) to see.)
-snub IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max
-  no  400mA     20A     3nH    37.8V    21.3V  -10.34V   -5.18V    3.80V  SH<-7V SP out of +-3V
-  no  400mA    -20A     3nH    36.3V    21.6V   -9.51V   -4.76V    3.71V  SH<-7V SP out of +-3V
-  no  400mA     20A     6nH    44.2V    22.0V  -11.71V   -3.89V    2.34V  VDS>40V SH<-7V SP out of +-3V
-  no  400mA    -20A     6nH    42.5V    22.5V  -10.84V   -3.55V    2.35V  VDS>40V SH<-7V SP out of +-3V
-  no  400mA     20A    12nH    44.3V    22.3V  -10.61V   -2.15V    1.30V  VDS>40V SH<-7V
-  no  400mA    -20A    12nH    44.3V    23.1V  -10.51V   -2.08V    1.34V  VDS>40V SH<-7V
-  no  150mA     20A     3nH    31.8V    21.6V   -6.98V   -3.53V    3.72V  SP out of +-3V
-  no  150mA    -20A     3nH    31.1V    21.8V   -6.56V   -3.33V    3.71V  SP out of +-3V
-  no  150mA     20A     6nH    39.3V    22.8V   -9.20V   -2.95V    2.45V  SH<-7V
-  no  150mA    -20A     6nH    38.2V    23.1V   -8.66V   -2.75V    2.48V  SH<-7V
-  no  150mA     20A    12nH    44.3V    23.5V  -10.51V   -2.08V    1.48V  VDS>40V SH<-7V
-  no  150mA    -20A    12nH    44.3V    24.0V  -10.37V   -1.98V    1.50V  VDS>40V SH<-7V
-  no   60mA     20A     3nH    23.7V    20.1V   -2.62V   -1.40V    3.23V  SP out of +-3V
-  no   60mA    -20A     3nH    23.3V    20.3V   -2.37V   -1.29V    3.23V  SP out of +-3V
-  no   60mA     20A     6nH    29.4V    22.2V   -4.58V   -1.35V    2.55V  
-  no   60mA    -20A     6nH    28.9V    22.4V   -4.28V   -1.24V    2.57V  
-  no   60mA     20A    12nH    37.6V    23.8V   -7.33V   -1.19V    1.70V  SH<-7V
-  no   60mA    -20A    12nH    36.7V    24.0V   -6.92V   -1.08V    1.74V  
-```
+Weapon half bridge, 16.8 V, +-20 A, 100 ns dead time; real pack + C1 + DC-biased MLCCs (compare bridge.out, ideal 16.8 V rail).
+Limits: VDS 40 V, SHx -7 V (200 ns), SPx +-3 V (200 ns).  'rail' = bridge-rail min/max after 3.5 us.
+
+== original gate model (RC, fixed 100 ns dead time), ideal rail = bridge.out
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+ 400mA     20A     3nH    37.8V    21.3V  -10.33V   -5.17V    3.79V  16.8-16.8V     281A  SHOOT-THROUGH SH<-7V SP out of +-3V
+ 400mA    -20A     3nH    36.3V    21.6V   -9.49V   -4.76V    3.70V  16.8-16.8V     275A  SHOOT-THROUGH SH<-7V SP out of +-3V
+ 400mA     20A     6nH    44.2V    22.0V  -11.71V   -3.89V    2.34V  16.8-16.8V     220A  SHOOT-THROUGH VDS>40V SH<-7V SP out of +-3V
+ 400mA    -20A     6nH    42.5V    22.5V  -10.82V   -3.55V    2.35V  16.8-16.8V     213A  SHOOT-THROUGH VDS>40V SH<-7V SP out of +-3V
+ 400mA     20A    12nH    44.3V    22.3V  -10.61V   -2.15V    1.30V  16.8-16.8V     157A  SHOOT-THROUGH VDS>40V SH<-7V
+ 400mA    -20A    12nH    44.3V    23.1V  -10.51V   -2.08V    1.34V  16.8-16.8V     148A  SHOOT-THROUGH VDS>40V SH<-7V
+ 150mA     20A     3nH    31.8V    21.6V   -6.98V   -3.53V    3.72V  16.8-16.8V     588A  SHOOT-THROUGH SP out of +-3V
+ 150mA    -20A     3nH    31.1V    21.8V   -6.56V   -3.33V    3.71V  16.8-16.8V     581A  SHOOT-THROUGH SP out of +-3V
+ 150mA     20A     6nH    39.3V    22.8V   -9.20V   -2.95V    2.45V  16.8-16.8V     490A  SHOOT-THROUGH SH<-7V
+ 150mA    -20A     6nH    38.2V    23.1V   -8.65V   -2.75V    2.48V  16.8-16.8V     482A  SHOOT-THROUGH SH<-7V
+ 150mA     20A    12nH    44.3V    23.5V  -10.51V   -2.08V    1.48V  16.8-16.8V     370A  SHOOT-THROUGH VDS>40V SH<-7V
+ 150mA    -20A    12nH    44.3V    24.0V  -10.37V   -1.98V    1.50V  16.8-16.8V     362A  SHOOT-THROUGH VDS>40V SH<-7V
+  60mA     20A     3nH    23.7V    20.1V   -2.62V   -1.40V    3.23V  16.8-16.8V     850A  SHOOT-THROUGH SP out of +-3V
+  60mA    -20A     3nH    23.3V    20.3V   -2.37V   -1.29V    3.23V  16.8-16.8V     843A  SHOOT-THROUGH SP out of +-3V
+  60mA     20A     6nH    29.4V    22.2V   -4.58V   -1.35V    2.55V  16.8-16.8V     760A  SHOOT-THROUGH
+  60mA    -20A     6nH    28.9V    22.4V   -4.28V   -1.24V    2.56V  16.8-16.8V     752A  SHOOT-THROUGH
+  60mA     20A    12nH    37.6V    23.8V   -7.33V   -1.19V    1.70V  16.8-16.8V     628A  SHOOT-THROUGH SH<-7V
+  60mA    -20A    12nH    36.7V    24.0V   -6.92V   -1.08V    1.74V  16.8-16.8V     620A  SHOOT-THROUGH
+
+== original gate model, real supply, C25 + C26/C31 1206 X5R C(V), C1 20 mOhm
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+ 400mA     20A     3nH    32.8V    19.7V   -9.10V   -4.55V    3.54V  13.2-21.5V     252A  SHOOT-THROUGH SH<-7V SP out of +-3V
+ 400mA    -20A     3nH    31.1V    20.0V   -8.29V   -4.15V    3.39V  12.9-20.5V     247A  SHOOT-THROUGH SH<-7V SP out of +-3V
+ 400mA     20A     6nH    40.2V    20.7V  -10.77V   -3.56V    2.25V  13.8-20.7V     200A  SHOOT-THROUGH VDS>40V SH<-7V SP out of +-3V
+ 400mA    -20A     6nH    37.5V    21.1V   -9.61V   -3.15V    2.19V  13.5-19.8V     193A  SHOOT-THROUGH SH<-7V SP out of +-3V
+ 400mA     20A    12nH    44.3V    21.4V  -11.10V   -2.21V    1.27V  14.5-19.9V     146A  SHOOT-THROUGH VDS>40V SH<-7V
+ 400mA    -20A    12nH    44.1V    22.1V  -10.96V   -2.13V    1.28V  14.2-18.9V     137A  SHOOT-THROUGH VDS>40V SH<-7V
+ 150mA     20A     3nH    31.1V    25.5V   -4.96V   -2.50V    2.74V   9.3-31.0V     464A  SHOOT-THROUGH
+ 150mA    -20A     3nH    29.6V    26.7V   -4.60V   -2.32V    2.79V   9.3-29.7V     457A  SHOOT-THROUGH
+ 150mA     20A     6nH    28.9V    22.9V   -7.02V   -2.25V    1.99V  10.1-28.0V     396A  SHOOT-THROUGH SH<-7V
+ 150mA    -20A     6nH    27.6V    23.9V   -6.52V   -2.06V    2.07V  10.1-26.8V     389A  SHOOT-THROUGH
+ 150mA     20A    12nH    38.0V    20.7V   -9.64V   -1.82V    1.25V  11.1-24.6V     309A  SHOOT-THROUGH SH<-7V
+ 150mA    -20A    12nH    35.9V    21.6V   -8.86V   -1.63V    1.31V  11.1-23.7V     301A  SHOOT-THROUGH SH<-7V
+  60mA     20A     3nH    32.6V    29.5V   -1.22V   -0.63V    1.91V   5.6-32.2V     553A  SHOOT-THROUGH
+  60mA    -20A     3nH    31.2V    30.6V   -1.01V   -0.52V    1.93V   5.6-31.0V     546A  SHOOT-THROUGH
+  60mA     20A     6nH    32.1V    27.9V   -2.45V   -0.71V    1.62V   6.2-30.9V     509A  SHOOT-THROUGH
+  60mA    -20A     6nH    30.6V    29.0V   -2.18V   -0.60V    1.67V   6.2-29.6V     501A  SHOOT-THROUGH
+  60mA     20A    12nH    31.4V    25.9V   -4.46V   -0.72V    1.19V   7.3-30.5V     441A  SHOOT-THROUGH
+  60mA    -20A    12nH    29.7V    26.9V   -4.08V   -0.61V    1.23V   7.3-29.2V     433A  SHOOT-THROUGH
+
+== IDRIVE current-mode + handshake, ideal rail
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+  60mA     20A     3nH    23.1V    16.8V   -3.54V   -1.49V    0.91V  16.8-16.8V      25A  
+  60mA    -20A     3nH    16.7V    22.7V    0.07V   -1.37V    0.90V  16.8-16.8V      23A  
+  60mA     20A     6nH    25.9V    16.8V   -4.38V   -1.22V    0.76V  16.8-16.8V      25A  
+  60mA    -20A     6nH    16.7V    25.3V    0.07V   -1.11V    0.77V  16.8-16.8V      23A  
+  60mA     20A    12nH    30.5V    18.5V   -5.80V   -1.04V    0.60V  16.8-16.8V      24A  
+  60mA    -20A    12nH    17.9V    29.6V    0.07V   -0.93V    0.61V  16.8-16.8V      22A  
+ 120mA     20A     3nH    26.5V    19.7V   -5.28V   -2.77V    1.54V  16.8-16.8V      28A  
+ 120mA    -20A     3nH    19.1V    25.9V    0.02V   -2.61V    1.51V  16.8-16.8V      26A  
+ 120mA     20A     6nH    30.9V    23.6V   -6.54V   -1.95V    1.21V  16.8-16.8V      27A  
+ 120mA    -20A     6nH    22.9V    30.0V   -0.13V   -1.81V    1.20V  16.8-16.8V      25A  
+ 120mA     20A    12nH    37.9V    26.2V   -8.64V   -1.64V    0.86V  16.8-16.8V      26A  SH<-7V
+ 120mA    -20A    12nH    25.6V    36.5V   -0.93V   -1.50V    0.87V  16.8-16.8V      24A  
+ 260mA     20A     3nH    32.1V    31.9V   -8.06V   -4.74V    2.53V  16.8-16.8V      33A  SH<-7V SP out of +-3V
+ 260mA    -20A     3nH    31.2V    31.1V   -5.19V   -4.61V    2.49V  16.8-16.8V      31A  SP out of +-3V
+ 260mA     20A     6nH    38.9V    34.5V   -9.98V   -3.15V    1.80V  16.8-16.8V      30A  SH<-7V SP out of +-3V
+ 260mA    -20A     6nH    33.8V    37.4V   -6.08V   -2.89V    1.79V  16.8-16.8V      28A  
+ 260mA     20A    12nH    44.2V    34.7V  -11.19V   -2.39V    1.18V  16.8-16.8V      27A  VDS>40V SH<-7V
+ 260mA    -20A    12nH    34.2V    44.2V   -6.56V   -2.34V    1.19V  16.8-16.8V      25A  VDS>40V
+
+== IDRIVE current-mode + handshake, real supply, C25 + C26/C31 1206 X5R C(V), C1 20 mOhm
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+  60mA     20A     3nH    23.3V    16.8V   -3.49V   -1.46V    0.87V  16.1-17.6V      25A  
+  60mA    -20A     3nH    16.8V    22.9V    0.07V   -1.34V    0.87V  16.2-17.5V      23A  
+  60mA     20A     6nH    26.1V    16.8V   -4.34V   -1.21V    0.74V  16.1-17.6V      25A  
+  60mA    -20A     6nH    16.8V    25.5V    0.07V   -1.09V    0.75V  16.2-17.5V      23A  
+  60mA     20A    12nH    30.7V    18.6V   -5.76V   -1.03V    0.58V  16.1-17.6V      24A  
+  60mA    -20A    12nH    18.0V    29.7V    0.07V   -0.93V    0.60V  16.2-17.5V      22A  
+ 120mA     20A     3nH    26.9V    20.5V   -5.19V   -2.69V    1.48V  16.1-17.7V      28A  
+ 120mA    -20A     3nH    19.8V    26.3V   -0.12V   -2.53V    1.46V  16.1-17.6V      26A  
+ 120mA     20A     6nH    31.2V    24.0V   -6.47V   -1.93V    1.17V  16.1-17.6V      27A  
+ 120mA    -20A     6nH    23.4V    30.3V   -0.29V   -1.78V    1.17V  16.1-17.6V      25A  
+ 120mA     20A    12nH    38.1V    26.3V   -8.58V   -1.63V    0.84V  16.1-17.6V      26A  SH<-7V
+ 120mA    -20A    12nH    25.7V    36.7V   -0.91V   -1.49V    0.85V  16.1-17.6V      24A  
+ 260mA     20A     3nH    32.9V    32.5V   -7.98V   -4.54V    2.38V  16.0-18.3V      32A  SH<-7V SP out of +-3V
+ 260mA    -20A     3nH    31.9V    31.9V   -4.86V   -4.36V    2.35V  16.0-18.3V      30A  SP out of +-3V
+ 260mA     20A     6nH    39.5V    34.8V   -9.90V   -3.13V    1.73V  16.1-17.7V      30A  SH<-7V SP out of +-3V
+ 260mA    -20A     6nH    34.1V    38.1V   -5.87V   -2.87V    1.72V  16.2-17.7V      28A  
+ 260mA     20A    12nH    44.2V    34.8V  -10.97V   -2.38V    1.14V  16.1-17.6V      27A  VDS>40V SH<-7V
+ 260mA    -20A    12nH    34.3V    44.2V   -6.45V   -2.26V    1.15V  16.2-17.6V      25A  VDS>40V
+
+== IDRIVE current-mode + handshake, real supply, C25 + C26/C31 1206 X5R C(V), C1 300 mOhm
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+  60mA     20A     3nH    23.0V    16.9V   -3.48V   -1.45V    0.87V  15.6-18.3V      25A  
+  60mA    -20A     3nH    16.9V    22.9V    0.07V   -1.33V    0.87V  15.6-18.0V      23A  
+  60mA     20A     6nH    25.8V    16.9V   -4.32V   -1.20V    0.74V  15.6-18.3V      25A  
+  60mA    -20A     6nH    16.9V    25.5V    0.07V   -1.09V    0.75V  15.6-18.0V      23A  
+  60mA     20A    12nH    30.4V    18.7V   -5.74V   -1.03V    0.59V  15.6-18.3V      24A  
+  60mA    -20A    12nH    18.0V    29.7V    0.07V   -0.92V    0.60V  15.6-18.0V      22A  
+ 120mA     20A     3nH    26.7V    20.5V   -5.18V   -2.68V    1.48V  15.6-18.3V      28A  
+ 120mA    -20A     3nH    19.8V    26.3V   -0.08V   -2.51V    1.46V  15.6-18.1V      26A  
+ 120mA     20A     6nH    31.0V    24.1V   -6.45V   -1.92V    1.17V  15.6-18.3V      27A  
+ 120mA    -20A     6nH    23.4V    30.3V   -0.25V   -1.78V    1.16V  15.6-18.1V      25A  
+ 120mA     20A    12nH    37.9V    26.4V   -8.56V   -1.63V    0.85V  15.6-18.3V      26A  SH<-7V
+ 120mA    -20A    12nH    25.8V    36.7V   -0.84V   -1.49V    0.86V  15.6-18.1V      24A  
+ 260mA     20A     3nH    32.7V    32.8V   -7.95V   -4.56V    2.40V  15.6-18.5V      32A  SH<-7V SP out of +-3V
+ 260mA    -20A     3nH    32.0V    31.8V   -4.85V   -4.36V    2.36V  15.6-18.4V      30A  SP out of +-3V
+ 260mA     20A     6nH    39.4V    35.0V   -9.90V   -3.12V    1.73V  15.6-18.3V      30A  SH<-7V SP out of +-3V
+ 260mA    -20A     6nH    34.2V    38.0V   -5.85V   -2.86V    1.72V  15.6-18.1V      28A  
+ 260mA     20A    12nH    44.2V    35.1V  -11.03V   -2.36V    1.15V  15.6-18.3V      27A  VDS>40V SH<-7V
+ 260mA    -20A    12nH    34.5V    44.2V   -6.45V   -2.26V    1.16V  15.6-18.1V      25A  VDS>40V
+
+== IDRIVE current-mode + handshake, real supply, 20 uF linear lumped at the leg (old value)
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+  60mA     20A     3nH    23.3V    16.6V   -3.49V   -1.48V    0.88V  16.4-17.5V      25A  
+  60mA    -20A     3nH    16.6V    22.9V    0.07V   -1.36V    0.88V  16.5-17.4V      23A  
+  60mA     20A     6nH    26.1V    16.6V   -4.34V   -1.21V    0.75V  16.4-17.3V      25A  
+  60mA    -20A     6nH    16.6V    25.5V    0.07V   -1.09V    0.75V  16.5-17.3V      23A  
+  60mA     20A    12nH    30.7V    18.9V   -5.77V   -1.03V    0.59V  16.5-17.2V      24A  
+  60mA    -20A    12nH    18.3V    29.8V    0.07V   -0.93V    0.60V  16.5-17.2V      22A  
+ 120mA     20A     3nH    27.0V    20.9V   -5.19V   -2.70V    1.48V  16.2-17.9V      28A  
+ 120mA    -20A     3nH    20.2V    26.4V   -0.17V   -2.56V    1.46V  16.3-17.9V      26A  
+ 120mA     20A     6nH    31.3V    24.4V   -6.47V   -1.93V    1.17V  16.3-17.6V      27A  
+ 120mA    -20A     6nH    23.7V    30.4V   -0.31V   -1.80V    1.17V  16.4-17.6V      25A  
+ 120mA     20A    12nH    38.1V    26.6V   -8.58V   -1.63V    0.85V  16.4-17.3V      26A  SH<-7V
+ 120mA    -20A    12nH    26.0V    36.8V   -0.94V   -1.49V    0.86V  16.5-17.3V      24A  
+ 260mA     20A     3nH    33.1V    33.0V   -7.98V   -4.54V    2.37V  15.9-18.7V      32A  SH<-7V SP out of +-3V
+ 260mA    -20A     3nH    32.3V    32.1V   -4.91V   -4.38V    2.35V  16.0-18.6V      30A  SP out of +-3V
+ 260mA     20A     6nH    39.7V    35.2V   -9.90V   -3.13V    1.73V  16.1-18.0V      30A  SH<-7V SP out of +-3V
+ 260mA    -20A     6nH    34.4V    38.2V   -5.93V   -2.87V    1.72V  16.2-18.0V      28A  
+ 260mA     20A    12nH    44.2V    35.2V  -10.95V   -2.37V    1.14V  16.3-17.5V      27A  VDS>40V SH<-7V
+ 260mA    -20A    12nH    34.6V    44.2V   -6.49V   -2.25V    1.16V  16.4-17.6V      25A  VDS>40V
+
+== IDRIVE current-mode + handshake, real supply, C25 + C26/C31 1210 X7R C(V), C1 20 mOhm
+IDRIVE  I load  L loop   VDS HS   VDS LS   SH min   SP min   SP max         rail I FET pk
+  60mA     20A     3nH    23.2V    16.7V   -3.49V   -1.47V    0.88V  16.4-17.3V      25A  
+  60mA    -20A     3nH    16.7V    22.9V    0.07V   -1.35V    0.88V  16.5-17.3V      23A  
+  60mA     20A     6nH    26.0V    16.7V   -4.34V   -1.21V    0.75V  16.4-17.2V      25A  
+  60mA    -20A     6nH    16.7V    25.5V    0.07V   -1.09V    0.75V  16.5-17.2V      23A  
+  60mA     20A    12nH    30.6V    18.8V   -5.77V   -1.03V    0.59V  16.4-17.2V      24A  
+  60mA    -20A    12nH    18.2V    29.8V    0.07V   -0.93V    0.60V  16.5-17.2V      22A  
+ 120mA     20A     3nH    26.9V    20.6V   -5.19V   -2.70V    1.48V  16.3-17.8V      28A  
+ 120mA    -20A     3nH    20.0V    26.3V   -0.10V   -2.53V    1.47V  16.3-17.7V      26A  
+ 120mA     20A     6nH    31.2V    24.2V   -6.47V   -1.93V    1.17V  16.4-17.5V      27A  
+ 120mA    -20A     6nH    23.6V    30.4V   -0.27V   -1.79V    1.17V  16.4-17.5V      25A  
+ 120mA     20A    12nH    38.1V    26.5V   -8.58V   -1.63V    0.85V  16.4-17.2V      26A  SH<-7V
+ 120mA    -20A    12nH    25.9V    36.8V   -0.90V   -1.49V    0.86V  16.5-17.2V      24A  
+ 260mA     20A     3nH    32.9V    32.7V   -7.97V   -4.56V    2.39V  16.0-18.4V      32A  SH<-7V SP out of +-3V
+ 260mA    -20A     3nH    32.0V    31.9V   -4.88V   -4.37V    2.36V  16.1-18.3V      30A  SP out of +-3V
+ 260mA     20A     6nH    39.5V    35.0V   -9.91V   -3.13V    1.73V  16.2-17.8V      30A  SH<-7V SP out of +-3V
+ 260mA    -20A     6nH    34.2V    38.1V   -5.89V   -2.87V    1.72V  16.3-17.8V      28A  
+ 260mA     20A    12nH    44.2V    35.0V  -10.98V   -2.38V    1.15V  16.4-17.4V      27A  VDS>40V SH<-7V
+ 260mA    -20A    12nH    34.5V    44.2V   -6.47V   -2.25V    1.16V  16.5-17.4V      25A  VDS>40V
