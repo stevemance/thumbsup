@@ -287,6 +287,15 @@ Rounds 43-45 (to 15 open), 2026-09-28:
 - Tried and dropped: region rip-up of the left front end with 12 random re-route orders (24-27 open every time, vs
   14); genmove of R58 / R59 (8 mm, both sides); JP2 on the top beside JP1 or by the +5V trunk (+5V closes, but its
   +3V3 / R_VSRC pads then need vias through the L3 east-bus lanes).
+- 2026-09-29, density map (kicad/gen/density.py -> out/density_*.png): the logic core (U1 with the left sensor
+  front end stacked on top of it, x 25-45 y 20-35) and U6/U7/C1 (x 20-35 y 5-20) run at 45-65 % copper occupancy;
+  the band between U1 and U2 (x 45-57 y 18-35) at 18-39 %.
+- Tried and rejected: moving the whole U1 block 5 mm east into that band (blockmove.py, frozen/blockmove_mcu.json:
+  67 parts, 51 west-edge bridges, 37 east-edge runs shortened, 46 segments re-routed; DRC back to 0 after two
+  lift / re-route passes).  It ended at 26 open (+13) with W_INHA / W_INHB detoured 29 / 43 mm, and the stuck left
+  front end kept exactly the same via room: the front end sits on U1 and moved with it, and the strip opened west
+  of U1 filled with the bridged lanes.  Spreading only helps if the front end is separated from U1 (its own area at
+  the rear edge, e.g. the band), which means re-placing J2 + U9 / U11 / JP1 and their passives and re-routing them.
 - Caution: L5 now carries many long jumpers (R_TEMPJ, W_INLA_M, W_VA, W_VB, SWDIO, +3V3 ...).  L2 stays a solid
   plane under F, but L5 under B is getting cut up; the next steps should prefer part moves over more L5 runs, and
   the L5 cuts want a review (stitching vias along long L5 runs, or moving some back to L4) before release.
