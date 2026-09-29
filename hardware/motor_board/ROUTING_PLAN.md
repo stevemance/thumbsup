@@ -282,6 +282,11 @@ Rounds 43-45 (to 15 open), 2026-09-28:
 - 44: R_MTEMP (U1.6) escapes inward under U1: pins 5 / 6 get staggered vias (pin 5's L_MTEMP via moved 21.55 ->
   22.0, its F clamp branch re-joined), pin 6 -> L4 to the R_MTEMP node.
 - 45: W_INLA_M (U1.21): via just outside the pad, mostly L5 through the freed north area to U6.
+- 46: L_nCS (U1.41): via at the inner end of the pin's pad (filled + capped), L3 west to U3's stub.
+- 47: C45 turned 90 deg, 0.75 mm north: its GND pad reaches the planes (was on a fenced F island).
+- Tried and dropped: region rip-up of the left front end with 12 random re-route orders (24-27 open every time, vs
+  14); genmove of R58 / R59 (8 mm, both sides); JP2 on the top beside JP1 or by the +5V trunk (+5V closes, but its
+  +3V3 / R_VSRC pads then need vias through the L3 east-bus lanes).
 - Caution: L5 now carries many long jumpers (R_TEMPJ, W_INLA_M, W_VA, W_VB, SWDIO, +3V3 ...).  L2 stays a solid
   plane under F, but L5 under B is getting cut up; the next steps should prefer part moves over more L5 runs, and
   the L5 cuts want a review (stitching vias along long L5 runs, or moving some back to L4) before release.
