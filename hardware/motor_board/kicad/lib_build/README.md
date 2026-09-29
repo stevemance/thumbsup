@@ -28,7 +28,12 @@ python3 test_check_lib.py # after changing check_lib/build_lib: every planted er
   - `SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB` (J2/J3, vendor drawing).
 
   Every other footprint is KiCad stock.
-- **3D models:** the custom footprints have none (stock ones do).
+- **3D models** (`model=` in `parts.FOOTPRINTS`): J2/J3, J1 and the 2512 shunts use stock KiCad
+  models (JST SM06B-SRSS-TB, PinHeader_2x10_P1.27mm_Vertical_SMD, R_2512_6332Metric), which share
+  the custom footprints' origin, so offset and rotation are 0. The DRV8316C has no stock
+  5×7 mm 40-pin model, so `model_rgf0040e.py` generates
+  `../motor_board/3dmodels/TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm.step`
+  (`uv run --no-project --with build123d python model_rgf0040e.py <out.step>`).
 
 ## How it was verified
 

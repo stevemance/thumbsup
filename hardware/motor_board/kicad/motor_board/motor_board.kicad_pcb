@@ -2826,6 +2826,17 @@
 			(uuid "f8f91c15-da90-4984-920a-7dd822ff679d")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/3dmodels/TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
@@ -3336,6 +3347,17 @@
 			(uuid "5a4b7815-135e-4e91-9bbc-62a3a19be678")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0805_2012Metric"
 		(layer "F.Cu")
@@ -4837,7 +4859,7 @@
 			(uuid "7f578d99-8aae-4b21-879b-09636790475d")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -7235,7 +7257,7 @@
 			(uuid "69a10316-d874-440c-82c1-3a86ca3e3e1b")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -7683,7 +7705,7 @@
 			(uuid "a36e1da0-acff-480d-917a-a2d801c4f831")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -8064,6 +8086,17 @@
 			(uuid "7d8d3799-007e-4662-82fb-ee655c7425b8")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_2512_6332Metric.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Package_DFN_QFN:PQFN-8-EP_6x5mm_P1.27mm_Generic"
 		(layer "F.Cu")
@@ -9142,7 +9175,7 @@
 			(uuid "61283b50-b698-49b7-9aa7-545925e3929b")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_TO_SOT_SMD.3dshapes/Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm.step"
+		(model "${KIPRJMOD}/3dmodels/Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -9772,7 +9805,7 @@
 			(uuid "121b5655-d534-4b95-8e98-78aa0076ff1a")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -9896,7 +9929,7 @@
 			(uuid "e12909b7-9cb6-4fe9-81c6-dee1edafdacf")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -11201,6 +11234,17 @@
 			(uuid "7e528402-6c50-4015-b5f6-8e7735b1c407")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_2512_6332Metric.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
@@ -12124,7 +12168,7 @@
 			(uuid "aa87a681-0c41-402f-943d-e9dfda601999")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -12460,7 +12504,7 @@
 			(uuid "891741bb-267d-400a-8dd3-0696e31ea20a")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -13717,7 +13761,7 @@
 			(uuid "f2bceef9-a99f-4c1b-ac8f-022d83b11d84")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -15273,7 +15317,7 @@
 			(uuid "bed71aea-7db1-4178-bd0b-2c4e47b8d474")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -17308,7 +17352,7 @@
 			(uuid "f281443b-17f8-4552-857f-680198d82454")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -17527,6 +17571,17 @@
 			(uuid "91f40cf0-3e7a-44c7-9b26-e257f9018a71")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_2512_6332Metric.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "TestPoint:TestPoint_Pad_D1.0mm"
 		(layer "F.Cu")
@@ -21603,6 +21658,17 @@
 			(uuid "98eb79f3-c6b3-4342-beba-fac13ef3c0cb")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/3dmodels/TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
@@ -22745,7 +22811,7 @@
 			(uuid "6387d780-80ab-4cb9-b51f-165697bd2d50")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Wire.3dshapes/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
+		(model "${KIPRJMOD}/3dmodels/SolderWire-0.5sqmm_1x01_D0.9mm_OD2.1mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -23288,6 +23354,17 @@
 			(uuid "03669de2-afdd-4e1e-bb00-2e86fd431cc2")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_2512_6332Metric.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:CP_Elec_10x10.5"
 		(layer "F.Cu")
@@ -24534,7 +24611,7 @@
 			(uuid "c8e1a0f0-4d38-4a45-8638-70d13996f45f")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step"
+		(model "${KIPRJMOD}/3dmodels/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -35207,6 +35284,17 @@
 			(uuid "3d7f3e09-849a-4035-b785-74e64c4daaed")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Connector_PinHeader_1.27mm.3dshapes/PinHeader_2x10_P1.27mm_Vertical_SMD.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
@@ -45605,6 +45693,17 @@
 			(uuid "b885d577-386e-4132-96ee-82b2ad09081c")
 		)
 		(embedded_fonts no)
+		(model "${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "B.Cu")

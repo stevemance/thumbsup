@@ -178,6 +178,16 @@ def pad(num, x, y, w, h, shape="roundrect", layers='"F.Cu" "F.Paste" "F.Mask"', 
             f'\t\t(layers {layers}){rrs}{extra}\n\t)\n')
 
 
+def model_block(m):
+    """(model ...) for parts.FOOTPRINTS[...]["model"] = (path, offset xyz, rotate xyz)."""
+    if not m:
+        return ""
+    path, off, rot = m
+    xyz = lambda v: " ".join(fmt(c) for c in v)
+    return (f'\t(model "{path}"\n\t\t(offset\n\t\t\t(xyz {xyz(off)})\n\t\t)\n'
+            f'\t\t(scale\n\t\t\t(xyz 1 1 1)\n\t\t)\n\t\t(rotate\n\t\t\t(xyz {xyz(rot)})\n\t\t)\n\t)\n')
+
+
 def footprint(name, descr, body_lines, pads_txt, crt, ref_y, val_y, attr="smd"):
     x0, y0, x1, y1 = crt
     return (f'(footprint "{name}"\n\t(version 20250114)\n\t(generator "motor_board_lib_build")\n'
@@ -186,7 +196,8 @@ def footprint(name, descr, body_lines, pads_txt, crt, ref_y, val_y, attr="smd"):
             + fp_text("Value", name, 0, val_y, "F.Fab")
             + '\t(fp_text user "${REFERENCE}"\n\t\t(at 0 0 0)\n\t\t(layer "F.Fab")\n\t\t(effects\n\t\t\t(font\n'
               '\t\t\t\t(size 0.5 0.5)\n\t\t\t\t(thickness 0.08)\n\t\t\t)\n\t\t)\n\t)\n'
-            + body_lines + rect(x0, y0, x1, y1, "F.CrtYd", 0.05) + pads_txt + ")\n")
+            + body_lines + rect(x0, y0, x1, y1, "F.CrtYd", 0.05) + pads_txt
+            + model_block(P.FOOTPRINTS[name].get("model")) + ")\n")
 
 
 def fp_rgf0040e(name):

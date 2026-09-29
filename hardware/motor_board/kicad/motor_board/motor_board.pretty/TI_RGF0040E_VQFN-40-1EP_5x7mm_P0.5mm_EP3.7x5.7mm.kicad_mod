@@ -513,4 +513,15 @@
 		(layers "F.Paste")
 		(roundrect_rratio 0.1)
 	)
+	(model "${KIPRJMOD}/3dmodels/TI_RGF0040E_VQFN-40-1EP_5x7mm_P0.5mm.step"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
 )
