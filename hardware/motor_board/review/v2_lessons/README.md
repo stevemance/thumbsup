@@ -1,156 +1,270 @@
 # Motor board layout v2: lessons from attempt 1 and the rules for the restart
 
-Attempt 1 (branch `worktree-routing`, kept as the backup) reached 13 open connections on 6 layers, 85 x 35 mm, with
-688 vias, and did not close.  v2 restarts from the same schematic (rev L1) on **4 layers**, 85 x 35 mm, with the
-ground rules the user set on 2026-09-29:
+**Revision 2 (2026-09-29)**, after five adversarial reviews ([adversarial/](adversarial/)).  Their findings were checked
+before being taken in.  Section 6 lists what changed from revision 1 and why.
 
-- The board outline is fixed.  **J1** (20-pin 1.27 mm board-to-board header) may go anywhere on the **bottom**.
-- **Hot parts go on the top side.**
-- Parts may be moved freely.  **Nothing is removed without asking the user.**
-- Preferred cable exits (soft): the left drive motor at the bottom-left, the right drive motor at the bottom-right
-  (rear corners), the weapon at the top-right (front-right).
-- MCU pins may be reassigned freely.  Every move goes into DESIGN.md, CHANGES.md and the pin map straight away.
-- Copper weight is our call.  Weight matters, so add copper only where the numbers need it.  Do not propose more
-  layers.
+Attempt 1 (branch `worktree-routing`, kept as the backup) reached 13 open connections on 6 layers, 85 x 35 mm, and
+did not close.  v2 restarts from the same schematic (rev L1) on **4 layers**, 85 x 35 mm, under the ground rules the
+user set on 2026-09-29:
 
-The four detailed reviews in this folder carry the evidence.  This page collects the conclusions:
+- **Outline:** fixed at 85 x 35 mm.
+- **J1** (20-pin 1.27 mm board-to-board header): anywhere on the **bottom**.
+- **Hot parts:** on the top side.
+- **Parts:** may be moved freely.  **Nothing is removed without asking.**
+- **Cable exits (soft preferences):** left drive at the bottom-left (rear-left), right drive at the bottom-right
+  (rear-right), weapon at the top-right (read as front-right; to confirm with the user).
+- **MCU pins:** may be reassigned freely.  DESIGN.md, CHANGES.md and the pin map are updated with every move.
+- **Copper weight:** our call, and weight matters.
+- **Layers:** do not propose more.
+
+Detail and evidence:
 
 | File | Scope |
 |---|---|
-| [design.md](design.md) | Design-specific lessons: clusters, pin assignment, what worked, 6 to 4 layers, placement checklist |
-| [process.md](process.md) | Process and tooling: router, tail loop, sweeps, gotchas, what the user values, proposed workflow |
-| [electrical.md](electrical.md) | Currents, stack-up, loops, Kelvin, thermal, EMC, v1 electrical defects |
-| [critique.md](critique.md) | Independent post-mortem with measurements, a proposed floorplan, part-size candidates, ranked root causes |
+| [design.md](design.md) | Design lessons: clusters, pin assignment, what worked, 6 to 4 layers, checklist |
+| [process.md](process.md) | Process and tooling lessons, what the user values |
+| [electrical.md](electrical.md) | Currents, loops, Kelvin, thermal, EMC, v1 electrical defects |
+| [critique.md](critique.md) | Independent post-mortem with measurements |
+| [adversarial/](adversarial/) | factcheck, electrical, floorplan, process, consistency: the reviews of the above |
 
-## 1. Why attempt 1 did not close (consensus of all four reviews)
+The files above are kept as written.  **Where they disagree with this page, this page wins.**  Among the known
+superseded items: critique §4's floorplan (it does not fit, adversarial/floorplan.md), critique §8's L3 plan, the via
+figures, and the TIM1-on-one-edge claim.
 
-1. **Via and inner-layer capacity around the MCU ran out; board area did not.**  The board was 20-30 % smaller than
-   DESIGN §6.13's own estimate (courtyards 2537 mm² on 2987 mm² of outline).  Growing it 10 mm closed 1 net.  The
-   empty band the grow left was an inner-layer bus corridor, so parts moved into it could not reach vias
-   (48 open).
-2. **The MCU pin map was fixed before placement.**  Seven nets leave U1 on the side opposite their load.  The 11
-   weapon-control nets leave from three sides, although TIM1's six outputs sit together on pins 35-44.
-3. **The MCU was on the bottom, with an unrelated block on top of it.**  The left sensor front end sat directly over
-   U1's fan-out, and both needed the same via sites.  That cluster stayed stuck for 47 rounds.
-4. **The MCU was off-centre relative to its loads, and U6 was on the wrong side.**  About 22 east-bound nets formed
-   an 11-lane L3 bus wall around U2 and J3.  U6 turned 3 short links into six 58-70 mm nets.
-5. **Inner layers were reserved for power by region.**  An L3 VBAT pour covered the whole front half, the bottom was
-   reserved as a gate corridor, and the overflow went onto the L5 "GND plane" as 300 mm of signal.
-6. **Process: routing started with no routability check on the placement.**  It then used a sequential greedy router
-   plus four days of incremental patching, which spends the room later fixes need.
+## 1. Why attempt 1 did not close
+
+1. **Via sites and inner-layer channels around the MCU ran out; board area did not.**  Growing the board 10 mm
+   closed 1 net.  The empty band the grow left was an inner-layer bus corridor, so blocks moved into it could not
+   get vias.  The total via count was normal: 304 signal vias for 311 signal connections, 0.98 per connection.  The
+   problem was *where* vias were needed.
+2. **The MCU pin map was fixed before placement.**  Seven nets leave U1 on the side opposite their load, and the
+   weapon-control nets leave from three sides.
+3. **The MCU was on the bottom with an unrelated block on top of it.**  The left sensor front end sat over U1's
+   fan-out, and both needed the same via sites.
+4. **The MCU was off-centre relative to its loads, and U6 was on the wrong side.**  The MCU-to-U4/U10/J3 nets formed
+   a bus wall around U2 (v1 had 12 nets plus +3V3 toward U4).  U6 at the far front-left stretched the W_INLx nets to
+   38-70 mm.
+5. **Inner layers were reserved for power by region.**  The overflow went onto the L5 "GND plane".
+6. **Process: routing started with no routability check.**  It then used a sequential router, plus about 31 hours of
+   incremental patching that spent the room later fixes needed.
 
 ## 2. What is kept from attempt 1
 
-- **The weapon bridge macro:** three U-cells (Q1-Q6, RS1-RS3, C25/C26/C31, NT1-3, JW1-3), a ~4 nH commutation
-  loop, gate/Kelvin pairs.  Reuse it as a rigid block at the front-right.
-- **The pack entry** (JBAT1/2, Q7/Q8, U13 soft-start, RS4, D1) as a block, and the connector pin orders.
-- **The discipline:** DRC 0 and parity 0 at every commit, an ops-based round log, isolated experiment directories,
-  and the diagnostic tools (density.py, viaspot, netcc, islands, cydump, blockmove, set3d).
-- **The circuit, BOM and 3D models**, unchanged except where section 5 asks the user.
+- **The weapon bridge cells:** Q1-Q6, RS1-RS3, C25/C26/C31, NT1-3, JW1-3, a ~4 nH commutation loop.  Kept as a
+  block at the front-right.  Where the gate pairs run (L1 inside the cells, or a bottom corridor) is an **open
+  decision** (section 5): the files disagree, and nobody has checked that L1 has room.
+- **The pack entry block** (JBAT1/2, Q7/Q8, U13, RS4, D1), the connector pin orders, and the circuit, BOM and 3D
+  models.
+- **The discipline:** DRC 0 and parity 0 at every commit, the ops round log, isolated experiment directories, and
+  the diagnostic tools.
 
-## 3. Rules for v2 (merged; the detail is in the files)
+## 3. Rules for v2
 
-**Stack-up (electrical.md B):** 4 layers, 1 oz on every layer (the inner 1 oz must be ordered; JLC defaults to
-0.5 oz, which puts 20-45 mV on the pack return).  Thin prepreg (~0.08-0.1 mm) on both outer pairs.  1.6 mm, or
-1.2 mm to save ~2-3 g if the commutation-loop estimate holds.
+### 3.1 Stack-up and planes (electrical.md B, corrected by adversarial/electrical.md)
 
-- L1: parts and power pours.
-- L2: solid GND, with no trace or jumper ever.
-- L3: VBAT feed pour over the front power band only, GND pour elsewhere, and a few slow lanes where no L4 signal
-  runs above.
-- L4: bottom parts, MCU fan-out and signals, GND fill stitched to L2.
+JLC's 4-layer builds with thin prepreg (1080 at 0.069 mm, 3313 at 0.092 mm) are symmetric with a **0.8-1.2 mm core
+between L2 and L3**.  **L3 therefore couples to L4, not to L2.**  Everything below follows from that.
 
-No 2 oz: the fine-pitch parts and the weight both argue against it.  The pack capacity comes from L1 and L3 pours
-in parallel plus via fields.
+- **Default JLC041611-1080** (1.6 mm, 1 oz on all layers).  The inner layers are 30 µm finished, which must be
+  specified: JLC's default inner copper is 0.5 oz.  Not 1.2 mm: it saves ~2 g but deflects 2.4x more, against the
+  MLCC flex-crack rule next to unfused pack copper.  No 2 oz, because of the weight and the loss of the 0.127 mm logic
+  rules.
+- **L1:** parts, power pours, pack path, gate/Kelvin/VDRAIN across the power band.
+- **L2:** solid GND.  No trace, no jumper.
+- **L3:**
+  - The VBAT feed pour in the front power band, including an L3 copy of the pre-RS4 pack nets (BAT_IN / PSW_S /
+    VBAT_SW) under Q7/Q8.
+  - Elsewhere a GND pour, plus few budgeted slow lanes.  Each lane needs GND fill on L4 directly above it.
+- **L4:** bottom parts, MCU fan-out, signals, GND fill stitched to L2.
+  - **Under the L3 VBAT band, L4 is solid GND with no signals.**  It carries the pack ripple return (~0.35 nH vs ~6 nH
+    via L2 alone).
+  - **No L4 trace may cross an L3 VBAT/GND boundary.**  A custom DRC or check script enforces this.
+  - **No pack-current copper on L4** (it faces the compute board).
+- **Via fields must not slot the planes:**
+  - Pitch ≥ 1.3 mm at 0.3 mm drill, or unused inner pads removed.
+  - Staggered fan-out rows.
+  - A plane-integrity check (minimum copper between antipads) is part of the routability gate.
+- **Drive-motor VBAT feeds** (C1 to R302/R402 to U3/U4 VM): a planned corridor on L1/L3, poured, ≥ 1 mm.  In v1,
+  R402 and U2's buck input hung off a 21 mm, 0.15 mm L4 track.
+- **DRV8316 VM bulk caps within 2 mm of their VM pins (DESIGN value).**  This protects the 4 V/µs hot-plug limit.
+  Re-run sim_hotplug if placement misses it.
+- **Thermal for U3/U4:**
+  - One plane makes the effective RθJA ~35-45 °C/W, not the JEDEC 25.7.
+  - An L3 GND island of ≥ 10 x 10 mm under each, with no lanes.
+  - The thermal copper must not face the compute board, which resolves the E3-09 / rule-15 conflict: no exposed
+    bottom pad.
+- **Sense loops** (CSA, Kelvin, NTC) stay out from under phase copper **on every layer**.  30 µm planes do not shield
+  below ~10 MHz.
+- **Order via-in-pad (POFV) and record its price**, or ban it for signals.
+- **Before ordering, confirm on the JLC form:** the stack-up name, 1 oz inner copper, and the via-in-pad price.
 
-**Floorplan (critique §4, design §F):**
+### 3.2 Floorplan (to be derived fresh, with measurements)
 
-- Power in the front ~18 mm: pack entry at the front-left, bulk cap at the bridge, the bridge at the front-right.
-- Logic in the rear ~17 mm.
-- **MCU on top**, in the middle of its loads, next to U2, with its pin sides facing their blocks.
-- U6/U14 between the MCU and U2.  U2's logic edge stays open.
-- Each sensor front end sits beside its connector, off every IC.  Its chain (connector, pull-up, 1 k, buffer, MCU)
-  runs monotonic, with no crossings.
-- J1 on the bottom, beside the MCU, with the UART/SWD/NRST pins facing it.
-- The BMS block (J4, U8) is self-contained at the left.
-- The drive-motor blocks sit at the rear corners: U3 at the left, U4 at the right.
-- The test pads go in one rear strip, never in the MCU core.
+Critique §4's floorplan **does not fit** (adversarial/floorplan.md): the sensor blocks, the buck and the MCU/test strip
+are at 129-185 % of their boxes, and the U4 bus runs at 118 % of its channel.  v2 derives its own floorplan with an
+**area budget per side and per block** first.  The principles hold:
 
-**Stacking:** put only an IC's own passives under it, or a self-contained block.  Never put one block's fan-out
-over another block's.
+- Power in the front band, logic in the rear.
+- **MCU on top, centred on its loads**, next to U2.
+- U6/U14 between the MCU and U2.
+- Each sensor front end sits beside its connector, off every IC, as a monotonic chain.  J2/J3 go near their drive
+  ICs and cable corners (DESIGN §6.9), not mid-edge.
+- **J1 on the bottom where the UART/SWD/NRST/ARM pins face it.**  The ARM charge pump (U14/C15/D9) goes at J1
+  pin 19 (design.md), with the safety pull-downs at the receiving end.
+- The BMS block is self-contained.
+- The drive ICs sit at the rear corners.
+- **A reserved channel for the MCU-to-U4 bus** of 12-13 nets.
+- Test pads in reachable strips, never in the MCU core.
 
-**Pins:** place the blocks first.  Then assign MCU pins with a score (pin edge against the direction of the
-destination), AF-checked against `ref/STM32G474RxTx_pins.xml`.  Constraints: the encoder uses CH1/CH2 of one
-timer, and the CSA inputs need specific ADC/COMP pins.  Record every change in the docs.
+adversarial/floorplan.md offers an alternative worth starting from: test pads and D1 in the empty front strip, J1
+under it, the buck south of U2 as in v1, and the U4 channel at ~64 %.  Its J3-next-to-J2 idea puts the right motor's
+cable across the robot and needs the user's OK.
 
-**Vias:** budget about 1.1 vias per signal connection, i.e. ≤ 1 per connection end (v1: 2.2).  Every GND pad gets
-its own via within 0.5 mm.  Fan-out via rows sit outside U1's body.  Thermal arrays are placed at placement time.
-Check the via-in-pad price on 4 layers before designing around it.
+**Placement rules:**
 
-**Rails:** +5V (sourced at U2's buck) and +3V3 (U5) are planned trunks.  **R20's feedback-top sense closes at
-C29/C30 at placement time.**  The R302/R402 VBAT feeds are ≥ 1 mm or poured.  The DRV8316 VM caps sit within 3 mm.
-Custom DRC rules enforce the minimum widths per net class.
+- Parts under an IC are only that IC's own passives, or a self-contained block.  No fan-out over another block's
+  fan-out.
+- Loop-critical parts stay on their IC's side (DESIGN §6.13).
+- Bottom parts respect the stack-gap height agreed with the user.  The ≤ 1.1 mm figure is outdated: v1's bottom
+  already has 1.6-3.35 mm parts.
+- Two-pin parts are placed by both ends.
 
-**Routability gate before any routing:**
+### 3.3 MCU pins (co-assigned with the floorplan)
 
-- Ratsnest length and crossings.
-- Demand against capacity on each cut line, at ≤ ~70 % of capacity.
-- Via sites per IC.
-- Zero parts stacked on escape fields.
+Score pin edge against destination bearing, then check every candidate against all of these:
 
-**Routing:**
+- **AF legality** (ref/STM32G474RxTx_pins.xml).
+- **Peripheral pins that exist on one pin only:**
+  - ADC5 is only on PA8/PA9 (the left CSA today).
+  - TIM20 CH1/CH2/CH3 are PB2 / PC2 / PC8, on three different edges.
+  - The encoder must use CH1/CH2 of one timer.
+  - Each CSA needs its ADC/COMP.
+  - Simultaneous ADC1/ADC2 sampling pairs.
+- **Reset and boot states:**
+  - The ROM UART bootloader on PA9/PA10.
+  - PA13/PA14/PA15/PB4 have reset pull-ups/pull-downs.
+  - PB4/PB6 have dead-battery pull-downs.
+  - PB8 is BOOT0.
+  - PC13-PC15 are weak drivers (30 pF).
+  - No weapon-control pin may glitch through boot.
+- **DRV_OFF:** a single pull-up must not leave a driver enabled if a branch breaks.  Check PC14's load.
 
-1. Critical short copper by hand: pours, gate/Kelvin, the buck loop, decoupling and GND drops.
-2. One **global negotiated-congestion route** of all signals.  Nets route, overlaps are priced, and the whole set
-   is re-routed until it is legal.  Report the open count, the overuse map and the via count.
-3. If overuse persists, fix the placement or the pins, never patch.
-4. The freeze-and-edit loop is for polish only, after 0 open.
+Useful options:
 
-## 4. My own lessons (the session lead)
+- USART1 on PB6/PB7 (the J1-facing edge in v1).
+- Grouping TIM1 on pins 35-44 is **not free**: it takes PA8/PA9 from ADC5 and PB13 from R_SOB_F.
 
-1. **Test the premise before proposing a structural move.**  I proposed moving U2 into the gap on the claim that
-   the gate loops would get shorter.  One look at the coordinates showed U2 was already central, and I had to
-   correct myself.  Each proposal now comes with the numbers that justify it.
-2. **Measure free space per layer and by via sites, never by the outer layers.**  The combined density map made
-   the band look empty.  It was the busiest corridor on L3/L4.  The v2 congestion check counts via-site
-   availability.
-3. **Geometric transforms move the congestion with them.**  The grow, the U1 block move and the cell C move all
-   preserved the bad topology.  Only separating stacked blocks, or changing the topology (pins, block order),
-   changes routability.
-4. **Planes are not overflow space.**  Letting "slow logic" onto L5 as a pressure valve cut up the plane round after
-   round.  In v2, L2 carries nothing and L3's lanes are budgeted in the floorplan.
-5. **Put design-level questions to the user early.**  The pin swaps, the test pads, the supply jumpers, part sizes
-   and J1's position all turned out to be negotiable.  They came up after days of routing, when they should have
-   been answered before placement.  v2 brings them to the floorplan review.
-6. **Sweeps are not a strategy.**  Generated experiment batches (genl5/genmove/genfence/gentp/genreg) yielded
-   ~2-5 %.  They are useful as a final polish, never as the main method.
+Expect a handful of unavoidable wrap-arounds.  Present the pin map to the user before placement is finalised
+(firmware contract).
+
+### 3.4 Vias
+
+- **Signal vias ≤ ~1 per connection** (v1 was already at 0.98; the target is placement that lets the vias land
+  outside the congested areas).
+- Count stitching vias (one per signal via changing reference) in the budget.
+- GND pads: a via each where the pad is not on a solid L1 GND pour.  This is not a blanket rule, because it spends
+  scarce sites.
+
+### 3.5 Rails
+
+- **+5V** (buck at U2) and **+3V3** (U5) are planned trunks.
+- **R20's +5V sense closes at C29/C30 at placement time.**  Open in v1, it would run the buck open-loop.
+- Custom DRC minimum widths per power net class.
+
+## 4. Workflow for v2 (revised per adversarial/process.md)
+
+- **P0.  Freeze the inputs with the user:**
+  - Part-size decisions.
+  - Gate-corridor choice.
+  - Stack-gap height.
+  - J3 location option.
+  - Confirmation of the weapon exit.
+  - Fab and assembly facts: the JLC form, via-in-pad, two-sided assembly, panel rails and fiducials.
+- **P1.  Floorplan + MCU pin assignment** with a per-side area budget.  **User checkpoint.**
+- **P2.  Routability gate:** a **coarse global router on 0.5-1 mm tiles** (numpy, seconds per run).  It models:
+  - per-tile track capacity per layer, with L2 at 0 and L3 lanes consuming L4 above;
+  - per-tile via capacity;
+  - the plane-integrity check.
+
+  It is validated by reproducing v1's failure around the MCU.  The gate is no tile over capacity.
+- **P3.  By hand:** MCU and QFN escape patterns, power pours, gate/Kelvin pairs, the buck loop, decoupling.
+- **P4.  Detailed routing, time-boxed.**
+  - Either the existing router confined to the global router's corridors, or Freerouting after a verified KiCad rule
+    round-trip on this clean placement.  (It never had a fair trial in v1.)
+  - DRC after every run; zone refill and island check.
+  - If it stalls above ~10 opens, go back to P1/P2.
+- **P5.  Finish ≤ ~10 opens by hand** (KiCad interactive or scripted ops).  Freeze-and-edit for polish only.
+- **P6.  Close-out:** plane integrity, via-in-pad list, JLC DFM, assembly (two-sided, THT J4), silkscreen, D3
+  visibility.
+- **Time boxes:**
+  - The global router: 1 day.
+  - If a phase runs past 2x its estimate, or flat for 3 iterations, report with measurements and one
+    recommendation.
+- **No mandatory custom detailed router.**  The user's preference is professional hand-style routing.
+
+## 5. Decisions for the user (before P1)
+
+1. **Part sizes (same circuit, different package or part).**  The floorplan review says U6, D2/L1 and J4 are
+   effectively needed:
+   - U6: TSSOP-14 to WQFN-14.
+   - D2/L1: SMA/5040 to SOD-123F/4030, if the current allows.
+   - J4: XH side-entry to PH/GH or vertical.
+   - C1: 10 x 10.5 to smaller, after the ripple and hot-plug sims.
+   - J2/J3: right-angle to vertical SH.
+   - R300/R400: 1206 to 0603.
+   - 8 x 10 µF 1206 50 V to 0805 35 V.
+
+   Each change gets a pin-to-pad check.
+2. **Gate corridor:** gate/Kelvin pairs on L1 inside the bridge cells, or a bottom corridor under the cells.
+3. **Stack-gap height** (the mated J1 + socket, 4.9-6.0 mm today) and the height limit for bottom parts.
+4. **J3 location:** near U4 at the rear-right (short motor cable), or next to J2 (shorter logic, with the cable
+   across the robot).
+5. **Weapon exit** "top-right" means front-right (drum side).
+6. **Test pads:** stay as TP1-TP12.  Nothing is replaced by a Tag-Connect unless the user asks.
+7. **Compute-board implications of where J1 goes:**
+   - The compute board mirrors J1.
+   - The Pico W antenna and USB overhang this board's outline, since there is no notch.
+   - Keep-outs under the bottom wire joints.
+
+## 6. Revision 1 to revision 2: what changed and why
+
+| Revision 1 said | Revision 2 | Source |
+|---|---|---|
+| Vias 2.2 per signal connection, target 1.1 | 0.98 per connection in v1; it was the location, not the count | factcheck (my ratio mixed GND/VBAT vias into it) |
+| TIM1 on pins 35-44, free | Costs ADC5 (PA8/PA9 only) and R_SOB_F; TIM20 is single-pin per channel | factcheck, floorplan, consistency |
+| L3 plans reasoned as if coupled to L2 | L3 couples to L4 (thick core), hence the L4-under-band GND, boundary and slot rules | adversarial/electrical |
+| 1.2 mm optional | 1.6 mm default | adversarial/electrical |
+| Critique §4 floorplan as the plan | Does not fit; derive fresh with an area budget and a reserved U4 channel | adversarial/floorplan |
+| A custom negotiated detailed router | A coarse global router as the gate; detail by hand, confined routing or Freerouting; ≤ 10 opens by hand | adversarial/process |
+| Pin rules: AF + encoder + CSA | Plus reset/boot states, single-pin peripherals, ADC sampling pairs, DRV_OFF | consistency |
+| GND via per pad, always | Only where not on a solid L1 GND pour | consistency |
+| Bottom parts ≤ 1.1 mm | Height per the agreed stack gap | factcheck, consistency |
+| Tag-Connect instead of TP2-TP4 | TPs stay; no removals without asking | consistency |
+| DRV8316 caps ≤ 3 mm | ≤ 2 mm (DESIGN) | consistency |
+| ARM circuit by U2 | At J1 pin 19 | consistency, floorplan |
+| "4 days of patching" | ~31 h per git | factcheck |
+| W_INLx 58-70 mm | 38-70 mm measured | factcheck |
+
+## 7. My own lessons (the session lead)
+
+1. **Test the premise before proposing a structural move.**  The U2-into-the-gap proposal was wrong on its own
+   premise.  So was my "2.2 vias per connection", which divided all vias by signal connections.  Each proposal now
+   comes with checked numbers.
+2. **Judge free space per layer and by via sites, never by the outer layers.**
+3. **Geometric transforms move congestion with them.**  Only separating stacked blocks or changing the topology
+   helps.
+4. **Planes are not overflow space.**
+5. **Put design-level questions to the user early:** pins, parts, test pads, jumpers, J1.
+6. **Sweeps are polish, not a strategy.**
 7. **Tool hygiene:**
    - A lone new via is re-netted by SaveBoard, so give it an anchor stub.
-   - `b.Zones()` becomes stale after zone moves.
-   - gen_sch re-rolls uuids, so edit sheets in place.
-   - The worktree guard blocks computed shell text, so write scripts to files.
-   - zsh does not word-split and no-match globs abort.
-   - Run long jobs in the background and wait with an until-loop.
-   - Memory is limited, so run with J ≤ 2.
-   - Leave the frozen board alone while the user has KiCad open.
-8. **Subagents and worktrees:** don't switch the session's worktree while agents write files; they follow the
-   session.  Give agents absolute paths in the worktree they will stay in.
-9. **Keep the project board in sync** with the working state whenever the user may open it, and say which file
-   they are looking at.
-
-## 5. Decisions to bring to the user at the floorplan review (none taken yet)
-
-- **Part-size changes** (same circuit and values, different package or part; critique §6, ~300 mm² total):
-  - J4 balance connector: XH side-entry to PH/GH or vertical.
-  - C1: 10 x 10.5 to 8 x 10, or 2 x 6.3 x 7.7 (ripple rating to check).
-  - U6: TSSOP-14 to WQFN-14.
-  - J2/J3: right-angle to vertical SH.
-  - R300/R400: 1206 to 0603.
-  - The eight 10 µF 1206 50 V caps to 0805 35 V.
-  - D2/L1: smaller packages if the current allows.
-
-  These are changes to parts, not removals, but they change the BOM, so they are the user's call.
-- **A Tag-Connect footprint (or a 5-pad row) for SWD** at the MCU edge.  It would be an added footprint.
-- **Where the BMS goes (J4 + U8) and which edge J4 sits on**, given the cable-exit preferences.
-- **The mated stack height** (J1 plus the compute board's socket, 4.9-6.0 mm with the current plan).  It sets the
-  bottom-side height limit (≤ 1.1 mm parts).
+   - `b.Zones()` is stale after zone moves.
+   - gen_sch re-rolls uuids.
+   - The worktree guard: put scripts in files.
+   - zsh does not word-split, and no-match globs abort.
+   - Run long jobs in the background with until-loops, J ≤ 2 on memory.
+8. **Subagents follow the session's worktree.**  Don't switch worktrees while they run.  Give them absolute paths
+   in the worktree they will stay in.
+9. **Keep the project board in sync** when the user may open it, and never write the board while KiCad has it open.
+10. **Adversarial review of my own synthesis paid off**: it caught four errors that would have steered the restart
+    wrong.
