@@ -296,6 +296,13 @@ Rounds 43-45 (to 15 open), 2026-09-28:
   front end kept exactly the same via room: the front end sits on U1 and moved with it, and the strip opened west
   of U1 filled with the bridged lanes.  Spreading only helps if the front end is separated from U1 (its own area at
   the rear edge, e.g. the band), which means re-placing J2 + U9 / U11 / JP1 and their passives and re-routing them.
+- Tried and rejected: the left front end into the band (J2 on the bottom at x 45.6-54.6 like J3, U9 / filters /
+  U11 on the bottom above it, JP1 + JP2 on the top on the +5V trunk, rev L2 pin swaps L_S1 -> PC7, L_S2 -> PC6,
+  L_MTEMP -> PB15, W_INLC_M -> PF0, L_INHB -> PB8, INA_nCS -> PB5 - all AF-checked, not applied): 48 open.
+  The band is a corridor on the inner layers: L3 carries the 11-lane east bus at y 27.8-30.8 (exactly J2's pin
+  row) and L4 the diagonal W_* bundle plus lanes at y 21-28 and 31-34, so every pad there that needs a via is
+  blocked.  Occupancy in the band: F 43 %, L3 38 %, L4 27 %, L5 7 %, B 24 %; in the core: 42 / 49 / 46 / 38 / 52 %.
+  Conclusion: the limit is inner-layer (via) capacity through the core and the bus corridors, not board area.
 - Caution: L5 now carries many long jumpers (R_TEMPJ, W_INLA_M, W_VA, W_VB, SWDIO, +3V3 ...).  L2 stays a solid
   plane under F, but L5 under B is getting cut up; the next steps should prefer part moves over more L5 runs, and
   the L5 cuts want a review (stitching vias along long L5 runs, or moving some back to L4) before release.
