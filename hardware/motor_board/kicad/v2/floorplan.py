@@ -151,4 +151,5 @@ def render(buckets):
     fig.savefig(HERE / "out" / "floorplan.png")
 
 
-main()
+if __name__ == "__main__":
+    main()
