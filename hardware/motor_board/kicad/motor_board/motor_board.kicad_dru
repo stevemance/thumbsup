@@ -1,0 +1,25 @@
+(version 1)
+# JLCPCB 4-layer capabilities (jlcpcb.com/capabilities/pcb-capabilities, 2026-09-29), with margin.
+(rule "JLC PTH pad hole to track 0.28 (0.35 recommended)"
+  (constraint hole_clearance (min 0.30mm))
+  (condition "A.Type == 'Pad' && A.isPlated() && A.Pad_Type == 'Through-hole'"))
+(rule "JLC pad hole to pad hole 0.45"
+  (constraint hole_to_hole (min 0.45mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad'"))
+(rule "JLC inner-layer PTH pad hole to copper 0.3"
+  (layer inner)
+  (constraint hole_clearance (min 0.30mm))
+  (condition "A.Type == 'Pad' && A.Pad_Type == 'Through-hole'"))
+(rule "JLC NPTH min 0.5"
+  (constraint hole_size (min 0.50mm))
+  (condition "A.Type == 'Pad' && A.Pad_Type == 'NPTH, mechanical'"))
+(rule "JLC SMD pad to pad 0.15 (different nets)"
+  (constraint clearance (min 0.15mm))
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && A.Net != B.Net"))
+(rule "JLC silkscreen line >= 0.15, text >= 1.0"
+  (layer "F.SilkS") (constraint text_thickness (min 0.15mm)) (constraint text_height (min 1.0mm)))
+(rule "JLC silkscreen line >= 0.15, text >= 1.0 (bottom)"
+  (layer "B.SilkS") (constraint text_thickness (min 0.15mm)) (constraint text_height (min 1.0mm)))
+(rule "v2: L2 is a solid GND plane, no tracks or vias of other nets' tracks on it"
+  (layer "In1.Cu")
+  (constraint disallow track))
