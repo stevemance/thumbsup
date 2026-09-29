@@ -16,16 +16,16 @@ design decision changes one of these, change it here too. Tick through it on ord
 ## PCB options (order form)
 | Option | Value | Why / source |
 |---|---|---|
-| Layers | **6** | the 4-layer board could not be routed (ROUTING_PLAN.md, 2026-09-25); layer jobs: L1 parts + power, L2 GND, L3 VBAT feed + signals, L4 signals + "+3V3 fill", L5 GND, L6 parts + signals |
-| Stack-up | **JLC061611-1080B** (1.6 mm, 1 oz outer **and inner**): L1-L2 1080 prepreg 0.069 mm, L2-L3 core 0.075 mm, L3-L4 2116 + 0.865 core + 2116 (1.08 mm), L4-L5 core 0.075 mm, L5-L6 1080 0.069 mm | thin L1-L2 keeps the weapon commutation loop under the old ~4 nH estimate (was 0.21 mm on the 4-layer stack; PLACEMENT 3); L3 / L4 each sit 0.075 mm over their own GND plane and 1.08 mm from each other (low crosstalk); the L3 VBAT pour against L2 adds plane capacitance.  In KiCad (base_edits.py STACKUP6).  Confirm the name on the order form: JLC renames stack-ups |
-| Outer copper | 1 oz | 0.5 mm-pitch QFNs; the pack current rides L1 + L3 pours |
-| **Inner copper** | **1 oz** (pick an "inner 1 oz" stack-up; JLC's default is 0.5 oz) | DESIGN 6.1: the pack current rides the L3 pour |
-| Board size | **85 x 35 mm**, 1 design (grown from 75 mm for routing room, 2026-09-28: the east part moved +10 mm, incl. MH2 / MH4, J3, U2, U4, JW1 / JW2, JR1-3) | PLACEMENT 1, ROUTING_PLAN.md |
+| Layers | **4** | layout v2 (2026-09-29, branch layout-v2) restarts on 4 layers; the 6-layer v1 is kept on branch worktree-routing. Layer jobs: L1 parts + power, L2 solid GND (no traces), L3 VBAT band under the bridges + GND elsewhere, L4 parts + signals + GND fill (review/v2_lessons/README.md 3.1) |
+| Stack-up | **JLC041611-1080** (1.6 mm): L1-L2 1080 prepreg 0.069 mm, L2-L3 core 1.23 mm, L3-L4 1080 prepreg 0.069 mm | thin L1-L2 keeps the weapon commutation loop at the ~4 nH estimate (PLACEMENT 3); L3 couples to L4, not L2, so L4 traces never cross a VBAT/GND boundary on L3 (solid GND under the VBAT band).  In KiCad (kicad/v2/build_board.py STACKUP4).  Confirm the name on the order form: JLC renames stack-ups |
+| Outer copper | 1 oz | 0.5 mm-pitch QFNs; the pack current rides the L1 pours + the L3 band |
+| **Inner copper** | **1 oz** (select it explicitly; JLC's 4-layer default is 0.5 oz) | the pack current rides the L3 VBAT band (DESIGN 6.2); the extra copper is two inner layers of 85 x 35 mm, ~3 g |
+| Board size | **85 x 35 mm**, 1 design (fixed for v2) | PLACEMENT 1 |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
-| **Via-in-pad** | **yes: epoxy-filled and capped** (free on JLC 6-layer boards) | thermal vias in U2/U3/U4's exposed pads, 8 vias in RS2's GND pad (layout step 1), and vias in the pads of C112.2, C74.1, C62.1, J2.3 (pad edge), R54.1, U11.5, U1.41 (inner pad end) (routing, ROUTING_PLAN.md 2026-09-27/28) |
-| Min track / space | 0.127 / 0.127 mm on logic nets (Default class); 0.15 on power, drive, gate, sense, rail classes (JLC 6-layer: 0.09 / 0.09) | project rules |
-| Hole to copper | 0.2 mm (JLC 6-layer via hole to track: 0.2) | project rules |
-| Min via | 0.4 mm pad / 0.2 mm drill for signals; 0.45 / 0.25 GND and rails; 0.6 / 0.3 power (JLC 6-layer min 0.25 / 0.15) | project rules |
+| **Via-in-pad** | **avoid; decide at layout close-out** (a paid option on JLC 4-layer boards, free only on 6+) | v2 routes without vias in signal pads. If U2/U3/U4's exposed-pad thermal vias need filling, order epoxy-filled and capped and list the pads here |
+| Min track / space | 0.15 / 0.127 mm on logic nets (Default class; 0.10 board minimum for pad escapes); 0.15 clearance on power, drive, gate, sense, rail classes (JLC 4-layer: 0.09 / 0.09) | motor_board.kicad_pro, motor_board.kicad_dru |
+| Hole to copper | via hole 0.20 mm; PTH hole 0.30 mm (JLC 4-layer: via 0.2, PTH 0.28, 0.35 recommended); pad hole-to-hole 0.45 | motor_board.kicad_dru |
+| Min via | 0.4 mm pad / 0.2 mm drill (Default); 0.45 / 0.25 sense and rails; 0.5 / 0.25 gate; 0.6 / 0.3 power (JLC 4-layer min 0.25 / 0.15) | motor_board.kicad_pro |
 | Impedance control | no | nothing on the board needs it (layout step 0) |
 | Mask / silk | any colour; silk on both sides | wire names are on the bottom silk |
 | Order number | "specify a location" (a clear spot on the bottom) or remove | cosmetic |
