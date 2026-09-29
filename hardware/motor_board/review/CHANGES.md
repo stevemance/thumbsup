@@ -591,4 +591,8 @@ Re-checked the same day (spice/sim_fault_kick.py, a rewritten spice/sim_weapon_b
 ≤ ~2 V/µs (200 ns) / 3.3 (50 ns) / 3.7 at −40 °C with the 1210s (the old 4 × 1206 would have reached 4.1 V/µs at
 −40 °C); the old bridge sim's RC gate model shot through on every edge, so its numbers were void; with a current-source
 gate and the DRV8323 handshake, 60/120 mA at 3–6 nH gives VDS ≤ 26.1 V, SHx ≥ −4.34 V, no SPx exceedance; open R45
-gives 31 V / −6.5 V (not 39 / −9.2).  DESIGN §5, §7, §9 updated.  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).
+gives 31 V / −6.5 V (not 39 / −9.2).  DESIGN §5, §7, §9 updated.
+
+**C25/C26/C31 → 10 µF 50 V X7R 1210 (C77102)** (user OK, 2026-09-29; was 1206 X5R C13585): the VDS-trip-only
+phase-to-phase kick at the DRV8316 VM pins drops from 7.7 to 4.3 V/µs, phase-to-GND from 3.7–4.4 to 2.5–2.8, the bus
+peak in those faults from ~30 to ~22 V; the comparator-trip kick from ≤ 1.9 to ≤ 1.2 V/µs (200 ns).  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).

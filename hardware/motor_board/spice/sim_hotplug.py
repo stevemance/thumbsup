@@ -18,7 +18,7 @@ bus bleeder R15 6.8k.  GND is tied to pack-.
 
 Load model (not a fixed resistor, per review R3A-02): the 5 V buck as a constant-power 2.5 W load
 that runs above ~9.8 V (UVLO 10.4 on / 9.2 off, simplified), plus ~66 kOhm of DC dividers and R15.
-Bus capacitance: C1 330 uF (ESR 20 mOhm new, 40 aged, 300 = its -40 C limit) + 3 x 10 uF 1206
+Bus capacitance: C1 330 uF (ESR 20 mOhm new, 40 aged, 300 = its -40 C limit) + 3 x 10 uF X7R 1210
 (C25/C26/C31) on VBAT, and each DRV8316's VM pins behind 5 nH + R302/R402 0.1 ohm with 2 x 10 uF 50 V X7R 1210
 + 200 nF (both drive branches modelled; the measured one is U3's).  The MLCCs are voltage-dependent (DC bias):
 differential C = C0 / (1 + (V/V0)^2), i.e. Q(V) = C0 V0 atan(V/V0).  Fits (review/v2_parts/adversarial/mlcc_dcbias.md):
@@ -59,7 +59,7 @@ def capline(name, a, b, n, c0, v0):
             f"{name}x {a} {b} 1n")
 
 
-CM = (3, 10e-6, 8.92)     # C25/C26/C31 10 uF 50 V X5R 1206
+CM = (3, 10e-6, 29.9)     # C25/C26/C31 10 uF 50 V X7R 1210 (v2; was X5R 1206, V0 = 8.92)
 CVM = (2, 10e-6, 29.9)    # per drive: 2 x 10 uF 50 V X7R 1210 (C302/C308, C402/C408)
 
 

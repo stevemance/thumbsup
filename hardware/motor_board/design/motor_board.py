@@ -58,7 +58,7 @@ C1210 = "Capacitor_SMD:C_1210_3225Metric"
 LCSC = {
     # JLC Basic passives (C-numbers from the JLC basic-parts list; stock/class re-check before ordering)
     "100n_50V_0603": "C14663", "100n_16V_0402": "C1525", "47n_50V_0603": "C1622", "1u_25V_0402": "C52923",
-    "1u_50V_0603": "C15849", "2u2_50V_0805": "C377773", "4u7_16V_0603": "C19666", "10u_50V_1206": "C13585",
+    "1u_50V_0603": "C15849", "2u2_50V_0805": "C377773", "4u7_16V_0603": "C19666",
     "22u_25V_0805": "C45783",
     # v2 package swaps (review/v2_parts/proposal.md + adversarial/, 2026-09-29)
     "10u_50V_1210": "C77102",      # Murata GRM32ER71H106KA12L X7R: ~7.6 uF at 16.8 V (-24 %, Murata curve); alt Samsung CL32A106KBJNNNE C380537
@@ -206,9 +206,9 @@ two("C21", "1uF 50V", C0603, "U2_VCP", "VBAT", LCSC["1u_50V_0603"], "VCP to VM (
 two("C22", "1uF 25V", C0402, "U2_DVDD", "GND", LCSC["1u_25V_0402"], "DVDD 3.3 V internal regulator")
 two("C23", "100nF 16V", C0402, "+3V3", "GND", LCSC["100n_16V_0402"], "VREF (CSA supply/reference) at U2 pin 26")
 two("C24", "100nF 50V", C0603, "VBAT", "GND", LCSC["100n_50V_0603"], "VM at U2 pin 6")
-two("C25", "10uF 50V", C1206, "VBAT", "GND", LCSC["10u_50V_1206"], "weapon bridge local, high-side drains")
-two("C26", "10uF 50V", C1206, "VBAT", "GND", LCSC["10u_50V_1206"], "weapon bridge local, high-side drains")
-two("C31", "10uF 50V", C1206, "VBAT", "GND", LCSC["10u_50V_1206"], "weapon bridge local: one 10 uF per half-bridge (C25 A, C26 B, C31 C)")
+two("C25", "10uF 50V X7R 1210", C1210, "VBAT", "GND", LCSC["10u_50V_1210"], "weapon bridge local, high-side drains")
+two("C26", "10uF 50V X7R 1210", C1210, "VBAT", "GND", LCSC["10u_50V_1210"], "weapon bridge local, high-side drains")
+two("C31", "10uF 50V X7R 1210", C1210, "VBAT", "GND", LCSC["10u_50V_1210"], "weapon bridge local: one 10 uF per half-bridge (C25 A, C26 B, C31 C)")
 # buck (LMR16006X core, 0.7 MHz): 5 V / 0.6 A for the compute board and the 3.3 V LDO
 two("C27", "2.2uF 50V", C0805, "VBAT", "GND", LCSC["2u2_50V_0805"], "buck VIN at pin 47")
 two("C28", "100nF 50V", C0603, "BUCK_CB", "BUCK_SW", LCSC["100n_50V_0603"], "buck bootstrap CB-SW")
