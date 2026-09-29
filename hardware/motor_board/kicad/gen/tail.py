@@ -61,7 +61,8 @@ if len(sys.argv) > 1 and sys.argv[1] == "freeze":
 pro = PRO.read_text()
 work = W / "work.kicad_pcb"
 # 1. board edits (pcbnew, own process)
-print(run(["/usr/bin/python3", str(HERE / "tail_apply.py"), str(FROZEN), str(work), str(W / "requests.json")] + ([EXP] if EXP else [])))
+BASE = __import__("os").environ.get("TAIL_BASE") or str(FROZEN)   # experiment on another board (multi-stage edits)
+print(run(["/usr/bin/python3", str(HERE / "tail_apply.py"), BASE, str(work), str(W / "requests.json")] + ([EXP] if EXP else [])))
 lap("board edits")
 reqs = json.load(open(W / "requests.json"))
 if reqs:

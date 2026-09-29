@@ -152,6 +152,65 @@ for e in tail_edits.EDITS:
         if "rot" in e:
             f.SetOrientationDegrees(e["rot"])
         f.SetPosition(pcbnew.VECTOR2I(F(e["x"] + OX), F(e["y"] + OY)))
+    elif op == "shift":                 # move a block (parts + its nets' copper + its pours) by dx, dy; the undo of grow.py
+        V = pcbnew.VECTOR2I(F(e["dx"]), F(e.get("dy", 0)))
+        ns = set(e["nets"])
+        bxs = e["box"] if isinstance(e["box"][0], (list, tuple)) else [e["box"]]
+        gps = (e["bridges"] if isinstance(e["bridges"][0], (list, tuple)) else [e["bridges"]]) if e.get("bridges") else []
+
+        def inb(p):
+            return any(inbox(p, q) for q in bxs)
+
+        def ing(p0, p1):
+            return any(inbox(p0, q) and inbox(p1, q) for q in gps)
+        zs = [z for z in b.Zones() if any(z.GetZoneName().startswith(p) for p in e.get("zones", []))]
+        zpoly = [z.Outline() for z in zs if not z.GetIsRuleArea()]
+
+        def in_pour(p):                  # inside one of the block's own copper pours (before the move)
+            return any(o.Contains(p) for o in zpoly)
+        kill, mv = [], []                # bridges: boxes holding the cell nets' grow bridges (removed)
+        for x in b.GetTracks():
+            n = x.GetNetname()
+            if x.GetClass() == "PCB_VIA":
+                p = x.GetPosition()
+                if (n in ns and inb(loc(p))) or (n in e.get("stitch", ()) and in_pour(p)):
+                    mv.append(x)
+                continue
+            p0, p1 = loc(x.GetStart()), loc(x.GetEnd())
+            if n in ns and inb(p0) and inb(p1):
+                mv.append(x)
+            elif n in ns and ing(p0, p1) and not (inb(p0) and inb(p1)):
+                kill.append(x)
+            elif n in e.get("stitch", ()) and in_pour(x.GetStart()) and in_pour(x.GetEnd()):
+                mv.append(x)
+        remove(kill)
+        for x in mv:
+            x.Move(V)
+        for r in e["refs"]:
+            fps[r].Move(V)
+        for z in zs:
+            z.Move(V)
+        print(f"shift: {len(e['refs'])} parts, {len(mv)} copper items, {len(zs)} zones moved; {len(kill)} bridge segments removed")
+    elif op == "copy_nets":             # replace nets' tracks / vias with a netcopper.py dump, translated (pre-grow copper)
+        src = json.load(open(Path(__file__).resolve().parent / e["src"]))
+        ns = set(e["nets"])
+        remove([x for x in b.GetTracks() if x.GetNetname() in ns])
+        dx, dy = e["dx"], e.get("dy", 0)
+        for q in src:
+            if q["net"] not in ns:
+                continue
+            if q["kind"] == "via":
+                y = pcbnew.PCB_VIA(b)
+                y.SetPosition(pcbnew.VECTOR2I_MM(q["c"][0] + dx + OX, q["c"][1] + dy + OY))
+                y.SetWidth(F(q["d"])); y.SetDrill(F(q["drill"])); y.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            else:
+                y = pcbnew.PCB_TRACK(b)
+                y.SetStart(pcbnew.VECTOR2I_MM(q["a"][0] + dx + OX, q["a"][1] + dy + OY))
+                y.SetEnd(pcbnew.VECTOR2I_MM(q["b"][0] + dx + OX, q["b"][1] + dy + OY))
+                y.SetWidth(F(q["w"])); y.SetLayer(b.GetLayerID(q["layer"]))
+            y.SetNet(nets[q["net"]])
+            b.Add(y)
+        print(f"copy_nets: {len([q for q in src if q['net'] in ns])} items from {e['src']}")
     elif op in ("rip", "rip_ref"):
         pass                             # (done in pass 1)
     elif op == "track":
@@ -181,7 +240,7 @@ for e in tail_edits.EDITS:
         r.setdefault("via_through_pours", True)
         reqs.append(r)
     elif op == "outline":               # replace a zone's outline (board-local polygon)
-        z = [z for z in b.Zones() if z.GetZoneName() == e["name"]][0]
+        z = [b.GetArea(i) for i in range(b.GetAreaCount()) if b.GetArea(i).GetZoneName() == e["name"]][0]
         ol = z.Outline(); ol.RemoveAllContours(); ol.NewOutline()
         for x_, y_ in e["poly"]:
             ol.Append(F(x_ + OX), F(y_ + OY))
