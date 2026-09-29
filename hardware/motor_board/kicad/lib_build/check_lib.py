@@ -31,7 +31,7 @@ HERE = Path(__file__).parent
 OUT = HERE / "out"
 DESIGN = HERE.parent.parent / "design"
 EASYEDA = HERE / "ref" / "easyeda"
-GENERIC_FP = ("R_0402", "R_0603", "R_0805", "R_1206", "C_0402", "C_0603", "C_0805", "C_1206")
+GENERIC_FP = ("R_0402", "R_0603", "R_0805", "R_1206", "C_0402", "C_0603", "C_0805", "C_1206", "C_1210")
 NUMBER_ONLY_PREFIX = ("J",)   # connectors: netlist pin names are signal names
 PLAIN_2T = ("R", "L")         # netlist names 1/2
 

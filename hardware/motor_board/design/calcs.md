@@ -34,8 +34,8 @@
 | Ripple current at 25.2 V, 22 uH | 260 mA p-p, peak 730 mA | inductor Isat >= 1.6 A (TI SNVSA24 9.2.2.2; current limit 1.2 typ / 1.7 max A) |
 | FB divider | 0.765 x (1 + 56k/10k) = 5.05 V | VFB 0.747-0.782 V -> 4.93-5.16 V |
 | Cout min (3 % droop, 0.57 A step) | 10.9 uF | SNVSA24 eq. 5 -> 2 x 22 uF 25 V (derates to ~2 x 10 uF at 5 V) |
-| Inductor | FNR5040S220MT: 22 uH, Isat 1.6 A guaranteed / 1.8 A typ (-30 % L), DCR 0.17 max, 5 x 5 mm | meets TI's 1.6 A recommendation (SNVSA24 9.2.2.2); only a hard +5V short (current limit 1.2 typ / 1.7 max A) reaches soft ferrite roll-off |
-| Diode | SS34 40 V 3 A SMA | >=1.25 x VIN max; carries ~ILIMIT (<= 1.7 A) almost continuously into a shorted output |
+| Inductor | ZEMS404030-220M: 22 uH, Isat 3.1 A min / 3.5 A typ (-30 % L), DCR 0.22 max, 4.1 x 4.1 x 3.0 mm molded | above TI's 1.6 A recommendation (SNVSA24 9.2.2.2) and the current limit (1.2 typ / 1.7 max A) even into a +5V short; +11 mW DCR loss vs the 0.17 ohm FNR5040S at 0.45 A |
+| Diode | PMEG4030ER 40 V 3 A SOD-123W, VF 0.44 V max @ 1 A, Tj 150 C | >=1.25 x VIN max; carries ~ILIMIT (<= 1.7 A) almost continuously into a shorted output: ~0.6 W at ~220 K/W (small cathode = SW node) -> Tj ~180 C, so a sustained +5V short is not survivable (DESIGN 3.2) |
 | Input power at 0.45 A out | 2.65 W (179 mA from the pack) | 85 % assumed |
 
 ## 4. Logic power budget (5 V rail, 600 mA max)
@@ -84,7 +84,7 @@
 | Weapon spin-up (20 A limit) | 22 A pack peak, bus sags to ~14.1 V, 0.52 s to 90 % | spice/sim_weapon_spinup.py |
 | Bus-capacitor ripple current at 20 A phase peak | ~8 A rms (SVPWM, M~0.5) | shared by C1 polymer and the weapon MLCCs C25/C26/C31; bursts < 1 s |
 | Switch-closure VM ramp (DRV8316 abs max 4 V/us) | <= 0.01 V/us with the U13/Q7/Q8 soft-start (see section 9) | without a limiter the ramp is set by C1 ESR x dI/dt: a stiff pack, short leads or an aged/cold C1 exceed 4 V/us (round-2 simulation) |
-| DRV8316 VM filter (R302/R402 0.1 ohm 1 W + 4 x 10 uF ~16 uF) | RC ~1.6 us (corner ~99 kHz, above the 48 kHz PWM); 0.11/0.24/0.52 W at 1/1.5/2 A rms incl. PWM ripple, <= ~1 W in weapon bursts; 0.8 V drop at 8 A | spice/sim_hotplug.py: every switch/bounce event <= 2.75 V/us at the VM pins in the 0-50 C environment (loaded bounce, re-close; 2.82 V/us only with C1 at its -40 C ESR and a ~1.3 ms bounce); weapon fault-clear kick ~1-2 V/us (review round 10 sims) |
+| DRV8316 VM filter (R302/R402 0.1 ohm 1 W + 2 x 10 uF 50 V X7R 1210, ~15 uF at 16.8 V) | RC ~1.5 us (corner ~99 kHz, above the 48 kHz PWM); 0.11/0.24/0.52 W at 1/1.5/2 A rms incl. PWM ripple, <= ~1 W in weapon bursts; 0.8 V drop at 8 A | spice/sim_hotplug.py (voltage-dependent MLCCs): every switch/bounce event <= 2.14 V/us at the VM pins in the 0-50 C environment (re-close 2.09); 2.62 V/us with C1 at its -40 C ESR; weapon fault-clear kick ~1-2 V/us (review round 10 sims with 16 uF: to be re-simulated) |
 | C1 voltage rating | 35 V vs SMBJ20A clamp 32.4 V max | the TVS protects the capacitor, not the other way round |
 | XT30 on the pack lead | 15 A continuous / 30 A burst | pack peak 22 A for 0.5 s is within the burst rating |
 

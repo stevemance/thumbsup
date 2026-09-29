@@ -567,3 +567,26 @@ Consequences: left encoder A/B are now on CH2/CH1 (the count sign is a firmware 
 nSWBOOT0 = 0 / nBOOT0 = 1 (RM0440 2.6.1: BOOT0 then comes from the option bit, PB8 is a GPIO; a blank chip boots
 the ROM bootloader through R12's pull-up, SWD programming is unaffected), programmed with the BOR level (§9 step 2).
 PB4 still has the UCPD dead-battery pull-down until firmware disables it: harmless on a buffered input.
+
+## Rev L2 (2026-09-29): v2 package swaps
+
+For the v2 4-layer layout (area), from review/v2_parts/proposal.md, checked by three adversarial reviews
+(review/v2_parts/adversarial/: function, JLC assembly + footprints, MLCC DC bias).  Netlist unchanged except U6
+pad 15 and the two removed capacitors per drive.
+
+| Ref | Before | After | Note |
+|---|---|---|---|
+| U6 | SN74LVC08APWR TSSOP-14 (C465737) | SN74LVC08ABQAR WQFN-14 (C31971766) | same die and pin numbers; thermal pad 15 → GND |
+| D2 | SS34 SMA (C8678) | PMEG4030ER SOD-123W (C389355) | lower VF, Tj 150 °C; "survives a shorted +5V" withdrawn (true of neither part on a small SW node, DESIGN 3.2) |
+| L1 | FNR5040S220MT 5×5 (C167971) | ZEMS404030-220M 4.1×4.1 (C49009291) | Isat 3.1 A min vs 1.6 A |
+| J4 | S5B-XH-A side entry (C263757) | B5B-XH-A vertical (C157991) | same plug and pin order; 9.8 mm mated |
+| J2/J3 | XUNPU SH R/A clone (C3029345) | JST BM06B-SRSS-TB vertical (C160392) | same pin numbering; genuine JST |
+| R300/R400 | 22 Ω 1206 (C17958) | ROHM ESR03EZPJ220 0603 anti-surge (C2074038) | same 250 mW |
+| C302/C308/C309/C310, C402/C408/C409/C410 | 4 × 10 µF 50 V X5R 1206 per drive (C13585) | C302/C308, C402/C408: 2 × 10 µF 50 V X7R 1210 (Murata GRM32ER71H106KA12L, C77102); **C309/C310/C409/C410 removed** (user OK, 2026-09-29) | the 1206s keep only ~2.3 µF at 16.8 V (the docs assumed ~4): ~9 µF per drive, now ~15 µF.  sim_hotplug.py now models MLCC DC bias: worst bounce 2.14 V/µs (0 °C), 2.62 (−40 °C), re-close 2.09 |
+| R15 | 6.8 k 0805 (C17772) | 0603 (C23212) | 41 mW |
+| C14 | 100 nF 100 V 0805 (C28233) | 0603 (C15725) | keeps 100 V |
+| D10 | 1N4148W SOD-123 (C81598) | 1N4148WS SOD-323 (C2128) | µA steering |
+
+Open (to re-check): the weapon fault-clear kick at the DRV8316 VM pins (round 10 sims used 16 µF, now ~15 µF at
+16.8 V: about the same), and `sim_weapon_bridge.py`'s bridge-capacitor value (C25/C26/C31 are X5R 1206: ~2.3 µF
+each at 16.8 V).  CPL: J2/J3/J4 need a 180° rotation fix at JLC (FAB.md).

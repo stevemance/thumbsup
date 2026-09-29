@@ -42,9 +42,9 @@ def sub(path, a, b):
 
 mutations = {
     "RGF pads back to ±2.1": lambda d: sub(d / "build_lib.py", "pad(1 + i, -2.4,", "pad(1 + i, -2.1,"),
-    "swap 1N4148W/B5819W LCSC": lambda d: (sub(d / "parts.py", 'dict(lcsc="C81598"', 'dict(lcsc="C8598X"'),),
-    "swap 1N4148W/B5819W mapping": lambda d: (sub(d / "parts.py", '"1N4148W": "1N4148W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W"',
-                                                  '"1N4148W": "B5819W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "1N4148W"')),
+    "swap 1N4148WS/B5819W LCSC": lambda d: (sub(d / "parts.py", 'dict(lcsc="C2128"', 'dict(lcsc="C8598X"'),),
+    "swap 1N4148WS/B5819W mapping": lambda d: (sub(d / "parts.py", '"1N4148WS": "1N4148WS", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W"',
+                                                  '"1N4148WS": "B5819W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "1N4148WS"')),
     "diode K/A swapped (SMBJ20A)": lambda d: sub(d / "parts.py", 'fp="Diode_SMD:D_SMB"),', 'fp="Diode_SMD:D_SMB", rename={"1": "A", "2": "K"}),'),
     "C1 polarity swapped": lambda d: sub(d / "parts.py", 'rename={"1": "+", "2": "-"}', 'rename={"1": "-", "2": "+"}'),
     "DRV8316 pin 22 renumbered": lambda d: sub(d / "parts.py", '("22", "nFAULT", "open_collector", "R")', '("24", "nFAULT", "open_collector", "R")'),
@@ -67,9 +67,9 @@ mutations = {
     "paste window over signal pads": lambda d: sub(d / "build_lib.py", "for cx in (-1.25, 0, 1.25):", "for cx in (-1.25, 0, 2.2):"),
     "74LVC08 gate grouping wrong": lambda d: sub(d / "parts.py", '[{"1", "2", "3"}, {"4", "5", "6"},', '[{"1", "2", "6"}, {"4", "5", "3"},'),
     "B5819W symbol carries the 1N4148W part (mapping + LCSC swapped)": lambda d: (
-        sub(d / "parts.py", '"1N4148W": "1N4148W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W"',
-            '"1N4148W": "B5819W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "1N4148W"'),
-        sub(d / "parts.py", 'dict(lcsc="C81598"', 'dict(lcsc="TMPX"'), sub(d / "parts.py", 'dict(lcsc="C8598"', 'dict(lcsc="C81598"'),
+        sub(d / "parts.py", '"1N4148WS": "1N4148WS", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W"',
+            '"1N4148WS": "B5819W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "1N4148WS"'),
+        sub(d / "parts.py", 'dict(lcsc="C2128"', 'dict(lcsc="TMPX"'), sub(d / "parts.py", 'dict(lcsc="C8598"', 'dict(lcsc="C2128"'),
         sub(d / "parts.py", 'dict(lcsc="TMPX"', 'dict(lcsc="C8598"')),
 }
 
@@ -104,7 +104,7 @@ mutations.update({
                                            "pads = [pad(n - i, -pitch * (n - 1) / 2 + i * pitch, sy, sw, sh) for i in range(n)]"),
     "J2 mirrored (tabs above the row)": lambda d: sub(d / "parts.py", "sig_y=-1.7,", "sig_y=1.7,") or sub(d / "parts.py", "mp_x=3.6, mp_y=1.7,", "mp_x=3.6, mp_y=-1.7,"),
     "J2 signal row shifted 0.5 mm": lambda d: sub(d / "parts.py", "sig_y=-1.7,", "sig_y=-2.2,"),
-    "custom footprint marked dnp": lambda d: sub(d / "build_lib.py", "def fp_sh(name, spec):", "def fp_sh(name, spec):\n    global footprint\n    _f = footprint\n    footprint = lambda *a, **k: _f(*a, **k).replace('(attr smd)', '(attr smd dnp)')"),
+    "custom footprint marked dnp": lambda d: sub(d / "build_lib.py", "def fp_header(name, spec):", "def fp_header(name, spec):\n    global footprint\n    _f = footprint\n    footprint = lambda *a, **k: _f(*a, **k).replace('(attr smd)', '(attr smd dnp)')"),
 })
 post_mutations = {"hidden power_in pin (DRV8316 VM)": hide_first_vm, "pad moved to the back side": pad_to_back,
                   "symbol excluded from the BOM": symbol_not_in_bom, "large paste margin on a pad": paste_margin}

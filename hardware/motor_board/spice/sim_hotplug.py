@@ -19,8 +19,12 @@ bus bleeder R15 6.8k.  GND is tied to pack-.
 Load model (not a fixed resistor, per review R3A-02): the 5 V buck as a constant-power 2.5 W load
 that runs above ~9.8 V (UVLO 10.4 on / 9.2 off, simplified), plus ~66 kOhm of DC dividers and R15.
 Bus capacitance: C1 330 uF (ESR 20 mOhm new, 40 aged, 300 = its -40 C limit) + 3 x 10 uF 1206
-(C25/C26/C31) derated to 4 uF on VBAT, and each DRV8316's VM pins behind 5 nH + R302/R402 0.1 ohm with 4 x 10 uF
-(~16 uF) + 200 nF (both drive branches modelled; the measured one is U3's).
+(C25/C26/C31) on VBAT, and each DRV8316's VM pins behind 5 nH + R302/R402 0.1 ohm with 2 x 10 uF 50 V X7R 1210
++ 200 nF (both drive branches modelled; the measured one is U3's).  The MLCCs are voltage-dependent (DC bias):
+differential C = C0 / (1 + (V/V0)^2), i.e. Q(V) = C0 V0 atan(V/V0).  Fits (review/v2_parts/adversarial/mlcc_dcbias.md):
+1206 X5R 10 uF V0 = 8.92 V (-78 % at 16.8 V, Samsung CL31A / Murata GRM31CR61H), 1210 X7R V0 = 29.9 V (-24 % at
+16.8 V, Murata GRM32ER71H106KA12).  The worst dV/dt happens at VM ~6-9 V, where the parts still have most of
+their capacitance, so a fixed 16.8 V value overstates the risk and a fixed nominal value understates it.
 
 Reports, per case: peak VM dV/dt over the whole event (including any closure spike), the average
 0-90 % ramp rate, peak pack current (the first A-level spike is C14 100 nF
@@ -43,8 +47,24 @@ FET = (".model hyg vdmos(vto=1.9 kp=180 rd=0.5m rs=0.3m rg=1.95 cgs=3.9n cgdmax=
        "a=0.25 cjo=5.4n m=0.5 vj=0.7 is=5e-12 n=1.05 rb=0.8m tt=4n bv=44 ibv=250u)")
 
 
+def capline(name, a, b, n, c0, v0):
+    """n parallel MLCCs of nominal c0 with a DC-bias curve C(V) = n c0 / (1 + (V/v0)^2) (v0=None: linear)."""
+    if v0 is None:
+        return f"{name} {a} {b} {n * c0}"
+    q = f"{n * c0 * v0 / 1e-6} * atan(v({a},{b}) / {v0})"   # charge, as volts across a 1 uF reference cap
+    return (f"e{name} {name}_q 0 vol = '{q}'\n"
+            f"v{name}s {name}_q {name}_r 0\n"
+            f"c{name}r {name}_r 0 1u\n"
+            f"f{name} {a} {b} v{name}s 1\n"
+            f"{name}x {a} {b} 1n")
+
+
+CM = (3, 10e-6, 8.92)     # C25/C26/C31 10 uF 50 V X5R 1206
+CVM = (2, 10e-6, 29.9)    # per drive: 2 x 10 uF 50 V X7R 1210 (C302/C308, C402/C408)
+
+
 def netlist(vpack=16.8, rbat=0.048, lead_nh=150.0, esr=0.020, off_ms=None, igate="60u", vth_f=1.14, vth_r=1.24,
-            steer=True, rhold=None, tmax="20u", iload=0.0, c18="100n", rvm=0.1, cvm="16u"):
+            steer=True, rhold=None, tmax="20u", iload=0.0, c18="100n", rvm=0.1, cvm=CVM, cm=CM):
     t_on = 1e-3
     if off_ms is None:
         ctl = f"pwl(0 0 {t_on} 0 {t_on + 1e-6} 1)"
@@ -92,18 +112,18 @@ dtvs 0 vbat dtvs
 cb vbat nb1 330u
 rb nb1 nb2 {esr}
 lb nb2 0 3n
-cm vbat nm1 12u
+{capline('cm', 'vbat', 'nm1', *cm)}
 rm nm1 nm2 0.001
 lm nm2 0 0.5n
 lt vbat vm 5n
 rt vm vm2 {rvm}
-cvm vm2 nv1 {cvm}
+{capline('cvm', 'vm2', 'nv1', *cvm)}
 rv nv1 0 0.005
 cvhf vm2 0 200n
-* the other drive's VM filter branch (R402 + ~16 uF)
+* the other drive's VM filter branch (R402 + 2 x 10 uF 1210)
 lt2 vbat vmb 5n
 rt2 vmb vmb2 {rvm}
-cvmb vmb2 nvb1 {cvm}
+{capline('cvmb', 'vmb2', 'nvb1', *cvm)}
 rvb nvb1 0 0.005
 cvhfb vmb2 0 200n
 * loads: buck as constant power above ~9.8 V, DC dividers ~66 k (R63/R64 78k + R4/R5 441k; the weapon phase dividers
@@ -195,7 +215,7 @@ def main():
             if kind not in shown:
                 print("\nContact bounce under a 20 A weapon load (C18 delays the UVLO, the FETs stay on while the bus falls);"
                       "\n  C1 ESR 40 mOhm = aged limit at 20 C, 100 mOhm = bound for aged at 0 C (interpolated between the ZK 20 C and -40 C limits);"
-                      "\n  (all at the DRV8316 VM pins, behind R302/R402 0.1 ohm + ~16 uF):")
+                      "\n  (all at the DRV8316 VM pins, behind R302/R402 0.1 ohm + 2 x 10 uF 1210):")
             print(f"{name} VM before {v0:5.1f} V {pk:8.3f}V/us {ipk:7.1f}A  {flag}")
         else:
             if kind not in shown:

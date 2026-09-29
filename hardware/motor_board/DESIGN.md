@@ -1,4 +1,4 @@
-# ThumbsUp motor board — design (rev L1, 2026-09-28: MCU pin swaps for routing, review/CHANGES.md)
+# ThumbsUp motor board — design (rev L2, 2026-09-29: v2 package swaps, review/CHANGES.md)
 
 The power half of the two-board stack: battery in, three motor channels out, 5 V down to the
 compute board through one header.  This is the brushless variant: **sensorless weapon + two
@@ -33,7 +33,7 @@ Rev B applied review round 1, rev C round 2, rev D round 3, rev E round 4, rev F
 | Telemetry | Per-phase currents (9), bus voltage, weapon phase voltages, weapon FET temp, motor temps, speed/position | 16 analog inputs on 5 ADCs + 2 encoder timers on one MCU |
 | Compute link | 5 V / ≤ 0.45 A to the compute board, UART, reset + SWD programming, weapon ARM, cell-monitor I²C | 20-pin 1.27 mm header (2 spare) |
 | Safety | Weapon cannot be driven unless the compute board is alive and armed; everything off in reset; failsafe on command loss | **Dynamic ARM**: the compute board must keep toggling W_ARM_CLK from software (≥ 500 Hz); a charge pump + Schmitt buffer turns that into the ARM level, which gates every weapon phase enable in hardware (AND on INLx) and disarms ~30–200 ms after the toggling stops (sim: 52–164 ms with nominal parts, 25–85 °C).  Command timeout and a watchdog in firmware.  Pulled-down enables; DRVOFF pulled up |
-| Environment | Indoor arena, ambient 0–50 °C | The DRV8316 VM filters (R302/R402 0.1 Ω + ~16 µF) keep the simulated switch-closure, re-close and loaded contact-bounce steps at the DRV8316 VM pins ≤ ~2.3 V/µs with C1 down to 0 °C (~2.8 V/µs only at C1's −40 °C ESR limit), under the 4 V/µs abs max (§5, §7.2).  Not covered: a weapon phase-to-ground short (§7.21) |
+| Environment | Indoor arena, ambient 0–50 °C | The DRV8316 VM filters (R302/R402 0.1 Ω + 2 × 10 µF 1210, ~15 µF at 16.8 V) keep the simulated switch-closure, re-close and loaded contact-bounce steps at the DRV8316 VM pins ≤ ~2.2 V/µs with C1 down to 0 °C (~2.6 V/µs only at C1's −40 °C ESR limit; voltage-dependent MLCC model), under the 4 V/µs abs max (§5, §7.2).  Not covered: a weapon phase-to-ground short (§7.21) |
 | Build | JLCPCB assembly | All parts on LCSC; 199 assembled parts + 6 DNP footprints, 67 BOM lines; **two-sided**: power stage, tall parts, connectors and test pads on top, low-profile passives/logic and J1 on the bottom; J4 THT.  Board area and chassis fit are settled at layout (§6.13 lists the estimate and the levers) |
 
 Not on this board (compute board): Pico/MCU for control, IMU + high-g accel, logging flash,
@@ -106,7 +106,7 @@ Path: **BAT+ (BAT_IN) → Q7 → PSW_S → Q8 → VBAT_SW → RS4 (1 mΩ) → VB
 | Q7, Q8 | 2 × HYG015N04LS1C2 (same as the weapon FETs), common source PSW_S, common gate PSW_G | **Q7** (drain at the pack): body diode blocks the plug-in surge; it is the FET in its linear region during soft-start (16 W peak, 54–57 mJ per closure).  **Q8** (drain at the board): conducts backwards when on; its body diode blocks a reversed pack.  On: 2 × 1.4 mΩ, ~2.0–2.5 W together at 22 A (hot), 0.5 s bursts |
 | R1 / D10 / C13 / R32 / D4 | 4.7 k / 1N4148W / 22 nF (Cdvdt) / 1 M / 12 V zener gate–source | Soft-start: VBAT ramps at ~(I_GATE − R32 bleed) / C13 ≈ 2.2 V/ms (sim; ~3.0 V/ms at the 77 µA max gate current), ~0.8 A into ~380 µF.  R1 isolates C13 so turn-off stays fast.  D10 lets C13 only *slow the gate's rise*: with a reversed pack GND is the most positive node and C13 would otherwise push the gate up and turn Q7/Q8 on (sim: 102–147 A without D10 if U13's unpowered gate hold is weak; only the C14 charge spike with it).  R32 resets C13 between power-ups (22 ms); it draws ~20–28 µA of the gate drive, so the ramp is 1.3–3.0 V/ms over the gate-current spread.  After a UVLO trip C13 stays charged for ~20–40 ms (D10 blocks its discharge through the gate); a re-close in that window is not slowed by C13 but is still benign (≤ 0.06 V/µs).  D4 clamps Vgs at 12 V (U13 GATE–SRC abs max 15 V) at full charge-pump voltage and through sag/recovery transients.  |
 | R13 / R14 / C18 | 100 k / 15 k / 100 nF on EN/UVLO | Switch off below ~9.0 V (7.7–10.1 V with 1 % resistors and the 0–5 µA EN sink), on above ~9.8 V (worst 10.8 V).  C18 (1.3 ms) filters the weapon's 24 kHz bus ripple so it cannot trip the UVLO early.  Stays below a tired 4S pack under load (~11.5 V average) **provided firmware folds current back at ~12 V** (§8); limits an *unloaded* quick re-close step to ~9 V (under load the bus can fall further before the filtered UVLO opens: §7.2) |
-| R15 | 6.8 k 0805 bleeder | After the switch opens the bus decays (τ ≈ 2.3 s with the DC dividers and ~374 µF); the switch UVLO opens the FETs about when the buck stops (~9 V: within ~0.1 s with typical thresholds, ~0.4 s at the minimum threshold), and any re-close after that ramps softly again.  A re-close before that finds the FETs on: at the DRV8316 VM pins (behind R302/R402) 0.06–0.7 V/µs typical, 2.09 V/µs worst (minimum UVLO, C1 at its −40 °C ESR), under 4 V/µs.  A drum still spinning keeps the bus (and the FETs) up longer |
+| R15 | 6.8 k 0603 bleeder | After the switch opens the bus decays (τ ≈ 2.3 s with the DC dividers and ~374 µF); the switch UVLO opens the FETs about when the buck stops (~9 V: within ~0.1 s with typical thresholds, ~0.4 s at the minimum threshold), and any re-close after that ramps softly again.  A re-close before that finds the FETs on: at the DRV8316 VM pins (behind R302/R402) 0.06–0.7 V/µs typical, 2.09 V/µs worst (minimum UVLO, C1 at its −40 °C ESR), under 4 V/µs.  A drum still spinning keeps the bus (and the FETs) up longer |
 | RS4, U7 | 1 mΩ 2512 + INA239 | **Pack monitor**, after the switch FETs (the INA239 inputs must stay ≥ −0.3 V, so a reversed pack must not reach them).  Kelvin to U7 through R2/R3 10 Ω with C2 100 nF.  VBUS = VBAT.  ±41 A at 1.25 mA/LSB, plus power and die temperature; firmware integrates mAh.  SPI (CS = PB8, R12 100 k pull-up).  ALERT (open drain) is wired onto W_nFAULT → TIM1 break.  **The INA239 has no per-limit mask**: only SOVL (38 A) and BOVL (19 V) are programmed; the rest stay at never-trip reset values (§8).  INA229AIDGSR is pin/footprint compatible but not register compatible (24-bit results, DEVICE_ID 2291h) |
 | D1 | SMBJ20A on VBAT | Standoff 20 V > 16.8 V; clamps ≤ 32.4 V, below the DRV8316's 40 V abs max |
 | C1 | 330 µF 35 V hybrid polymer (EEHZK1V331P) | Bus bulk and weapon ripple current (2.8 A rms rating); 35 V so it survives the TVS clamp level.  Stake it with adhesive (the vibration-proof EEHZK1V331V is not stocked at JLC) |
@@ -146,7 +146,7 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
 * **Bridge:** Q1/Q2 (A), Q3/Q4 (B), Q5/Q6 (C), HYG015N04LS1C2 (40 V, 1.4 mΩ typ / 1.7 max @ 10 V,
   PDFN 5×6; leads 1–3 = S, 4 = G, tab = D).  High-side drains on VBAT; U2 VDRAIN (pin 7) Kelvin
   to the drains.  No gate resistors (IDRIVE current-mode gate drive; FET internal RG ~2 Ω).
-  One 10 µF 1206 per half-bridge: C25 (A), C26 (B), C31 (C).
+  One 10 µF 1206 per half-bridge: C25 (A), C26 (B), C31 (C) (X5R: ~2.3 µF each at 16.8 V; `sim_weapon_bridge.py` assumes more, **to be re-checked**).
 * **Shunts:** RS1–RS3 2 mΩ 2512 low-side on a custom footprint (Milliohm's 1–4 mΩ land: 2.0 mm
   terminals).  SPx to the FET-source side (net W_SLx), SNx via net-tie NT1–NT3 to the shunt's
   ground pad.  CSA gain 20 V/V → 40 mV/A, ±35 A linear range, 20 mA/LSB, bidirectional (VREF/2).
@@ -186,10 +186,13 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
   regen current limit (≤ ~10 A → ≤ ~3.75 V at the pins: inside the 4.0 V abs max, briefly above the
   VDD + 0.3 V operating limit, §7.4).
 * **FET temperature:** TH1 10 k NTC at the FETs, R43 pull-up, C44 100 nF → PA6.
-* **5 V buck (inside U2):** VIN pin 47 from VBAT (C27 2.2 µF 50 V X5R); L1 FNR5040S220MT 22 µH,
-  Isat 1.6 A guaranteed / 1.8 A typ (−30 % L), which is TI's own 1.6 A recommendation; only a hard
-  +5V short (current limit 1.2 A typ / 1.7 A max) reaches soft ferrite roll-off, and the buck's
-  thermal shutdown ends that.  D2 SS34 (3 A: survives a shorted +5V); C28 100 nF CB–SW; R20 56 k /
+* **5 V buck (inside U2):** VIN pin 47 from VBAT (C27 2.2 µF 50 V X5R); L1 ZEMS404030-220M 22 µH
+  4.1 × 4.1 mm molded, Isat 3.1 A min / 3.5 typ (−30 % L), above TI's 1.6 A recommendation and the current
+  limit (1.2 A typ / 1.7 A max) even into a hard +5V short.  D2 PMEG4030ER (40 V 3 A, SOD-123W, Tj 150 °C).
+  In a sustained +5V short D2 carries ~ILIMIT: ~0.6 W, and its heat leaves through the cathode tab, which is
+  the SW node and must stay small, so Rθja ≈ 220 K/W → Tj ≈ 180 °C at 50 °C ambient.  **A sustained +5V
+  short is therefore not survivable for D2** (nor was it for the SS34 on a small SW node); it is a
+  board-level fault, not a design case, and the buck's thermal shutdown only limits it.  C28 100 nF CB–SW; R20 56 k /
   R21 10 k → 5.05 V; C29/C30 22 µF 25 V.
 
 ### 3.3 Drive channels — U3 (left), U4 (right) DRV8316C
@@ -206,11 +209,11 @@ Per channel (U3 values shown; U4 is identical with 4xx designators):
 
 | Pin(s) | Connection |
 |---|---|
-| VM 9/10/11 | **L_VM** (U4: R_VM), fed from VBAT through **R302 0.1 Ω 1 W 2512** (R402), with C300/C301 100 nF 50 V at the pins + C302/C308/C309/C310 4 × 10 µF 50 V 1206 (~16 µF effective at 16.8 V).  The ~1.6 µs RC isolates the DRV8316's 4 V/µs VM abs max from bus events: loaded contact bounce 3.75 → 2.26 V/µs (≤ 2.33 to ~1.3 ms), worst re-close 3.44 → 2.09 V/µs (spice/hotplug.out), weapon fault-clear kick 9–11 → ~1–2 V/µs (review round 10 sims, not in spice/).  Cost: the RC corner (~99 kHz) is above the 48 kHz PWM, so R302 carries most of the drive's switching ripple too: 0.11 / 0.24 / 0.52 W at 1 / 1.5 / 2 A rms, plus up to ~0.6 W of weapon ripple during a weapon burst (≤ ~1 W for ≤ 0.5 s; ~0.5 W continuous worst; the 1 W part derates to ~0.65 W at 100 °C); 0.8 V drop at an 8 A peak |
+| VM 9/10/11 | **L_VM** (U4: R_VM), fed from VBAT through **R302 0.1 Ω 1 W 2512** (R402), with C300/C301 100 nF 50 V at the pins + C302/C308 2 × 10 µF 50 V X7R **1210** (~7.6 µF each at 16.8 V, ~15 µF per drive; v2 swap from 4 × 1206 X5R, which keep only ~2.3 µF each: review/v2_parts/adversarial/mlcc_dcbias.md).  The ~1.5 µs RC isolates the DRV8316's 4 V/µs VM abs max from bus events: loaded contact bounce 3.75 → 2.14 V/µs (0 °C bound), worst re-close 2.09 V/µs (spice/hotplug.out, voltage-dependent MLCC model), weapon fault-clear kick 9–11 → ~1–2 V/µs (review round 10 sims with 16 µF, not in spice/; **to be re-simulated with the real ~15 µF**).  Cost: the RC corner (~99 kHz) is above the 48 kHz PWM, so R302 carries most of the drive's switching ripple too: 0.11 / 0.24 / 0.52 W at 1 / 1.5 / 2 A rms, plus up to ~0.6 W of weapon ripple during a weapon burst (≤ ~1 W for ≤ 0.5 s; ~0.5 W continuous worst; the 1 W part derates to ~0.65 W at 100 °C); 0.8 V drop at an 8 A peak |
 | CP 8 / CPH 7 / CPL 6 | C303 1 µF 50 V CP–L_VM; C304 47 nF 50 V CPH–CPL |
 | AVDD 25 | C305 1 µF 50 V 0603 (TI wants 0.7–1.3 µF effective at 3.3 V; worst case sits at 0.7: check at bring-up) |
 | VREF/ILIM 37 | tied to the chip's own AVDD (pin 25), C306 100 nF.  VREF must stay ≤ AVDD (3.1–3.465 V), so it cannot come from the external LDO.  Consequence: the cycle-by-cycle current-limit modes are **not usable** (they need VREF/ILIM near AVDD/2 and disable SOx); current limiting is done by the MCU's FOC loop |
-| SW_BK 5 / FB_BK 3 / GND_BK 4 | **buck unused but must be populated** (SLVSH07 8.3.4.2 / 9.2.1.1.5): R300 22 Ω **1206** SW→FB, C307 22 µF **25 V** 0805 FB→GND (TI: ≥ 10 V); firmware disables it first thing (§8) |
+| SW_BK 5 / FB_BK 3 / GND_BK 4 | **buck unused but must be populated** (SLVSH07 8.3.4.2 / 9.2.1.1.5): R300 22 Ω **0603 anti-surge 250 mW** (ROHM ESR03) SW→FB, C307 22 µF **25 V** 0805 FB→GND (TI: ≥ 10 V); firmware disables it first thing (§8) |
 | INHA/B/C 27/29/31 | TIM8_CH1/2/3 = PB6/PC7/PB9 (left); TIM20_CH1/2/3 = PB2/PC2/PC8 (right) |
 | INLA/B/C 28/30/32 | +3V3 (3x PWM: INL = phase enable; Hi-Z is done with the shared DRVOFF pin, or per chip with the CTRL4 DRV_OFF bit, §8.1) |
 | DRVOFF 21 | shared DRV_OFF net (PC14), R50 10 k pull-**up**: both drive bridges are off until firmware drives it low.  This is the drives' coast path (a timer break brakes: with TIM8/TIM20 OISx = 1 and OSSI = 1 it forces the high sides on in 3x mode, and gives Hi-Z for a chip that has reset into 6x mode, §8.1) |
@@ -225,8 +228,8 @@ AGND/PGND partitioned at the IC per TI §11.1 (the netlist has one GND net; do t
 copper: thermal pad + AGND pins + AVDD/VREF/CBK returns on a local island joined to the power
 ground at the pad).
 
-**Sensor connectors J2/J3** (SH 1.0 mm 6-pin, XUNPU WAFER-SH1.0-6PWB): 1 VS, 2 GND, 3 S1, 4 S2,
-5 S3, 6 motor NTC.
+**Sensor connectors J2/J3** (SH 1.0 mm 6-pin **vertical**, genuine JST BM06B-SRSS-TB): 1 VS, 2 GND, 3 S1, 4 S2,
+5 S3, 6 motor NTC.  Strain-relieve the cables (a vertical SMD header takes the pull on its joints).
 
 * **Supply:** JP1/JP2 select 3.3 V (default, 1–2 bridged) or 5 V (2–3: 5 V Hall ICs).  Then U11/U12
   TPS22945 (100–200 mA current limit, 5–20 ms blanking, 80 ms auto-retry; OC flag unused) with
@@ -436,7 +439,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 
 | Check | Result |
 |---|---|
-| Power-switch closure (`sim_hotplug.py`, `hotplug.out`) | Behavioural LM74502 + Q7/Q8 model (charge pump, hysteretic EN/UVLO gating the 60 µA gate source and 2 Ω sink, C18, EN sink, D4, D10/C13/R32) with a realistic load (buck as constant power above its UVLO, ~66 kΩ of dividers, R15).  **Closure:** VBAT ramps ~2.2 V/ms (1.3–3.0 V/ms over the 40–77 µA gate current); VM dV/dt 0.002–0.005 V/µs in every case (stiff or 300 nH lead, C1 at 40 or 300 mΩ, 12 V pack) vs the 4 V/µs limit; Q7 16 W peak (22.0 W at max gate current), 54–57 mJ; the 9–23 A peak current is C14 ringing with the lead, upstream of the FETs.  **Reversed pack:** only the 13 A C14 spike with D10, whatever U13's unpowered gate hold; 102–147 A without D10 if that hold is weak.  **Re-close** (at the DRV8316 VM pins): typical thresholds 0.06–0.7 V/µs within ~0.1 s; minimum threshold with C1 at 300 mΩ 1.8–2.09 V/µs up to ~0.4 s; soft (≤ 0.005 V/µs) after that.  **Contact bounce, 20 A load, 0.1–0.8 ms:** 0.8–2.26 V/µs with C1 up to its aged 0 °C bound, 2.66 V/µs at its −40 °C ESR.  Longer bounces to ~1.3 ms (round 27/28 reruns, not in `hotplug.out`): ≤ 2.33 V/µs at 0 °C, 2.82 V/µs at −40 °C.  Without the R302/R402 filters these were up to ~3.75–4.3 V/µs |
+| Power-switch closure (`sim_hotplug.py`, `hotplug.out`) | Behavioural LM74502 + Q7/Q8 model (charge pump, hysteretic EN/UVLO gating the 60 µA gate source and 2 Ω sink, C18, EN sink, D4, D10/C13/R32) with a realistic load (buck as constant power above its UVLO, ~66 kΩ of dividers, R15).  **Closure:** VBAT ramps ~2.2 V/ms (1.3–3.0 V/ms over the 40–77 µA gate current); VM dV/dt 0.002–0.005 V/µs in every case (stiff or 300 nH lead, C1 at 40 or 300 mΩ, 12 V pack) vs the 4 V/µs limit; Q7 16 W peak (22.0 W at max gate current), 54–57 mJ; the 9–23 A peak current is C14 ringing with the lead, upstream of the FETs.  **Reversed pack:** only the 13 A C14 spike with D10, whatever U13's unpowered gate hold; 102–147 A without D10 if that hold is weak.  **Re-close** (at the DRV8316 VM pins): typical thresholds 0.06–0.7 V/µs within ~0.1 s; minimum threshold with C1 at 300 mΩ 1.8–2.09 V/µs up to ~0.4 s; soft (≤ 0.005 V/µs) after that.  **Contact bounce, 20 A load, 0.1–0.8 ms:** 0.73–2.14 V/µs with C1 up to its aged 0 °C bound, 2.62 V/µs at its −40 °C ESR (v2: 2 × 1210 per drive, MLCCs modelled with their DC-bias curves; the worst dV/dt occurs at VM ≈ 6–9 V).  Longer bounces to ~1.3 ms were ≤ 2.33 / 2.82 V/µs with the old fixed 16 µF model (round 27/28, not rerun).  Without the R302/R402 filters these were up to ~3.75–4.3 V/µs |
 | Dynamic ARM (`sim_arm.py`, `arm.out`) | 250 Hz–10 kHz toggling, 25 and 85 °C (BAT54S leakage): armed 2.50–2.95 V vs U14 VT+ ≤ ~2.15 V; 7–10 rising edges to arm; disarm 52–134 ms stuck low, 67–164 ms stuck high (to VT− 1.33 / 0.8 V) |
 | Weapon bridge switching (`sim_weapon_bridge.py`) | At IDRIVE 400 mA the high-side VDS rings to 36–44 V and SHx undershoots past −7 V even with a 3 nH loop. At **60 mA** with a **3–6 nH** commutation loop: VDS ≤ 29 V (40 V part), SHx ≥ −4.6 V (−7 V limit).  At 12 nH, SHx reaches −7.3 V: the loop must stay short.  SPx peaks at +3.2 V for a few ns from the shunt ESL (limit ±3 V for 200 ns).  The FET model is calibrated to datasheet capacitances/gate charge, not a vendor model: read it as trends |
 | Weapon spin-up (`sim_weapon_spinup.py`) | See §4; 15 A limit → 0.68 s, 25 A → 0.43 s, pack peak 27 A |
@@ -466,7 +469,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    (RθJA 25.7 °C/W is the JEDEC 4-layer figure).  AGND/PGND partition per §3.3.  The 100 nF VM
    caps at pins 9 and 11 also serve pin 10 (adjacent); keep U11/U12 away from U3/U4 (85 °C parts).
 6. **R302/R402** (up to ~1 W in bursts) away from the DRV8316 thermal copper, on their own pour.  Keep the **DRV_OFF** trace (PC14, a 2 MHz / 30 pF pin) short.  **Power entry:** U13, C12, C14, C18 (at U13 pin 1), R1, D10, C13, R32, D4 next to Q7/Q8; the gate trace short.  Feed U3/U4's VM from C1 on their own branch (not through the weapon bridge's copper), so weapon switching ripple at the DRV8316 VM pins stays well under 4 V/µs (check in §9 step 6).  C1 close to the
-   switch output *and* the bridges; each DRV8316 gets its 2 × 100 nF + 4 × 10 µF within 2 mm, on the filtered side of R302/R402 (all DRV8316 VM current must pass through the resistor).
+   switch output *and* the bridges; each DRV8316 gets its 2 × 100 nF + 2 × 10 µF 1210 within 2 mm, on the filtered side of R302/R402 (all DRV8316 VM current must pass through the resistor).
 7. **Buck:** SW node tiny; L1/D2/C29 loop tight per the LMR16006 layout guide; FB divider at
    pin 1 away from L1; R4/R5/C10 away from SW.
 8. **Analog:** CSA outputs and dividers routed away from phase nodes; the 330 Ω / 22 pF and 1 nF
@@ -486,14 +489,14 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 10. **Mechanical:** 4 × M2 NPTH holes (MH1–MH4) near the corners for nylon standoffs clamping the
     stack; J1 on the bottom side; no exposed pack-current copper on the bottom layer facing the
     compute board (keep the high-current pours on top/inner layers, solder mask everywhere);
-    C1 staked with adhesive by hand after assembly (JLC does not stake); 1206/2512 parts and C14 (across the unswitched pack) oriented parallel to
+    C1 staked with adhesive by hand after assembly (JLC does not stake); 1206/1210/2512 parts and C14 (across the unswitched pack) oriented parallel to
     the nearest board edge/standoff line and kept ≥ 3 mm from the holes (flex cracks across the
     bus are shorts on an unfused LiPo); keep the Pico W antenna area of the compute board clear.
 11. U8 uses KiCad's QFN-20 EP 2.0 mm land (TI's RGR0020A is 2.05 mm): acceptable; paste per KiCad.
 12. **Custom footprints** (project library `motor_board.pretty`, built by `kicad/lib_build/`): TI_RGF0040E… (U3/U4, TI RGF0040E
     drawing), R_2512_HoLR_1-4mR (RS1–RS3, Milliohm HoLR datasheet land), BOOMELE_1.27-2x10P_SMD
-    (J1, BOOMELE drawing), SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB (J2/J3, XUNPU drawing: tab pads
-    1.2 × 2.5 mm).  RS4 uses JIERR's small-electrode land (2.1 × 4.0 pads, 4.1 mm gap, datasheet p.5): R_2512_JIERR_RE_small_electrode.
+    (J1, BOOMELE drawing).  J2/J3 (JST BM06B vertical), J4 (JST B5B-XH-A vertical), U6 (TI BQA WQFN-14) and
+    L1 use KiCad stock footprints checked against the maker's land (review/v2_parts/adversarial/jlc_footprints.md).  RS4 uses JIERR's small-electrode land (2.1 × 4.0 pads, 4.1 mm gap, datasheet p.5): R_2512_JIERR_RE_small_electrode.
 13. **Area and placement (settled at layout).**  Estimate: top-side courtyards ≈ 1900 mm², bottom
     ≈ 700–900 mm², plus mating clearance for J2–J4 → ~3600–4400 mm² at realistic density, vs a
     ~3100 mm² v1.1 bay.  Assembly is two-sided anyway (J1).  **Top:** Q1–Q8, RS1–RS4, C1,

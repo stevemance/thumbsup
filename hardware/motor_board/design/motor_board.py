@@ -52,6 +52,7 @@ def two(ref, value, footprint, net1, net2, lcsc="", desc="", names=("1", "2"), d
 R0402, C0402, C0603, C0805, C1206 = ("Resistor_SMD:R_0402_1005Metric", "Capacitor_SMD:C_0402_1005Metric",
                                      "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_0805_2012Metric",
                                      "Capacitor_SMD:C_1206_3216Metric")
+C1210 = "Capacitor_SMD:C_1210_3225Metric"
 
 # LCSC numbers: filled from the JLC lookup (see ../BOM.md for stock / class / date checked)
 LCSC = {
@@ -59,6 +60,10 @@ LCSC = {
     "100n_50V_0603": "C14663", "100n_16V_0402": "C1525", "47n_50V_0603": "C1622", "1u_25V_0402": "C52923",
     "1u_50V_0603": "C15849", "2u2_50V_0805": "C377773", "4u7_16V_0603": "C19666", "10u_50V_1206": "C13585",
     "22u_25V_0805": "C45783",
+    # v2 package swaps (review/v2_parts/proposal.md + adversarial/, 2026-09-29)
+    "10u_50V_1210": "C77102",      # Murata GRM32ER71H106KA12L X7R: ~7.6 uF at 16.8 V (-24 %, Murata curve); alt Samsung CL32A106KBJNNNE C380537
+    "R6k8_0603": "C23212", "100n_100V_0603": "C15725", "1N4148WS": "C2128",
+    "R22_0603_surge": "C2074038",  # ROHM ESR03EZPJ220 anti-surge 0603 250 mW
     "R10k": "C25744", "R100k": "C25741", "R68k": "C36871", "R56k": "C25796", "R1k": "C11702",
     "LED": "C2286", "NTC10k": "C13564",
     # Extended parts (numbers from jlcpcb.com / lcsc.com part pages, 2026-09-23)
@@ -68,11 +73,11 @@ LCSC = {
     "SMBJ20A": "C151922",          # BORN SMBJ20A (several makers; pick the one in stock)
     "C_BULK": "C278516",           # Panasonic EEHZK1V331P 330 uF 35 V hybrid polymer, 10x10.2
     "AP2112K-3.3": "C51118",
-    "74LVC08": "C465737",          # TI SN74LVC08APWR TSSOP-14 (alt Nexperia 74LVC08APW C6053)
+    "74LVC08": "C31971766",        # TI SN74LVC08ABQAR WQFN-14 BQA (was SN74LVC08APWR TSSOP-14 C465737)
     "LVC3G17": "C68245",           # TI SN74LVC3G17DCUR VSSOP-8 2.3x2 (DCT alt C18213, same pinout)
-    "L22u": "C167971",             # Changjiang FNR5040S220MT 22 uH 1.8 A 5x5
-    "SS34": "C8678",               # SS34 40 V 3 A SMA (buck catch diode)
-    "SM06B": "C3029345",           # SH1.0 6P horizontal SMD (JST SM06B-SRSS-TB clone; C160405 out of stock)
+    "L22u": "C49009291",           # ZE ZEMS404030-220M 22 uH 4.1x4.1x3 molded, Isat 3.1 A min (alt MetalLions C51883186)
+    "PMEG4030ER": "C389355",       # Nexperia PMEG4030ER 40 V 3 A CFP3/SOD-123W (buck catch diode; alt MDD DSK34 C41029)
+    "BM06B": "C160392",            # JST BM06B-SRSS-TB genuine, SH1.0 6P vertical SMD
     "B2B_M": "C59981",             # BOOMELE 1.27-2*10P, 1.27 mm 2x10 SMD male (6,280 in stock 2026-09-23)
     "INA239": "C2876522",          # TI INA239AIDGSR VSSOP-10 (INA229AIDGSR C2846803 is a pin-compatible drop-in)
     "SHUNT_1m": "C46961745",       # JIERR RE2512F3R001 1 mOhm 3 W 2512 (verified for the v1 board)
@@ -85,7 +90,7 @@ LCSC = {
     "22n_50V_0603": "C21122", "R6k8_0805": "C17772", "LM74502": "C3236215", "R0R1_2512": "C25466", "100n_100V_0805": "C28233", "R15k": "C25756", "1N4148W": "C81598", "R1M": "C26083", "ZENER12": "C21567", "470n_25V_0603": "C1623", "2u2_16V_0603": "C23630", "LVC1G17": "C212314", "B5819W": "C8598", "BAT54S": "C47546",   # Nexperia BAT54S,215 SOT-23
     "BAV99": "C2500", "R2k2_0603": "C4190", 
     "BQ76907": "C22458649",        # TI BQ76907RGRR 2-7S monitor (listed at JLC; BQ76905 not found at LCSC)
-    "XH5": "C263757",              # JST S5B-XH-A(LF)(SN) side-entry THT; vertical B5B-XH-A = C157991
+    "XH5": "C157991",              # JST B5B-XH-A(LF)(SN) vertical THT (plain -A, no peg)
 }
 
 # ============================================================== power entry and battery monitoring
@@ -108,10 +113,10 @@ part("U13", "LM74502DDFR", "Package_TO_SOT_SMD:Texas_DDF0008A_SOT-8_1.6x2.9mm_P0
      {"1": ("EN/UVLO", "PSW_EN"), "2": ("GND", "GND"), "3": ("NC", "NC"), "4": ("VCAP", "PSW_CAP"), "5": ("VS", "BAT_IN"),
       "6": ("GATE", "PSW_G"), "7": ("OV", "GND"), "8": ("SRC", "PSW_S")}, LCSC["LM74502"],
      "high-side switch controller (SNOSDE5A): charge pump, 60 uA gate source for inrush control, 2.4 A gate sink, -65 V reverse rating; OV unused")
-two("C14", "100nF 100V", C0805, "BAT_IN", "GND", LCSC["100n_100V_0805"], "U13 VS (>= 22 nF); 100 V: when the switch opens under load the pack-lead energy rings BAT_IN to 40-60 V (Q7 avalanches by design), and C14 is the only ceramic across the unswitched pack")
+two("C14", "100nF 100V", C0603, "BAT_IN", "GND", LCSC["100n_100V_0603"], "U13 VS (>= 22 nF); 100 V: when the switch opens under load the pack-lead energy rings BAT_IN to 40-60 V (Q7 avalanches by design), and C14 is the only ceramic across the unswitched pack")
 two("C12", "220nF 25V", C0603, "PSW_CAP", "BAT_IN", LCSC["220n_25V_0603"], "U13 VCAP to VS (>= 10 x Ciss of Q7+Q8 = 81 nF; SNOSDE5A 9.2.2.4)")
 two("R1", "4.7k", R0402, "PSW_G", "PSW_RG", LCSC["R4k7"], "RG: isolates Cdvdt from the gate so turn-off (2.4 A sink) stays fast (SNOSDE5A 8.3.3.1)")
-two("D10", "1N4148W", "Diode_SMD:D_SOD-123", "PSW_DV", "PSW_RG", LCSC["1N4148W"],
+two("D10", "1N4148WS", "Diode_SMD:D_SOD-323", "PSW_DV", "PSW_RG", LCSC["1N4148WS"],
     "Cdvdt steering: C13 can only slow the gate's rise; with a reversed pack GND is the most positive node and C13 must not push the gate up", names=("K", "A"))
 two("C13", "22nF 50V", C0603, "PSW_DV", "GND", LCSC["22n_50V_0603"], "Cdvdt: VBAT ramp ~2.2 V/ms with R32's bleed (1.3-3.0 V/ms over IGATE 40-77 uA), ~0.8 A into ~380 uF")
 two("R32", "1M", R0402, "PSW_DV", "GND", LCSC["R1M"], "resets C13 between power-ups (tau 22 ms); draws ~20-28 uA of the 40-77 uA gate drive during the ramp")
@@ -120,8 +125,8 @@ two("R14", "15k 1%", R0402, "PSW_EN", "GND", LCSC["R15k"], "EN/UVLO bottom")
 two("C18", "100nF 16V", C0402, "PSW_EN", "GND", LCSC["100n_16V_0402"], "EN/UVLO filter (1.3 ms with R13||R14): the weapon's 24 kHz bus ripple must not trip the switch UVLO on a tired pack")
 two("D4", "MMSZ5242B 12V", "Diode_SMD:D_SOD-123", "PSW_G", "PSW_S", LCSC["ZENER12"],
     "Q7/Q8 gate-source clamp: keeps Vgs < 15 V (U13 GATE-SRC abs max) and < 20 V (FET) through sag/recovery transients and at full charge-pump voltage (VCAP-VS up to 13.9 V)", names=("K", "A"))
-two("R15", "6.8k 0805", "Resistor_SMD:R_0805_2012Metric", "VBAT", "GND", LCSC["R6k8_0805"],
-    "bus bleeder (41 mW): after the switch opens, VBAT falls to the switch UVLO within ~0.1-0.4 s, so a later re-close starts soft")
+two("R15", "6.8k 0603", "Resistor_SMD:R_0603_1608Metric", "VBAT", "GND", LCSC["R6k8_0603"],
+    "bus bleeder (41 mW of 100 mW; 154 mW briefly at the 32.4 V TVS clamp): after the switch opens, VBAT falls to the switch UVLO within ~0.1-0.4 s, so a later re-close starts soft")
 two("RS4", "1mR 1% 2512", "motor_board:R_2512_JIERR_RE_small_electrode", "VBAT_SW", "VBAT", LCSC["SHUNT_1m"], "pack current shunt, after the switch FETs (INA239 inputs must stay >= -0.3 V; Kelvin to U7 through R2/R3)")
 two("R2", "10R", R0402, "VBAT_SW", "INA_INP", LCSC["R10R"], "INA239 IN+ series (TI 8.1.4: dV/dt robustness on a short)")
 two("R3", "10R", R0402, "VBAT", "INA_INN", LCSC["R10R"], "INA239 IN- series")
@@ -144,7 +149,7 @@ two("C10", "100nF 16V", C0402, "BUCK_EN", "GND", LCSC["100n_16V_0402"], "nSHDN f
 # ---- cell monitoring (balance lead): BQ76907, 4S wiring per the BQ76907 datasheet Table 7-1:
 # cells VC7-VC6 (4), VC5-VC4 (3), VC3-VC2 (2), VC1-VC0 (1); shorted VC6=VC5, VC4=VC3, VC2=VC1.
 # Host = the compute board over I2C on the header (all 52 motor-MCU I/O are in use).
-part("J4", "JST XH 5-pin (balance)", "Connector_JST:JST_XH_S5B-XH-A_1x05_P2.50mm_Horizontal",
+part("J4", "JST XH 5-pin vertical (balance)", "Connector_JST:JST_XH_B5B-XH-A_1x05_P2.50mm_Vertical",
      {"1": ("B0", "BAL0"), "2": ("B1", "BAL1"), "3": ("B2", "BAL2"), "4": ("B3", "BAL3"), "5": ("B4", "BAL4")},
      LCSC["XH5"], "4S balance lead: pin 1 = pack negative (B0) ... pin 5 = pack positive (B4); check the pack's lead order")
 for k in range(5):
@@ -207,9 +212,10 @@ two("C31", "10uF 50V", C1206, "VBAT", "GND", LCSC["10u_50V_1206"], "weapon bridg
 # buck (LMR16006X core, 0.7 MHz): 5 V / 0.6 A for the compute board and the 3.3 V LDO
 two("C27", "2.2uF 50V", C0805, "VBAT", "GND", LCSC["2u2_50V_0805"], "buck VIN at pin 47")
 two("C28", "100nF 50V", C0603, "BUCK_CB", "BUCK_SW", LCSC["100n_50V_0603"], "buck bootstrap CB-SW")
-two("L1", "FNR5040S220MT 22uH 1.8A", "Inductor_SMD:L_Changjiang_FNR5040S", "BUCK_SW", "+5V", LCSC["L22u"],
-    "buck inductor: Isat 1.6 A min / 1.8 A typ vs buck current limit 1.2 A typ / 1.7 A max (soft ferrite roll-off only in a +5V short)")
-two("D2", "SS34 40V 3A", "Diode_SMD:D_SMA", "BUCK_SW", "GND", LCSC["SS34"], "buck catch diode (carries ~ILIMIT continuously into a shorted +5V)", names=("K", "A"))
+two("L1", "ZEMS404030-220M 22uH", "Inductor_SMD:L_Changjiang_FTC404030S", "BUCK_SW", "+5V", LCSC["L22u"],
+    "buck inductor: Isat 3.1 A min / 3.5 A typ (-30 % L) vs buck current limit 1.2 A typ / 1.7 A max (no saturation even in a +5V short); DCR 220 mOhm max")
+two("D2", "PMEG4030ER 40V 3A", "Diode_SMD:Nexperia_CFP3_SOD-123W", "BUCK_SW", "GND", LCSC["PMEG4030ER"],
+    "buck catch diode (carries ~ILIMIT into a shorted +5V; heat leaves through the cathode tab = the small SW node, so a sustained short is not survivable, DESIGN 3.2)", names=("K", "A"))
 two("R20", "56k 1%", R0402, "+5V", "BUCK_FB", LCSC["R56k"], "FB top: Vout = 0.765 V x (1 + 56k/10k) = 5.05 V")
 two("R21", "10k 1%", R0402, "BUCK_FB", "GND", LCSC["R10k"], "FB bottom")
 two("C29", "22uF 25V", C0805, "+5V", "GND", LCSC["22u_25V_0805"], "buck output")
@@ -233,12 +239,12 @@ for ph, hi, lo, shunt, nt in (("A", "Q1", "Q2", "RS1", "NT1"), ("B", "Q3", "Q4",
 # weapon interlock: each phase enable INLx = TIM1_CHxN AND W_ARM_S (dynamic ARM from the compute board, below).  In 3x PWM mode
 # INLx = 0 puts the phase Hi-Z whatever INHx does, so without ARM the weapon coasts and cannot be driven, and the
 # DRV8323 stays awake (ENABLE = W_EN from the MCU) so nFAULT/CSA keep working.  W_ARM_S also goes to the MCU (PD2, FT).
-part("U6", "SN74LVC08APWR", "Package_SO:TSSOP-14_4.4x5mm_P0.65mm",
+part("U6", "SN74LVC08ABQAR", "Package_DFN_QFN:DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm",
      {"1": ("1A", "W_INLA_M"), "2": ("1B", "W_ARM_S"), "3": ("1Y", "W_INLA"),
       "4": ("2A", "W_INLB_M"), "5": ("2B", "W_ARM_S"), "6": ("2Y", "W_INLB"), "7": ("GND", "GND"),
       "8": ("3Y", "W_INLC"), "9": ("3A", "W_INLC_M"), "10": ("3B", "W_ARM_S"),
-      "11": ("4Y", "NC"), "12": ("4A", "GND"), "13": ("4B", "GND"), "14": ("VCC", "+3V3")},
-     LCSC["74LVC08"], "hardware weapon interlock (SN74LVC08A pinout, SCAS283; 4th gate inputs grounded)")
+      "11": ("4Y", "NC"), "12": ("4A", "GND"), "13": ("4B", "GND"), "14": ("VCC", "+3V3"), "15": ("EP", "GND")},
+     LCSC["74LVC08"], "hardware weapon interlock (SN74LVC08A BQA pinout, SCAS283; 4th gate inputs grounded; thermal pad to GND)")
 two("C40", "100nF 16V", C0402, "+3V3", "GND", LCSC["100n_16V_0402"], "U6 decoupling")
 two("R40", "100k", R0402, "W_EN", "GND", LCSC["R100k"], "U2 ENABLE low (sleep) while the MCU is in reset")
 # dynamic ARM: the compute board must keep toggling W_ARM_CLK from its control loop (>= 500 Hz, 3.3 V square wave).
@@ -287,12 +293,11 @@ def drv8316(ref, s):
     n = int(ref[1:]) * 100
     two(f"C{n}", "100nF 50V", C0603, f"{s}_VM", "GND", LCSC["100n_50V_0603"], f"{ref} VM pin 9")
     two(f"C{n+1}", "100nF 50V", C0603, f"{s}_VM", "GND", LCSC["100n_50V_0603"], f"{ref} VM pin 11")
-    two(f"C{n+2}", "10uF 50V", C1206, f"{s}_VM", "GND", LCSC["10u_50V_1206"], f"{ref} VM bulk")
-    two(f"C{n+8}", "10uF 50V", C1206, f"{s}_VM", "GND", LCSC["10u_50V_1206"], f"{ref} VM bulk (1206 50 V X5R keeps ~4 uF at 16.8 V each)")
-    two(f"C{n+9}", "10uF 50V", C1206, f"{s}_VM", "GND", LCSC["10u_50V_1206"], f"{ref} VM bulk (with R{n+2}: ~16 uF effective behind 0.1 ohm)")
-    two(f"C{n+10}", "10uF 50V", C1206, f"{s}_VM", "GND", LCSC["10u_50V_1206"], f"{ref} VM bulk")
+    # 2 x 1210 X7R (was 4 x 1206 X5R, which keep only ~2.3 uF each at 16.8 V; review/v2_parts/adversarial/mlcc_dcbias.md)
+    two(f"C{n+2}", "10uF 50V X7R 1210", C1210, f"{s}_VM", "GND", LCSC["10u_50V_1210"], f"{ref} VM bulk (1210 X7R keeps ~7.6 uF at 16.8 V)")
+    two(f"C{n+8}", "10uF 50V X7R 1210", C1210, f"{s}_VM", "GND", LCSC["10u_50V_1210"], f"{ref} VM bulk (with R{n+2}: ~15 uF effective behind 0.1 ohm)")
     two(f"R{n+2}", "0.1R 1W 2512", "Resistor_SMD:R_2512_6332Metric", "VBAT", f"{s}_VM", LCSC["R0R1_2512"],
-        f"{ref} VM feed: with C{n+2}/C{n+8}-C{n+10} a ~1.6 us RC that isolates the DRV8316 (4 V/us VM abs max) from bus events: "
+        f"{ref} VM feed: with C{n+2}/C{n+8} a ~1.5 us RC that isolates the DRV8316 (4 V/us VM abs max) from bus events: "
         "loaded contact bounce 3.75 -> 2.26 V/us, worst re-close 3.44 -> 2.09 V/us, weapon fault-clear kick 9-11 -> ~1-2 V/us (review sims); "
         "0.11/0.24/0.52 W at 1/1.5/2 A rms incl. the drive's own PWM ripple (RC corner ~99 kHz), <= ~1 W in weapon bursts; 0.8 V drop at an 8 A peak")
     two(f"C{n+3}", "1uF 50V", C0603, f"{s}_CP", f"{s}_VM", LCSC["1u_50V_0603"], f"{ref} CP to VM")
@@ -300,8 +305,8 @@ def drv8316(ref, s):
     two(f"C{n+5}", "1uF 50V", C0603, f"{s}_AVDD", "GND", LCSC["1u_50V_0603"], f"{ref} AVDD (TI: 0.7-1.3 uF effective at 3.3 V)")
     two(f"C{n+6}", "100nF 16V", C0402, f"{s}_AVDD", "GND", LCSC["100n_16V_0402"], f"{ref} VREF pin 37 (tied to its own AVDD: ROC is 2.8 V..AVDD, and AVDD can be as low as 3.1 V)")
     # buck unused: SLVSH07 8.3.4.2 / 9.2.1.1.5 resistor mode, RBK 22 ohm + CBK 22 uF populated, then CTRL6 = 0x19 over SPI
-    two(f"R{n}", "22R 1206", "Resistor_SMD:R_1206_3216Metric", f"{s}_SWBK", f"{s}_FBBK", LCSC["R22_1206"],
-        f"{ref} buck unused: resistor mode (SLVSH07 9.2.1.1.5); 1206 for dissipation until firmware sets BUCK_DIS")
+    two(f"R{n}", "22R 0603 anti-surge", "Resistor_SMD:R_0603_1608Metric", f"{s}_SWBK", f"{s}_FBBK", LCSC["R22_0603_surge"],
+        f"{ref} buck unused: resistor mode (SLVSH07 9.2.1.1.5); 250 mW anti-surge (68-100 mW until firmware sets BUCK_DIS)")
     two(f"C{n+7}", "22uF 25V", C0805, f"{s}_FBBK", "GND", LCSC["22u_25V_0805"], f"{ref} buck unused: CBK (SLVSH07: 22 uF, >= 10 V)")
     two(f"R{n+1}", "10k 1%", R0402, f"{s}_nFAULT", f"{s}_AVDD", LCSC["R10k"],
         f"{ref} nFAULT pull-up to its own AVDD (TI: pull up to AVDD; valid whenever the chip is powered)")
@@ -319,10 +324,10 @@ two("R50", "10k 1%", R0402, "DRV_OFF", "+3V3", LCSC["R10k"], "DRVOFF high = both
 # so 5 V push-pull sensors are safe and the MCU's TT_a pins (PB0, PB10) never see more than 3.3 V.
 for s, jref, jp, rt, ub, us, rp, cn, sr, dt in (("L", "J2", "JP1", "R52", "U9", "U11", 54, 45, 110, 7),
                                                ("R", "J3", "JP2", "R53", "U10", "U12", 57, 48, 114, 8)):
-    part(jref, "SH1.0 6P SMD R/A", "motor_board:SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB",
+    part(jref, "SH1.0 6P SMD vertical", "Connector_JST:JST_SH_BM06B-SRSS-TB_1x06-1MP_P1.00mm_Vertical",
          {"1": ("VS", f"{s}_VS"), "2": ("GND", "GND"), "3": ("S1", f"{s}_H1"), "4": ("S2", f"{s}_H2"),
           "5": ("S3", f"{s}_H3"), "6": ("TEMP", f"{s}_TEMPJ"), "MP": ("MP", "GND")},
-         LCSC["SM06B"], f"drive {s} sensor: 1 VS, 2 GND, 3 H1/A/U, 4 H2/B/V, 5 H3/Z/W, 6 motor NTC (JST SH compatible)")
+         LCSC["BM06B"], f"drive {s} sensor: 1 VS, 2 GND, 3 H1/A/U, 4 H2/B/V, 5 H3/Z/W, 6 motor NTC (JST SH compatible)")
     part(jp, "SolderJumper_3", "Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm",
          {"1": ("A", "+3V3"), "2": ("C", f"{s}_VSRC"), "3": ("B", "+5V")},
          desc=f"sensor {s} supply: 1-2 = 3.3 V (default, bridged), 2-3 = 5 V (5 V Hall ICs)")

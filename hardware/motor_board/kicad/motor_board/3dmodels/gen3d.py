@@ -1,6 +1,6 @@
 from build123d import *
 import os
-D = "/home/smance/projects/thumbsup/.claude/worktrees/routing/hardware/motor_board/kicad/motor_board/3dmodels"
+D = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(D, exist_ok=True)
 BODY = Color(0.15, 0.15, 0.15)
 PIN = Color(0.82, 0.82, 0.78)
@@ -23,6 +23,34 @@ def save(parts, name):
     print(p, c.bounding_box())
 
 # model coords: Y up (KiCad footprint Y is down) -> pad (x, y) => model (x, -y)
+
+def wqfn14_bqa():
+    # ---- TI BQA0014A WQFN-14 2.5 x 3.0, P0.5, EP 1.0 x 1.5, 0.8 max (U6, SN74LVC08ABQAR) ----
+    # pads (footprint DHWQFN-14-1EP_2.5x3mm): 1 / 14 at x -+0.25 on the top short side, 2-6 left (y -1..1),
+    # 7 / 8 bottom short side, 9-13 right (y 1..-1)
+    H, L, W, T = 0.75, 0.4, 0.25, 0.2
+    body = box(-1.25, 1.25, -1.5, 1.5, 0.02, H)
+    dot = Pos(-0.75, 1.1, H) * Cylinder(0.12, 0.02)
+    pins = []
+    for i in range(5):
+        y = 1.0 - 0.5 * i                                                  # model Y up: pad 2 (fp y -1) at +1
+        pins.append(box(-1.25, -1.25 + L, y - W/2, y + W/2, 0, T))        # left 2-6
+        pins.append(box(1.25 - L, 1.25, y - W/2, y + W/2, 0, T))          # right 13-9
+    for x in (-0.25, 0.25):
+        pins.append(box(x - W/2, x + W/2, 1.5 - L, 1.5, 0, T))            # 1 / 14
+        pins.append(box(x - W/2, x + W/2, -1.5, -1.5 + L, 0, T))          # 7 / 8
+    ep = box(-0.5, 0.5, -0.75, 0.75, 0, T)
+    body = body - Compound(pins) - ep
+    save([(body, BODY, "body"), (Compound(pins + [ep]), PIN, "pins"), (dot, MARK, "pin1")],
+         "DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm")
+
+
+import sys
+if sys.argv[1:] == ["wqfn14"]:
+    wqfn14_bqa()
+    raise SystemExit
+wqfn14_bqa()
+
 
 # ---- QFN-20 3.5x3.5 P0.5 EP2x2 (TI RGR, VQFN 0.9 typ / 1.0 max) ----
 H = 0.9

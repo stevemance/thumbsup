@@ -26,12 +26,12 @@ BLOCKS = {
     },
     "drive_left": {
         "Drive L (DRV8316C)": ["U3", "C303", "C304", "C305", "C306", "R301", "R300", "C307"],
-        "VM filter": ["R302", "C300", "C301", "C302", "C308", "C309", "C310"],
+        "VM filter": ["R302", "C300", "C301", "C302", "C308"],
         "Motor wires": ["JL1", "JL2", "JL3"],
     },
     "drive_right": {
         "Drive R (DRV8316C)": ["U4", "C403", "C404", "C405", "C406", "R401", "R400", "C407"],
-        "VM filter": ["R402", "C400", "C401", "C402", "C408", "C409", "C410"],
+        "VM filter": ["R402", "C400", "C401", "C402", "C408"],
         "Motor wires": ["JR1", "JR2", "JR3"],
         "DRV_OFF pull-up (shared)": ["R50", "TP8"],
     },

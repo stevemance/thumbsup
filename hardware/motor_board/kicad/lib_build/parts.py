@@ -117,13 +117,16 @@ STOCK = {
     "INA239AIDGSR": dict(lcsc="C2876522", src=("Sensor_Energy", "INA229"), ref="U",
         desc="85 V, 16-bit SPI current/voltage/power monitor (INA239; pin-compatible with INA229)",
         datasheet=DS + "ina239.pdf", fp="Package_SO:MSOP-10_3x3mm_P0.5mm"),
-    # SN74LVC08A PW pinout: 1A 1, 1B 2, 1Y 3, 2A 4, 2B 5, 2Y 6, GND 7, 3Y 8, 3A 9, 3B 10, 4Y 11,
-    # 4A 12, 4B 13, VCC 14
-    "SN74LVC08APWR": dict(lcsc="C465737", src=("74xx", "74LS08"), ref="U",
+    # SN74LVC08A BQA (WQFN-14) pinout (SCAS283, one pin-number column shared with PW): 1A 1, 1B 2, 1Y 3,
+    # 2A 4, 2B 5, 2Y 6, GND 7, 3Y 8, 3A 9, 3B 10, 4Y 11, 4A 12, 4B 13, VCC 14, thermal pad 15 (GND or
+    # floating per TI; tied to GND here).  Footprint: KiCad's BQA0014A-tagged DHWQFN (TI land 0.25 x 0.6,
+    # EP 1.0 x 1.5; identical to JLC's).
+    "SN74LVC08ABQAR": dict(lcsc="C31971766", src=("74xx", "74LS08"), ref="U",
         rename={"1": "1A", "2": "1B", "3": "1Y", "4": "2A", "5": "2B", "6": "2Y", "8": "3Y", "9": "3A",
                 "10": "3B", "11": "4Y", "12": "4A", "13": "4B"},
-        desc="Quad 2-input AND gate, 1.65-3.6 V, TSSOP-14 (SN74LVC08A)",
-        datasheet=DS + "sn74lvc08a.pdf", fp="Package_SO:TSSOP-14_4.4x5mm_P0.65mm"),
+        add_pins=[("5_0", "15", "EP", "passive", 2.54, -12.7, 90)],
+        desc="Quad 2-input AND gate, 1.65-3.6 V, WQFN-14 BQA with thermal pad (SN74LVC08A)",
+        datasheet=DS + "sn74lvc08a.pdf", fp="Package_DFN_QFN:DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm"),
     # Diodes 74LVC1G17 SOT353 (SE) pinout: 1 NC, 2 A, 3 GND, 4 Y, 5 VCC
     "74LVC1G17SE-7": dict(lcsc="C212314", src=("74xGxx", "74LVC1G17"), ref="U", rename={"2": "A", "4": "Y"},
         desc="Single Schmitt-trigger buffer, SOT-353 (Diodes 74LVC1G17SE)",
@@ -148,17 +151,22 @@ STOCK = {
         datasheet="https://assets.nexperia.com/documents/data-sheet/BAT54S.pdf", fp="Package_TO_SOT_SMD:SOT-23"),
     "SMBJ20A": dict(lcsc="C151922", src=("Device", "D_Zener"), ref="D",
         desc="Unidirectional TVS 20 V standoff, 600 W, SMB (BORN SMBJ20A)", datasheet="", fp="Diode_SMD:D_SMB"),
-    "SS34": dict(lcsc="C8678", src=("Diode", "SS34"), ref="D", desc="Schottky 40 V 3 A, SMA", datasheet="", fp="Diode_SMD:D_SMA"),
-    "1N4148W": dict(lcsc="C81598", src=("Diode", "1N4148W"), ref="D", desc="Switching diode 75 V 150 mA, SOD-123",
-        datasheet="", fp="Diode_SMD:D_SOD-123"),
+    # PMEG4030ER CFP3 / SOD-123W: pad 1 = cathode (Nexperia land 1.2 x 1.2 at 2.8 mm, = KiCad's footprint)
+    "PMEG4030ER": dict(lcsc="C389355", src=("Device", "D_Schottky"), ref="D",
+        desc="Schottky 40 V 3 A, VF 0.44 V max @ 1 A, Tj 150 C, CFP3 / SOD-123W (Nexperia PMEG4030ER)",
+        datasheet="https://assets.nexperia.com/documents/data-sheet/PMEG4030ER.pdf", fp="Diode_SMD:Nexperia_CFP3_SOD-123W"),
+    "1N4148WS": dict(lcsc="C2128", src=("Diode", "1N4148WS"), ref="D", desc="Switching diode 100 V 150 mA, SOD-323",
+        datasheet="", fp="Diode_SMD:D_SOD-323"),
     "MMSZ5242B": dict(lcsc="C21567", src=("Device", "D_Zener"), ref="D", desc="Zener 12 V 350 mW, SOD-123 (JSCJ MMSZ5242B)",
         datasheet="", fp="Diode_SMD:D_SOD-123"),
     "B5819W": dict(lcsc="C8598", src=("Device", "D_Schottky"), ref="D", desc="Schottky 40 V 1 A, SOD-123",
         datasheet="", fp="Diode_SMD:D_SOD-123"),
     "KT-0603R": dict(lcsc="C2286", src=("Device", "LED"), ref="D", desc="LED red 0603 (KENTO KT-0603R)",
         datasheet="", fp="LED_SMD:LED_0603_1608Metric"),
-    "FNR5040S220MT": dict(lcsc="C167971", src=("Device", "L"), ref="L", desc="22 uH 1.6 A shielded inductor 5x5x4 (Changjiang FNR5040S220MT)",
-        datasheet="", fp="Inductor_SMD:L_Changjiang_FNR5040S"),
+    # ZE ZEMS404030-220M land (A 4.10 pad length, B 1.30 gap, C 4.10) = KiCad's FTC404030S (1.4 x 4.1 at +-1.35)
+    "ZEMS404030-220M": dict(lcsc="C49009291", src=("Device", "L"), ref="L",
+        desc="22 uH molded inductor 4.1x4.1x3.0, Isat 3.1 A min (-30 % L), DCR 220 mOhm max (ZE ZEMS404030-220M)",
+        datasheet="", fp="Inductor_SMD:L_Changjiang_FTC404030S"),
     "EEHZK1V331P": dict(lcsc="C278516", src=("Device", "C_Polarized"), ref="C", rename={"1": "+", "2": "-"}, desc="330 uF 35 V hybrid polymer 10x10.2 (Panasonic EEH-ZK1V331P)",
         datasheet="", fp="Capacitor_SMD:CP_Elec_10x10.5"),
     "HoLR2512-3W-2mR": dict(lcsc="C2844506", src=("Device", "R"), ref="R", desc="2 mOhm 1% 3 W 2512 alloy shunt (Milliohm HoLR2512)",
@@ -170,27 +178,30 @@ STOCK = {
     "BOOMELE_1.27-2x10P": dict(lcsc="C59981", src=("Connector_Generic", "Conn_02x10_Odd_Even"), ref="J",
         desc="2x10 1.27 mm SMD male header, 5.5 mm lead span (BOOMELE 1.27-2*10P)",
         datasheet="", fp="motor_board:BOOMELE_1.27-2x10P_SMD"),
-    "WAFER-SH1.0-6PWB": dict(lcsc="C3029345", src=("Connector_Generic_MountingPin", "Conn_01x06_MountingPin"), ref="J",
-        desc="SH 1.0 mm 6-pin SMD right-angle (XUNPU WAFER-SH1.0-6PWB, JST SM06B-SRSS-TB compatible)",
-        datasheet="", fp="motor_board:SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB"),
-    "S5B-XH-A": dict(lcsc="C263757", src=("Connector_Generic", "Conn_01x05"), ref="J",
-        desc="JST XH 5-pin side-entry THT (balance lead)", datasheet="",
-        fp="Connector_JST:JST_XH_S5B-XH-A_1x05_P2.50mm_Horizontal"),
+    # genuine JST vertical SH; KiCad's footprint = JST's layout, pin 1 at x = -2.5 (JLC's EasyEDA copy is
+    # rotated 180 deg: fix the rotation in the CPL, FAB.md)
+    "BM06B-SRSS-TB": dict(lcsc="C160392", src=("Connector_Generic_MountingPin", "Conn_01x06_MountingPin"), ref="J",
+        desc="JST SH 1.0 mm 6-pin SMD vertical (BM06B-SRSS-TB)",
+        datasheet="", fp="Connector_JST:JST_SH_BM06B-SRSS-TB_1x06-1MP_P1.00mm_Vertical"),
+    # plain -A (no locating peg); JLC's footprint is rotated 180 deg with the origin at the body centre (CPL, FAB.md)
+    "B5B-XH-A": dict(lcsc="C157991", src=("Connector_Generic", "Conn_01x05"), ref="J",
+        desc="JST XH 5-pin vertical THT (balance lead), 9.8 mm mated", datasheet="",
+        fp="Connector_JST:JST_XH_B5B-XH-A_1x05_P2.50mm_Vertical"),
 }
 
 # BOM comment (design/bom.csv "Comment") → library symbol, for check_lib.py
 BOM_TO_SYMBOL = {
     "STM32G474RET6": "STM32G474RET6", "DRV8323RHRGZR": "DRV8323RHRGZR", "DRV8316CRRGFR": "DRV8316CRRGFR",
     "INA239AIDGSR": "INA239AIDGSR", "BQ76907RGRR": "BQ76907RGRR", "LM74502DDFR": "LM74502DDFR",
-    "TPS22945DCKR": "TPS22945DCKR", "SN74LVC08APWR": "SN74LVC08APWR", "74LVC1G17SE-7": "74LVC1G17SE-7",
+    "TPS22945DCKR": "TPS22945DCKR", "SN74LVC08ABQAR": "SN74LVC08ABQAR", "74LVC1G17SE-7": "74LVC1G17SE-7",
     "SN74LVC3G17DCUR": "SN74LVC3G17DCUR", "AP2112K-3.3TRG1": "AP2112K-3.3TRG1",
     "HYG015N04LS1C2": "HYG015N04LS1C2", "BAV99": "BAV99", "BAT54S": "BAT54S", "SMBJ20A": "SMBJ20A",
-    "SS34 40V 3A": "SS34", "1N4148W": "1N4148W", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W",
-    "LED red": "KT-0603R", "FNR5040S220MT 22uH 1.8A": "FNR5040S220MT",
+    "PMEG4030ER 40V 3A": "PMEG4030ER", "1N4148WS": "1N4148WS", "MMSZ5242B 12V": "MMSZ5242B", "B5819W": "B5819W",
+    "LED red": "KT-0603R", "ZEMS404030-220M 22uH": "ZEMS404030-220M",
     "330uF 35V hybrid polymer": "EEHZK1V331P", "2mR 1% 2512": "HoLR2512-3W-2mR",
     "1mR 1% 2512": "RE2512F3R001", "0.1R 1W 2512": "25121WF100LT4E",
-    "B2B 2x10 1.27mm male": "BOOMELE_1.27-2x10P", "SH1.0 6P SMD R/A": "WAFER-SH1.0-6PWB",
-    "JST XH 5-pin (balance)": "S5B-XH-A",
+    "B2B 2x10 1.27mm male": "BOOMELE_1.27-2x10P", "SH1.0 6P SMD vertical": "BM06B-SRSS-TB",
+    "JST XH 5-pin vertical (balance)": "B5B-XH-A",
 }
 
 # ---------------------------------------------------------------- custom footprints (motor_board.pretty)
@@ -256,9 +267,9 @@ EASYEDA_DEVIATIONS = {
 
 # Gate grouping per unit for multi-unit symbols (datasheet pinouts), checked by check_lib.
 UNITS = {
-    # SN74LVC08A PW: gate 1 = 1A,1B,1Y (1,2,3); gate 2 = 4,5,6; gate 3 = 3A,3B,3Y (9,10,8);
+    # SN74LVC08A (PW and BQA share the numbers): gate 1 = 1A,1B,1Y (1,2,3); gate 2 = 4,5,6; gate 3 = 3A,3B,3Y (9,10,8);
     # gate 4 = 4A,4B,4Y (12,13,11); power GND 7, VCC 14
-    "SN74LVC08APWR": [{"1", "2", "3"}, {"4", "5", "6"}, {"8", "9", "10"}, {"11", "12", "13"}, {"7", "14"}],
+    "SN74LVC08ABQAR": [{"1", "2", "3"}, {"4", "5", "6"}, {"8", "9", "10"}, {"11", "12", "13"}, {"7", "14", "15"}],
     # SN74LVC3G17 DCU: 1A/1Y (1,7), 2A/2Y (3,5), 3A/3Y (6,2); power GND 4, VCC 8
     "SN74LVC3G17DCUR": [{"1", "7"}, {"3", "5"}, {"2", "6"}, {"4", "8"}],
 }
@@ -268,7 +279,7 @@ UNITS = {
 STOCK_EASYEDA_REF = {
     "Package_TO_SOT_SMD:SOT-353_SC-70-5": "SC-70-5_L2.1-W1.3-P0.65-LS2.1-BL",
     "Package_TO_SOT_SMD:Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm": "SOT-23-8_L2.9-W1.6-P0.65-LS2.8-BL",
-    "Package_SO:TSSOP-14_4.4x5mm_P0.65mm": "TSSOP-14_L5.0-W4.4-P0.65-LS6.4-BL",
+    "Package_DFN_QFN:DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm": "WQFN-14_L3.0-W2.5-P0.50-TL-EP_TXS0104EQWBQARQ1",
     "Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm": "VQFN-20_L3.5-W3.5-P0.50-TL-EP2.1",
     "Package_DFN_QFN:Texas_RGZ0048A_VQFN-48-1EP_7x7mm_P0.5mm_EP5.15x5.15mm": "VQFN-48_L7.0-W7.0-P0.50-TL-EP5.1",
     "Package_SO:MSOP-10_3x3mm_P0.5mm": "VSSOP-10_L3.0-W3.0-P0.50-LS4.9-BL",

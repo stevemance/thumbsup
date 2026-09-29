@@ -37,7 +37,8 @@ design decision changes one of these, change it here too. Tick through it on ord
 | Panel / rails | board under 70 x 70 mm: **rails on all four edges**, **mouse-bite tabs (no V-cut) on the rear edge**, tabs away from J2, J3, C29, C30, R402 | pads are 0.40 mm from the rear edge (PLACEMENT 6) |
 | Fiducials | added by JLC | JLC help (PLACEMENT 6) |
 | Reflow order | bottom side first | nothing on the bottom is heavy |
-| Through-hole | J4 (JST S5B-XH-A): JLC THT assembly **or** hand-solder | BOM.md |
+| Through-hole | J4 (JST B5B-XH-A vertical): JLC THT assembly **or** hand-solder | BOM.md |
+| **CPL rotation check** | **J2, J3 (JST BM06B) and J4 (B5B-XH-A): JLC's footprints are ours rotated 180° (J4's origin is also at the body centre: +5 mm X offset).  Correct them in the CPL and check pin 1 in JLC's placement preview**: a reversed J4 puts B− on pin 5, a reversed J2/J3 swaps all six signals.  Also check U6 (WQFN-14 pin 1) and D2 (cathode = pad 1) | review/v2_parts/adversarial/jlc_footprints.md |
 | Not assembled | wire holes JBAT1/2, JW1-3, JL1-3, JR1-3; test pads; net ties; solder jumpers JP1/JP2 (copper, bridged 1-2 by default); MH1-MH4 | out of the BOM by design |
 | DNP | C110-C112, C114-C116 (sensor line filters, fit only for Hall sensors) | BOM.md |
 | BOM / CPL | from the KiCad board (the LCSC field is on every part) | kicad-jlcpcb-tools |

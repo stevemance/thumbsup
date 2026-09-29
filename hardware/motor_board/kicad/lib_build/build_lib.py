@@ -84,6 +84,9 @@ def stock_symbol(name, spec, lcsc, libcache):
             num = K.child(pin, "number")[1]
             if num in spec.get("rename", {}):
                 K.child(pin, "name")[1] = Str(spec["rename"][num])
+    for unit_sfx, num, pname, etype, x, y, ang in spec.get("add_pins", []):   # e.g. an exposed pad the stock part lacks
+        unit = next(u for u in K.children(node, "symbol") if u[1] == f"{name}_{unit_sfx}")
+        unit.append(pin_node((num, pname, etype, None), x, y, ang, length=5.08))
     set_props(node, name, spec, lcsc)
     return node
 

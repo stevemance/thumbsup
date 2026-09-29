@@ -13,6 +13,7 @@ MODELS = {
     "QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm": P + "QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step",
     "Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm": P + "Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm.step",
     "SH1.0-6P_RA_XUNPU_WAFER-SH1.0-6PWB": K + "Connector_JST.3dshapes/JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal.step",
+    "DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm": P + "DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm.step",
     "BOOMELE_1.27-2x10P_SMD": K + "Connector_PinHeader_1.27mm.3dshapes/PinHeader_2x10_P1.27mm_Vertical_SMD.step",
     "R_2512_HoLR_1-4mR": K + "Resistor_SMD.3dshapes/R_2512_6332Metric.step",
     "R_2512_JIERR_RE_small_electrode": K + "Resistor_SMD.3dshapes/R_2512_6332Metric.step",

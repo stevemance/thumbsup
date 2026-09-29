@@ -19,13 +19,13 @@ inside one sheet: draw them as plain wires (or local labels).
 
 ## drive_left
 
-**Parts:** C300, C301, C302, C303, C304, C305, C306, C307, C308, C309, C310, JL1, JL2, JL3, R300, R301, R302, U3
+**Parts:** C300, C301, C302, C303, C304, C305, C306, C307, C308, JL1, JL2, JL3, R300, R301, R302, U3
 
 **Global labels:** DRV_OFF, L_INHA, L_INHB, L_INHC, L_SOA, L_SOB, L_SOC, L_nCS, L_nFAULT, SPI_MISO, SPI_MOSI, SPI_SCK, VBAT
 
 ## drive_right
 
-**Parts:** C400, C401, C402, C403, C404, C405, C406, C407, C408, C409, C410, JR1, JR2, JR3, R50, R400, R401, R402, TP8, U4
+**Parts:** C400, C401, C402, C403, C404, C405, C406, C407, C408, JR1, JR2, JR3, R50, R400, R401, R402, TP8, U4
 
 **Global labels:** DRV_OFF, R_INHA, R_INHB, R_INHC, R_SOA, R_SOB, R_SOC, R_nCS, R_nFAULT, SPI_MISO, SPI_MOSI, SPI_SCK, VBAT
 
