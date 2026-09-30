@@ -22,8 +22,13 @@
 #define HCI_ACL_CHUNK_SIZE_ALIGNMENT 4
 
 #define MAX_NR_HCI_CONNECTIONS 1
-#define MAX_NR_L2CAP_CHANNELS 3
-#define MAX_NR_L2CAP_SERVICES 2
+// SDP + HID control + HID interrupt can be open at once when a host connects to us.
+#define MAX_NR_L2CAP_CHANNELS 4
+// SDP (PSM 0x0001) + HID control (0x11) + HID interrupt (0x13).  With only 2 slots
+// the HID control PSM silently fails to register and every host-initiated HID
+// connection is refused (L2CAP result 0x0002 PSM not supported), so the robot
+// could never reconnect to the emulator on its own.
+#define MAX_NR_L2CAP_SERVICES 3
 #define MAX_NR_BTSTACK_LINK_KEY_DB_MEMORY_ENTRIES 2
 
 // Limit number of ACL buffers to avoid cyw43 shared bus overrun

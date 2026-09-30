@@ -3,12 +3,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "btstack.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
+
+#define LATENCY_MARKER_PIN 15  // GP15 - probed by the HITL logic analyzer
 
 #define REPORT_INTERVAL_MS 10
 #define SERIAL_POLL_MS 5
@@ -90,6 +93,8 @@ static gamepad_state_t gp_state;
 static bool state_dirty = true;
 static bool send_pending = false;
 static uint32_t last_report_ms = 0;
+// PAUSE <ms>: stop sending reports (link stays up) to test report-age failsafes.
+static uint32_t pause_until_ms = 0;
 static uint32_t last_cmd_ms = 0;
 static uint16_t hid_cid = 0;
 static hci_con_handle_t hid_con_handle = 0;
@@ -237,13 +242,19 @@ static void send_report(void) {
     message[7] = (uint8_t)gp_state.ry;
 
     hid_device_send_interrupt_message(hid_cid, message, sizeof(message));
+    // HITL latency marker: high while this report carries a deflected stick.
+    // Mirrors gamepad_is_deflected() in the robot firmware (int8 * 4 scaling).
+    gpio_put(LATENCY_MARKER_PIN,
+             abs(gp_state.lx) > 64 || abs(gp_state.ly) > 64 ||
+             abs(gp_state.rx) > 64 || abs(gp_state.ry) > 64 ||
+             (gp_state.buttons & (BTN_L2_MASK | BTN_R2_MASK)));
     send_pending = false;
     state_dirty = false;
     last_report_ms = btstack_run_loop_get_time_ms();
 
     // HITL latency instrumentation: log the time the HID report was sent.
-    printf("HITL SENT t_ms=%lu ry=%d\n",
-           (unsigned long)last_report_ms, (int)(int8_t)gp_state.ry);
+    printf("HITL SENT t_ms=%lu ry=%d buttons=0x%04x\n",
+           (unsigned long)last_report_ms, (int)(int8_t)gp_state.ry, gp_state.buttons);
 }
 
 static void request_send(void) {
@@ -275,6 +286,7 @@ static void print_help(void) {
     printf("  DPAD <CENTER|UP|UP_RIGHT|RIGHT|DOWN_RIGHT|DOWN|DOWN_LEFT|LEFT|UP_LEFT>\n");
     printf("  RESET\n");
     printf("  STATE\n");
+    printf("  PAUSE <ms>\n");
     printf("  HELP\n");
 }
 
@@ -433,6 +445,14 @@ static void handle_line(char* line) {
         return;
     }
 
+    if (streq_case(cmd, "PAUSE")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        unsigned long ms = value ? strtoul(value, NULL, 0) : 0;
+        pause_until_ms = btstack_run_loop_get_time_ms() + (uint32_t)ms;
+        printf("OK PAUSE ms=%lu\n", ms);
+        return;
+    }
+
     if (streq_case(cmd, "STATE")) {
         print_state();
         return;
@@ -489,7 +509,8 @@ static void poll_timer_handler(btstack_timer_source_t* ts) {
             gap_sniff_mode_exit(hid_con_handle);
             last_sniff_exit_ms = now;
         }
-        if (state_dirty || (now - last_report_ms) >= REPORT_INTERVAL_MS) {
+        bool paused = (int32_t)(pause_until_ms - now) > 0;
+        if (!paused && (state_dirty || (now - last_report_ms) >= REPORT_INTERVAL_MS)) {
             request_send();
         }
     }
@@ -623,6 +644,10 @@ int btstack_main(int argc, const char* argv[]) {
     hci_event_callback_registration.callback = &packet_handler;
     hci_add_event_handler(&hci_event_callback_registration);
     hid_device_register_packet_handler(&packet_handler);
+
+    gpio_init(LATENCY_MARKER_PIN);
+    gpio_set_dir(LATENCY_MARKER_PIN, GPIO_OUT);
+    gpio_put(LATENCY_MARKER_PIN, 0);
 
     poll_timer.process = &poll_timer_handler;
     btstack_run_loop_set_timer(&poll_timer, SERIAL_POLL_MS);
