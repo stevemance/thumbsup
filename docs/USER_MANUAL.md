@@ -142,17 +142,18 @@ once Bluetooth is ready. It is not used during normal operation.
 
 ## Driving
 
-Drive uses **arcade-style mixing** on the **left analog stick**.
+Drive uses **split-stick** arcade mixing: the **left stick** is throttle and the
+**right stick** is turn, so a turn can be made without touching the throttle and
+vice versa. (Compile-time option `DRIVE_LAYOUT_SPLIT 0` restores single-stick.)
 
-### Left Stick Mapping
+### Stick Mapping
 
-| Axis | Direction | Action |
-|------|-----------|--------|
-| Y-axis | Push forward (up) | Drive forward |
-| Y-axis | Pull backward (down) | Drive backward |
-| X-axis | Push right | Turn right |
-| X-axis | Push left | Turn left |
-| Diagonal | Any combination | Combined driving and turning |
+| Stick | Direction | Action |
+|-------|-----------|--------|
+| Left stick Y | Push forward (up) | Drive forward |
+| Left stick Y | Pull backward (down) | Drive backward |
+| Right stick X | Push right | Turn right |
+| Right stick X | Push left | Turn left |
 
 ### Drive Parameters
 
@@ -160,19 +161,20 @@ Drive uses **arcade-style mixing** on the **left analog stick**.
 |-----------|-------|
 | Maximum Drive Speed | 75% of motor maximum |
 | Maximum Turn Speed | 70% of motor maximum |
-| Stick Deadzone | 15 (out of 512 raw range) |
-| Expo Curve | 70% cubic |
+| Deadzones (512 raw range) | Throttle 24, turn 32 |
+| Expo Curve | Throttle 70% cubic, turn 30% cubic |
+| Drive PWM | 100 Hz (the SAX2 drive ESC reacts after ~5 frames) |
 
 ### Expo Curve
 
-The 70% expo curve provides fine control at low stick deflections while preserving
-full power at the extremes. At 50% stick, the actual output is much lower than 50%,
-making precise maneuvering easier. Full-throw still reaches full speed.
+The throttle uses a 70% expo curve: fine control at low stick deflection, full
+power at full throw. Turn uses a much flatter 30% curve, so turn rate is close to
+proportional to stick position; with 70% expo most of the turn rate sat in the
+last fifth of stick travel, which made flick turns overshoot.
 
 ### Arcade Mixing
 
-The left stick Y-axis controls forward/backward speed and the X-axis controls
-turning. These are combined:
+Throttle (left stick Y) and turn (right stick X) are combined:
 
 - **Left motor** = forward + turn
 - **Right motor** = forward - turn
@@ -207,7 +209,8 @@ brushless motor through an AM32 ESC.
 2. The firmware sends DShot throttle-zero for ~2 seconds to arm the ESC.
 3. A direction-change prime sequence is sent (required for AM32 3D mode startup).
 4. The weapon LED turns **orange** (armed, not spinning).
-5. Use the right stick to control weapon speed.
+5. Release both triggers, then hold a trigger to spin (see below). A trigger held
+   while arming is ignored until it has been released once.
 
 ### Arming Will Be Rejected If
 
@@ -220,20 +223,19 @@ brushless motor through an AM32 ESC.
 
 | Control | Action |
 |---------|--------|
-| Right Stick Y forward (up) | Increase weapon speed (forward spin) |
-| Right Stick Y backward (down) | Reverse weapon spin (3D mode) |
-| Right Stick centered | Weapon at idle (0% throttle while armed) |
+| Hold **ZR** (right trigger) | Spin forward at full speed (ramps up over ~1.5 s) |
+| Hold **ZL** (left trigger) | Spin in reverse at full speed (3D mode) |
+| Release | Weapon spins down |
+| Both held | The trigger pressed first wins; releasing it hands over to the other |
 
-The weapon uses **bidirectional (3D mode)** throttle:
+The triggers are on/off. After arming, clearing an e-stop, a reconnect or a
+controller-signal stall, both triggers must be released before a press spins the
+weapon again.
 
-| Stick Position | DShot Range | Direction |
-|----------------|-------------|-----------|
-| Centered (0%) | 0 (idle) | Stopped |
-| Forward +1% to +100% | 1048-2047 | Forward spin |
-| Backward -1% to -100% | 48-1047 | Reverse spin |
-
-A deadzone threshold is applied to the right stick to prevent accidental weapon
-activation.
+If the weapon ESC stops answering while armed (for example it reset during a
+battery sag), the robot recovers it automatically: the weapon stops for about
+2-3 seconds while the ESC restarts and re-arms, then spins back up if a trigger
+is still held.
 
 ### Weapon Telemetry
 
@@ -244,8 +246,8 @@ When armed, the ESC reports telemetry via Extended DShot Telemetry (EDT):
 | eRPM | Electrical RPM |
 | RPM | Mechanical RPM (eRPM / 7 pole pairs) |
 | Voltage | ESC input voltage |
-| Current | Motor current draw |
-| Temperature | ESC temperature |
+| Current | Not available: this ESC has no working current sensor |
+| Temperature | ESC MCU temperature (the ESC limits power above 70°C) |
 
 Telemetry is visible on the USB serial console.
 
@@ -293,7 +295,9 @@ The safety system runs continuously every 10 ms.
 
 ### Failsafe (Connection Loss)
 
-If the controller stops sending data for 1500 ms:
+If the controller stops sending data for 250 ms while the robot is driving or the
+weapon is commanded, drive and weapon go to neutral (the weapon trigger must then
+be released and pressed again). If it stops for 1500 ms:
 
 1. All drive motors stop.
 2. The weapon is disarmed.
@@ -320,8 +324,8 @@ On power-up, the firmware runs a self-test. If it fails:
 
 | Action | Control |
 |--------|---------|
-| Enter | Hold both shoulder buttons (L + R) for 1 second |
-| Exit | Hold both shoulder buttons (L + R) for 1 second again |
+| Enter | Hold **Minus + Plus** for 1 second |
+| Exit | Hold **Minus + Plus** for 1 second again |
 
 While active:
 - System LED turns **purple** (pulsing).
@@ -430,13 +434,13 @@ Options:
 | Red system LED | Critical battery or error | Charge battery; check serial log |
 | Both LEDs red fast blink | Emergency stop | Hold A for 2 sec to clear |
 | B press ignored | E-stop active or low battery | Clear E-stop; check battery |
-| Weapon arms, won't spin | Right stick not moved | Push right stick forward |
+| Weapon arms, won't spin | Trigger held while arming, or not held | Release both triggers, then hold ZR or ZL |
 
 ### ESC Beep Patterns
 
 | Pattern | Meaning |
 |---------|---------|
-| Continuous beeping (~3 sec interval) | No DShot signal or update rate too slow |
+| Continuous beeping (~3 sec interval) | No DShot signal. Normal while the weapon is disarmed: the robot holds the signal low so the ESC always starts its firmware |
 | Single tone on power-up | ESC armed successfully |
 | Silent during operation | Normal (ESC receiving valid throttle) |
 | Beeping during throttle | Error: check DShot wiring or ESC config |
@@ -469,8 +473,8 @@ firmware prints:
 ### During Match
 
 - Arm weapon with B when match starts.
-- Control weapon speed with right stick.
-- Drive with left stick.
+- Hold ZR (forward) or ZL (reverse) to spin the weapon; release to spin down.
+- Throttle with the left stick, turn with the right stick.
 - Monitor system LED for battery warnings.
 
 ### Post-Match
@@ -493,16 +497,17 @@ firmware prints:
 |                                                                   |
 |  Left Stick              Right Stick         Face Buttons         |
 |  +---+                   +---+               +---+                |
-|  | ^ | Forward           | ^ | Weapon Fwd      Y                 |
-|  |< >| Turn              |   |              X     A               |
-|  | v | Reverse           | v | Weapon Rev      B                 |
+|  | ^ | Forward           |   |                 Y                 |
+|  |   |                   |< >| Turn         X     A               |
+|  | v | Reverse           |   |                 B                 |
 |  +---+                   +---+               +---+                |
 |                                                                   |
 |  CONTROLS:                                                        |
 |    B              Arm / Disarm weapon (toggle)                    |
+|    ZR (hold)      Weapon forward      ZL (hold)  Weapon reverse   |
 |    A (hold 2s)    Clear emergency stop                            |
 |    L1 + R1        EMERGENCY STOP (immediate)                     |
-|    L + R (hold)   Enter/exit controller test mode                 |
+|    - + + (hold)   Enter/exit controller test mode                 |
 |    X + Y (hold)   Enter/exit motor calibration mode               |
 |    D-Up+Right     Enter/exit trim mode (hold 2s)                  |
 |                                                                   |

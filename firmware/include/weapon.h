@@ -48,6 +48,8 @@ void weapon_emergency_stop(void);
 bool weapon_get_telemetry(weapon_telemetry_t* telemetry);
 // Latest per-field values and receive times, regardless of age.
 bool weapon_get_telemetry_snapshot(weapon_telemetry_t* telemetry);
+// Times the weapon ESC stopped answering while armed and was recovered.
+uint32_t weapon_get_esc_recoveries(void);
 uint32_t weapon_get_dshot_failures(void);
 uint16_t weapon_get_dshot_last_throttle(void);
 void weapon_get_dshot_send_counts(uint32_t* attempts, uint32_t* successes);

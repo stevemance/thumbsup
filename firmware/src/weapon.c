@@ -62,6 +62,14 @@ static uint8_t dshot_setup_attempts = 0;
 static bool dshot_setup_pending = false;
 static bool dshot_setup_done = false;
 static uint8_t dshot_setup_step = 0;     // index into the setup command list
+enum { ESC_RECOVERY_NONE, ESC_RECOVERY_LOW, ESC_RECOVERY_REARM };
+static uint8_t esc_recovery_phase = ESC_RECOVERY_NONE;
+static uint32_t esc_recovery_start_ms = 0;
+static uint32_t esc_last_reply_ms = 0;
+static uint32_t esc_recoveries = 0;
+static bool esc_replied = false;         // a reply since the last (re)arm
+static uint32_t esc_first_reply_ms = 0;
+static uint32_t esc_link_start_ms = 0;   // when frames last (re)started
 static uint8_t dshot_setup_repeat = 0;   // frames of the current command sent
 static uint32_t dshot_telemetry_interval_ms = WEAPON_DSHOT_TELEMETRY_MS;
 static bool initialized = false;
@@ -237,6 +245,13 @@ static void weapon_poll_telemetry_locked(void) {
         return;
     }
     dshot_telemetry_responses++;
+    if (!esc_replied) {
+        esc_replied = true;
+        esc_first_reply_ms = t.timestamp_ms;
+        printf("WPN ESC first reply %lu ms after frames started\n",
+               (unsigned long)(t.timestamp_ms - esc_link_start_ms));
+    }
+    esc_last_reply_ms = t.timestamp_ms;
     weapon_apply_telemetry_locked(&t);
 }
 
@@ -246,8 +261,60 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
     }
     (void)force_send;
 
+    // ESC recovery, step 2: after the low pulse, resume frames and re-arm.
+    if (esc_recovery_phase == ESC_RECOVERY_LOW) {
+        current_speed = 0;
+        if ((now_ms - esc_recovery_start_ms) < WEAPON_ESC_RECOVER_LOW_MS) {
+            return;
+        }
+        dshot_set_output_paused(MOTOR_WEAPON, false);
+        esc_recovery_phase = ESC_RECOVERY_REARM;
+        esc_recovery_start_ms = now_ms;
+        esc_link_start_ms = now_ms;
+        esc_replied = false;
+        arm_start_time = now_ms;             // setup commands follow after WEAPON_DSHOT_SETUP_DELAY_MS
+        weapon_mark_dshot_setup_pending();
+    }
+
     // Read the reply to the previous frame first: sending drains the RX FIFO.
     weapon_poll_telemetry_locked();
+
+    // ESC recovery, step 1: the ESC stopped answering (or never started);
+    // hold the line low.  Reply timestamps can be a tick newer than now_ms,
+    // so ages are signed.
+    bool esc_settled = esc_replied &&
+                       (int32_t)(now_ms - esc_first_reply_ms) > WEAPON_ESC_SETTLE_MS;
+    bool lost;
+    int32_t silent_ms;
+    if (!esc_replied) {
+        silent_ms = (int32_t)(now_ms - esc_link_start_ms);
+        lost = silent_ms > WEAPON_ESC_FIRST_REPLY_MS;
+    } else {
+        silent_ms = (int32_t)(now_ms - esc_last_reply_ms);
+        lost = esc_settled && esc_recovery_phase == ESC_RECOVERY_NONE &&
+               (weapon_state == WEAPON_STATE_ARMED || weapon_state == WEAPON_STATE_SPINNING) &&
+               silent_ms > WEAPON_ESC_LOST_MS;
+    }
+    if (esc_recovery_phase != ESC_RECOVERY_LOW && lost) {
+        esc_recovery_phase = ESC_RECOVERY_LOW;
+        esc_recovery_start_ms = now_ms;
+        esc_recoveries++;
+        current_speed = 0;
+        dshot_set_output_paused(MOTOR_WEAPON, true);
+        printf("WPN ESC %s for %ld ms: recovery %lu\n", esc_replied ? "stopped replying" : "never replied",
+               (long)silent_ms, (unsigned long)esc_recoveries);
+        return;
+    }
+    if (esc_recovery_phase == ESC_RECOVERY_REARM) {
+        current_speed = 0;
+        throttle = 0;
+        if ((now_ms - esc_recovery_start_ms) >= WEAPON_ESC_REARM_MS && !dshot_setup_pending &&
+            esc_settled) {
+            esc_recovery_phase = ESC_RECOVERY_NONE;
+            printf("WPN ESC recovery %lu done, replies %s\n", (unsigned long)esc_recoveries,
+                   esc_replied ? "resumed" : "still missing");
+        }
+    }
 
     // Keep a stable send cadence (bounded by WEAPON_DSHOT_UPDATE_MS).
     bool should_send = (last_dshot_send_time == 0) ||
@@ -272,6 +339,10 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
         last_dshot_send_time = now_ms;
         if (setup_cmd >= 0) {
             weapon_dshot_setup_frame_sent_locked(now_ms);
+            // Command frames go out with the telemetry bit clear and the ESC
+            // does not answer them: don't count this as the ESC going silent.
+            esc_last_reply_ms = now_ms;
+            esc_link_start_ms = esc_replied ? esc_link_start_ms : now_ms;
         }
 #if HITL_CONSOLE
         if (setup_cmd < 0 && throttle > 0) {
@@ -550,6 +621,8 @@ bool weapon_init(void) {
             dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
         }
         dshot_setup_done = true;
+        // Disarmed until armed: hold the signal low (see dshot_set_output_paused).
+        dshot_set_output_paused(MOTOR_WEAPON, true);
     } else {
         DEBUG_PRINT("Weapon system initialized in PWM mode (DShot init failed)\n");
     }
@@ -787,8 +860,10 @@ void weapon_update(void) {
                     break;
 
                 case WEAPON_MODE_DSHOT:
-                    if (dshot_initialized) {
-                        dshot_send_throttle(MOTOR_WEAPON, 0, false);
+                    // Disarmed: no frames, signal held low, so an ESC that
+                    // powers up or resets now always starts its firmware.
+                    if (dshot_initialized && !dshot_output_paused(MOTOR_WEAPON)) {
+                        dshot_set_output_paused(MOTOR_WEAPON, true);
                     }
                     break;
 
@@ -838,6 +913,12 @@ bool weapon_arm(void) {
         // refuses to start the motor from standstill.
         weapon_mark_dshot_setup_pending();
         dshot_telemetry_pending = 0;
+        // Frames resume here; the ARMING state then sends zero throttle for
+        // WEAPON_ARM_TIMEOUT so the ESC arms.
+        dshot_set_output_paused(MOTOR_WEAPON, false);
+        esc_recovery_phase = ESC_RECOVERY_NONE;
+        esc_link_start_ms = arm_start_time;
+        esc_replied = false;
     }
     mutex_exit(&mode_mutex);
     DEBUG_PRINT("Weapon arming... (Battery: %.1fV)\n", battery_mv / 1000.0f);
@@ -862,6 +943,7 @@ bool weapon_disarm(void) {
             if (dshot_initialized) {
                 dshot_send_throttle(MOTOR_WEAPON, 0, false);
                 dshot_telemetry_pending = 0;
+                dshot_set_output_paused(MOTOR_WEAPON, true);
             } else {
                 // DShot was destroyed (e.g. by emergency_stop forcing GPIO to SIO).
                 // Re-initialize after releasing the mutex.
@@ -990,6 +1072,10 @@ bool weapon_get_telemetry(weapon_telemetry_t* telemetry) {
     }
     mutex_exit(&mode_mutex);
     return ok;
+}
+
+uint32_t weapon_get_esc_recoveries(void) {
+    return esc_recoveries;
 }
 
 bool weapon_get_telemetry_snapshot(weapon_telemetry_t* telemetry) {

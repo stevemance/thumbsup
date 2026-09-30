@@ -262,6 +262,7 @@ static void print_telem_raw(int count) {
 }
 
 static void dshot_spin_for_ms(uint16_t throttle, uint32_t duration_ms, bool request_telemetry) {
+    dshot_set_output_paused(MOTOR_WEAPON, false);  // disarmed weapon holds the line low
     const uint32_t step_ms = 2;
     uint32_t steps = duration_ms / step_ms;
     if (steps == 0) {
@@ -597,6 +598,7 @@ static bool handle_line(char* line) {
             return true;
         }
         dshot_command_t cmd_id = (dshot_command_t)(DSHOT_CMD_BEEP1 + (index - 1));
+        dshot_set_output_paused(MOTOR_WEAPON, false);
         printf("BEEP %s\n", dshot_send_command(MOTOR_WEAPON, cmd_id) ? "ok" : "fail");
         return true;
     }
@@ -615,6 +617,7 @@ static bool handle_line(char* line) {
             printf("ERR: DSHOT_CMD 12 (save settings) is blocked; use tools/am32_pico_flasher.py write-config\n");
             return true;
         }
+        dshot_set_output_paused(MOTOR_WEAPON, false);
         printf("DSHOT_CMD %s\n",
                dshot_send_command(MOTOR_WEAPON, (dshot_command_t)raw_cmd) ? "ok" : "fail");
         return true;

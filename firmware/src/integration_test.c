@@ -551,6 +551,7 @@ bool integration_test_run_if_requested(uint32_t timeout_ms) {
     integration_log_dshot_state("Post-arm");
 
     printf("Sending ESC setup commands...\n");
+    dshot_set_output_paused(MOTOR_WEAPON, false);
     dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
     dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_OFF);
     dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_SPIN_DIRECTION_NORMAL);

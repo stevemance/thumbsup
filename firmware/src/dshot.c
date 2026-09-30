@@ -34,6 +34,7 @@ typedef struct {
     bool edt_seen;              // any EDT frame decoded since init / enable
     uint32_t telem_type_counts[16];   // valid frames by payload type nibble (value >> 8)
     dshot_rx_stats_t rx_stats;
+    bool output_paused;         // pin held low by SIO, no frames sent
 } dshot_motor_state_t;
 
 static dshot_motor_state_t motor_states[MAX_DSHOT_MOTORS] = {0};
@@ -397,6 +398,7 @@ bool dshot_init(motor_channel_t motor, const dshot_config_t* config) {
     memset(state->telem_type_counts, 0, sizeof(state->telem_type_counts));
     memset(&state->rx_stats, 0, sizeof(state->rx_stats));
     state->crc_invert_override = -1;
+    state->output_paused = false;
     state->initialized = true;
 
     DEBUG_PRINT("DShot initialized: motor=%d, GPIO=%d, speed=%d, bidir=%d, PIO=%p, SM=%d, DMA=%d\n",
@@ -427,6 +429,10 @@ bool dshot_send_throttle(motor_channel_t motor, uint16_t throttle, bool request_
 
     if (state->dma_chan < 0) {
         DEBUG_PRINT("CRITICAL: Invalid DMA channel for motor %d\n", motor);
+        return false;
+    }
+
+    if (state->output_paused) {
         return false;
     }
 
@@ -753,6 +759,27 @@ uint32_t dshot_erpm_to_rpm(uint32_t erpm, uint8_t pole_pairs) {
         return 0;
     }
     return erpm / pole_pairs;
+}
+
+void dshot_set_output_paused(motor_channel_t motor, bool paused) {
+    if (motor >= MAX_DSHOT_MOTORS || !motor_states[motor].initialized) {
+        return;
+    }
+    dshot_motor_state_t* state = &motor_states[motor];
+    uint pin = state->config.gpio_pin;
+    if (paused) {
+        gpio_set_function(pin, GPIO_FUNC_SIO);
+        gpio_put(pin, 0);
+        gpio_set_dir(pin, GPIO_OUT);
+    } else if (state->output_paused) {
+        pio_sm_clear_fifos(state->pio, state->sm);
+        pio_gpio_init(state->pio, pin);
+    }
+    state->output_paused = paused;
+}
+
+bool dshot_output_paused(motor_channel_t motor) {
+    return motor < MAX_DSHOT_MOTORS && motor_states[motor].output_paused;
 }
 
 // Deinitialize DShot (free resources)

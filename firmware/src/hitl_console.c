@@ -18,6 +18,7 @@
 #include "motor_control.h"
 #include "dshot.h"
 #include "weapon.h"
+#include "hardware/gpio.h"
 
 #define HITL_LINE_MAX 160
 #define HITL_STATUS_INTERVAL_MS 100
@@ -505,6 +506,26 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
         return;
     }
 
+    if (streq_case(cmd, "WPNLINE")) {
+        // Sets the idle level of the weapon signal pin while disarmed, to
+        // test how the ESC bootloader reacts to it at power-up.
+        char* value = strtok_r(NULL, " \t", &save);
+        if (weapon_is_armed() || !value) {
+            printf("ERR HITL WPNLINE expects HIGH|LOW|PULLUP while disarmed\n");
+            return;
+        }
+        gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
+        if (streq_case(value, "PULLUP")) {
+            gpio_set_dir(PIN_WEAPON_PWM, GPIO_IN);
+            gpio_pull_up(PIN_WEAPON_PWM);
+        } else {
+            gpio_set_dir(PIN_WEAPON_PWM, GPIO_OUT);
+            gpio_put(PIN_WEAPON_PWM, streq_case(value, "HIGH") ? 1 : 0);
+        }
+        printf("HITL WPNLINE %s\n", value);
+        return;
+    }
+
     if (streq_case(cmd, "WEAPON")) {
         char* value = strtok_r(NULL, " \t", &save);
         if (value && streq_case(value, "OFF")) {
@@ -539,10 +560,14 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
         weapon_get_telemetry_snapshot(&wt);
         uint32_t now = to_ms_since_boot(get_absolute_time());
 #define AGE(ms) ((ms) ? (long)(now - (ms)) : -1L)
+        // Raw ESC current as sent (ignored by the weapon logic while
+        // WEAPON_ESC_HAS_CURRENT_SENSE is 0), for current-sensor checks.
+        dshot_telemetry_t raw_t = {0};
+        bool raw_ok = dshot_get_telemetry(MOTOR_WEAPON, &raw_t);
         printf("HITL EDTSTATS sent=%lu read=%lu ok=%lu no_start=%lu bitcount=%lu gcr=%lu crc=%lu "
                "erpm=%lu stopped=%lu temp=%lu volt=%lu curr=%lu dbg=%lu stress=%lu event=%lu "
                "e00=%lu eff=%lu discarded_words=%lu edt_active=%u "
-               "rpm=%lu rpm_age=%ld v=%.2f v_age=%ld t=%u t_age=%ld i_age=%ld\n",
+               "rpm=%lu rpm_age=%ld v=%.2f v_age=%ld t=%u t_age=%ld i_age=%ld i_raw_ca=%u i_raw_age=%ld esc_recoveries=%lu\n",
                (unsigned long)st.frames_sent, (unsigned long)st.replies_read,
                (unsigned long)st.results[DSHOT_RX_OK], (unsigned long)st.results[DSHOT_RX_NO_START],
                (unsigned long)st.results[DSHOT_RX_BITCOUNT], (unsigned long)st.results[DSHOT_RX_GCR],
@@ -556,7 +581,9 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
                (unsigned long)st.discarded_words,
                dshot_extended_telemetry_active(MOTOR_WEAPON) ? 1u : 0u,
                (unsigned long)wt.rpm, AGE(wt.erpm_ms), wt.voltage_cV / 100.0f, AGE(wt.voltage_ms),
-               wt.temperature_C, AGE(wt.temperature_ms), AGE(wt.current_ms));
+               wt.temperature_C, AGE(wt.temperature_ms), AGE(wt.current_ms),
+               raw_ok ? raw_t.current_cA : 0u, raw_ok ? AGE(raw_t.current_ms) : -1L,
+               (unsigned long)weapon_get_esc_recoveries());
 #undef AGE
         if (arg && streq_case(arg, "RESET")) {
             dshot_reset_rx_stats(MOTOR_WEAPON);

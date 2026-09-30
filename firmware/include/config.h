@@ -212,6 +212,25 @@
 // at rest and at full speed: no working current sensor.  Current telemetry
 // is ignored unless this is set for an ESC that measures it.
 #define WEAPON_ESC_HAS_CURRENT_SENSE   0
+
+// ESC recovery.  If the weapon ESC resets while armed (e.g. a battery sag),
+// its AM32 bootloader can mistake idle-high DShot for a programmer and stay
+// in the bootloader: the weapon is then dead until power-cycled.  When the
+// ESC stops answering for WEAPON_ESC_LOST_MS the signal is held low for
+// WEAPON_ESC_RECOVER_LOW_MS (the bootloader jumps to the firmware after 20 ms
+// of low line), then zero throttle is sent for WEAPON_ESC_REARM_MS so the ESC
+// re-arms before the weapon ramps back up.  WEAPON_ESC_REARM_MS is the minimum
+// zero-throttle time; re-arming also waits for the ESC to settle.
+#define WEAPON_ESC_LOST_MS             150
+// An ESC only starts replying once it has recognised the DShot stream, which
+// takes a while after frames (re)start; until its first reply it gets this long.
+#define WEAPON_ESC_FIRST_REPLY_MS      1500
+// AM32 stops answering while it plays its arming tone, shortly after it
+// starts replying; silence is only treated as a lost ESC once it has been
+// answering for this long.
+#define WEAPON_ESC_SETTLE_MS           1500
+#define WEAPON_ESC_RECOVER_LOW_MS      50
+#define WEAPON_ESC_REARM_MS            1000
 // Range bounds for V/I/T at weapon layer
 #define WEAPON_TELEM_MAX_VOLTAGE_CV    2520   // 25.2V (2x nominal 3S)
 #define WEAPON_TELEM_MIN_VOLTAGE_CV    500    // 5V minimum

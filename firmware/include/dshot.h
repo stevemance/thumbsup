@@ -290,4 +290,17 @@ uint16_t dshot_throttle_from_percent_3d(int8_t percent);
  */
 void dshot_deinit(motor_channel_t motor);
 
+/**
+ * Pause or resume the DShot output.  Paused, the pin is driven low and no
+ * frames are sent (dshot_send_throttle returns false).
+ *
+ * An AM32 ESC decides at power-up whether to run its firmware from the
+ * signal line: if it sees the line high throughout its ~10 ms check it stays
+ * in the bootloader and ignores DShot until power-cycled.  Idle-high DShot
+ * with frames more than ~5 ms apart can look like that, so the line is held
+ * low whenever the weapon is disarmed.
+ */
+void dshot_set_output_paused(motor_channel_t motor, bool paused);
+bool dshot_output_paused(motor_channel_t motor);
+
 #endif // DSHOT_H
