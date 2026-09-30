@@ -55,12 +55,25 @@ Buttons outside this set are ignored by the generic parser.
 
 ## Competition Firmware Expectations
 
-The competition code uses:
+The competition code (`DRIVE_LAYOUT_SPLIT`, `WEAPON_TRIGGER_*` in
+`firmware/include/config.h`) uses:
 
-- `axis_y` and `axis_x` for drive (signed).
-- `axis_ry` for weapon speed (signed, positive-only after deadzone).
+- `axis_y` for drive throttle (emulator `AXIS LY`) and `axis_rx` for turn
+  (emulator `AXIS RX`). `axis_x` (`AXIS LX`) and `axis_ry` (`AXIS RY`) are unused.
+- Digital triggers for the weapon, hold-to-spin at a fixed 100%:
+  `BUTTON_TRIGGER_R` (emulator `BTN R2 1`) = forward, `BUTTON_TRIGGER_L`
+  (`BTN L2 1`) = reverse, releasing (`BTN R2 0` / `BTN L2 0`) spins down. The
+  first trigger pressed wins while both are held; both pressed in the same
+  report from idle = no spin. After arming, estop clear, reconnect or the
+  neutral guard, both triggers must be seen released before a press counts.
+- The startup neutral guard requires all sticks centred and both triggers released.
 - `BUTTON_SHOULDER_L` + `BUTTON_SHOULDER_R` for estop.
 - `BUTTON_B` toggle for arm.
 - `BUTTON_A` hold to clear estop.
+- `MISC_BUTTON_SELECT` + `MISC_BUTTON_START` (Minus + Plus; emulator
+  `BTN SELECT` + `BTN START`) to enter test mode.
 
-This mapping aims to keep those controls consistent.
+This mapping aims to keep those controls consistent. `tools/hitl_orchestrator.py`
+drives the weapon via its `weapon_press` / `weapon_release` / `weapon_reverse`
+helpers; legacy `--*-axis` weapon arguments only select direction (magnitude
+is ignored).

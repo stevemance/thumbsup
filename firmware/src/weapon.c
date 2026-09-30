@@ -53,14 +53,16 @@ static uint16_t dshot_raw_dump_remaining = 0;
 static weapon_telemetry_t last_weapon_telem = {0};
 static bool last_weapon_telem_valid = false;
 static uint32_t filtered_rpm = 0;
-static uint16_t filtered_voltage_cV = 0;
-static uint16_t filtered_current_cA = 0;
-static uint8_t  filtered_temperature_C = 0;
 static bool     telem_filter_primed = false;
+static uint32_t rpm_last_accepted = 0;   // last raw rpm that passed the step check
+static uint32_t rpm_last_rejected = 0;
+static uint8_t  rpm_consistent_rejects = 0;
 static uint32_t last_dshot_setup_attempt_ms = 0;
 static uint8_t dshot_setup_attempts = 0;
 static bool dshot_setup_pending = false;
 static bool dshot_setup_done = false;
+static uint8_t dshot_setup_step = 0;     // index into the setup command list
+static uint8_t dshot_setup_repeat = 0;   // frames of the current command sent
 static uint32_t dshot_telemetry_interval_ms = WEAPON_DSHOT_TELEMETRY_MS;
 static bool initialized = false;
 // Protected by mode_mutex — accessed by weapon_update() and mode switch functions.
@@ -77,240 +79,218 @@ static uint16_t weapon_speed_to_pulse(uint8_t speed_percent) {
     return PWM_MIN_PULSE + (speed_percent * range) / 100;
 }
 
+// ESC setup (EDT on, 3D off, normal direction, optionally 3D on) is sent as
+// ordinary frames on the normal send cadence: each command value repeated
+// WEAPON_DSHOT_CMD_REPEAT times (AM32 acts on the 6th identical command).
+// This used to call dshot_send_command(), which sleeps 2 ms per frame and
+// blocked the Bluetooth/control loop for ~80 ms per attempt.
+#define WEAPON_DSHOT_CMD_REPEAT 10
+static const uint16_t dshot_setup_cmds[] = {
+    DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE,
+    DSHOT_CMD_3D_MODE_OFF,
+    DSHOT_CMD_SPIN_DIRECTION_NORMAL,
+    DSHOT_CMD_3D_MODE_ON,   // only when WEAPON_DSHOT_USE_3D
+};
+#define DSHOT_SETUP_CMD_COUNT (WEAPON_DSHOT_USE_3D ? 4u : 3u)
+
 static void weapon_mark_dshot_setup_pending(void) {
     dshot_setup_pending = true;
     dshot_setup_done = false;
     dshot_setup_attempts = 0;
+    dshot_setup_step = 0;
+    dshot_setup_repeat = 0;
     last_dshot_setup_attempt_ms = 0;
 }
 
-static void weapon_run_dshot_setup_locked(uint32_t now_ms) {
-    if (!dshot_setup_pending) {
-        return;
+// Returns the setup command to send in place of the throttle this frame, or
+// -1 when no setup frame is due.
+static int weapon_dshot_setup_frame_locked(uint32_t now_ms) {
+    if (!dshot_setup_pending || (now_ms - arm_start_time) < WEAPON_DSHOT_SETUP_DELAY_MS) {
+        return -1;
     }
-    if ((now_ms - arm_start_time) < WEAPON_DSHOT_SETUP_DELAY_MS) {
-        return;
+    if (dshot_setup_step >= DSHOT_SETUP_CMD_COUNT) {
+        return -1;
     }
-    if (last_dshot_setup_attempt_ms != 0 &&
-        (now_ms - last_dshot_setup_attempt_ms) < WEAPON_DSHOT_SETUP_RETRY_MS) {
-        return;
-    }
-
-    last_dshot_setup_attempt_ms = now_ms;
-    if (dshot_setup_attempts < UINT8_MAX) {
+    if (dshot_setup_step == 0 && dshot_setup_repeat == 0) {
+        last_dshot_setup_attempt_ms = now_ms;
         dshot_setup_attempts++;
     }
-
-    bool ok = dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
-    ok = ok && dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
-    // Note: SPIN_DIRECTION_NORMAL intentionally omitted.  Sending it right
-    // before the first throttle command biases the ESC's internal direction
-    // state, causing one direction to be rejected until a ~2s zero-hold
-    // clears the lockout.  The ESC defaults to normal direction anyway.
-    weapon_poll_telemetry_locked();
-
-    if (ok && dshot_extended_telemetry_seen(MOTOR_WEAPON)) {
-        dshot_setup_pending = false;
-        dshot_setup_done = true;
-    } else if (dshot_setup_attempts >= WEAPON_DSHOT_SETUP_MAX_ATTEMPTS) {
-        dshot_setup_pending = false;
-        dshot_setup_done = true;
-        DEBUG_PRINT("WARN: EDT enable not confirmed after %u attempts\n",
-                    dshot_setup_attempts);
-    }
+    return dshot_setup_cmds[dshot_setup_step];
 }
 
-// Maximum time (µs) to spend draining telemetry per call.  The DP decoder can
-// take 200-500µs per frame; capping total drain time prevents the weapon update
-// loop from stalling and accumulating latency.
-#define WEAPON_TELEM_DRAIN_BUDGET_US 250
-// Maximum raw frames to read per drain call (even cheap reads add up).
-#define WEAPON_TELEM_DRAIN_MAX_FRAMES 4
+static void weapon_dshot_setup_frame_sent_locked(uint32_t now_ms) {
+    if (++dshot_setup_repeat < WEAPON_DSHOT_CMD_REPEAT) {
+        return;
+    }
+    dshot_setup_repeat = 0;
+    if (++dshot_setup_step < DSHOT_SETUP_CMD_COUNT) {
+        return;
+    }
+    dshot_setup_pending = false;
+    dshot_setup_done = true;
+    printf("WPN setup done in %lu ms edt_ack=%u edt_seen=%u\n",
+           (unsigned long)(now_ms - last_dshot_setup_attempt_ms),
+           dshot_extended_telemetry_active(MOTOR_WEAPON) ? 1u : 0u,
+           dshot_extended_telemetry_seen(MOTOR_WEAPON) ? 1u : 0u);
+}
 
-static void weapon_poll_telemetry_locked(void) {
-    uint64_t raw = 0;
-    dshot_telemetry_t telem;
-    uint64_t drain_start_us = time_us_64();
-    uint32_t frames_read = 0;
+static void weapon_reset_telemetry_filter_locked(void) {
+    telem_filter_primed = false;
+    filtered_rpm = 0;
+    rpm_last_accepted = 0;
+    rpm_consistent_rejects = 0;
+    memset(&last_weapon_telem, 0, sizeof(last_weapon_telem));
+    last_weapon_telem_valid = false;
+}
 
-    while (dshot_read_telemetry_raw(MOTOR_WEAPON, &raw)) {
-        frames_read++;
+// RPM step check.  Decoding is now exact (GCR + checksum, no guessing), so
+// this is only a backstop against the rare corrupted frame that still passes
+// the 4-bit checksum.  It compares against the last *accepted raw* value, not
+// the filter output, and accepts WEAPON_TELEM_RPM_RESYNC mutually consistent
+// readings in a row, so it can never lock telemetry out (it used to, for
+// seconds, after a single bad frame).
+static bool weapon_rpm_plausible_locked(uint32_t rpm) {
+    if (rpm > WEAPON_TELEM_MAX_RPM) {
+        return false;
+    }
+    if (!telem_filter_primed) {
+        return true;
+    }
+    uint32_t step = rpm > rpm_last_accepted ? rpm - rpm_last_accepted : rpm_last_accepted - rpm;
+    if (step <= WEAPON_TELEM_MAX_RPM_STEP) {
+        rpm_consistent_rejects = 0;
+        return true;
+    }
+    uint32_t vs_prev = rpm > rpm_last_rejected ? rpm - rpm_last_rejected : rpm_last_rejected - rpm;
+    rpm_consistent_rejects = (rpm_consistent_rejects > 0 && vs_prev <= WEAPON_TELEM_MAX_RPM_STEP)
+                             ? rpm_consistent_rejects + 1 : 1;
+    rpm_last_rejected = rpm;
+    if (rpm_consistent_rejects >= WEAPON_TELEM_RPM_RESYNC) {
+        rpm_consistent_rejects = 0;
+        return true;
+    }
+    return false;
+}
 
-#if INTEGRATION_TEST_AUTO
-        if (dshot_raw_dump_remaining > 0) {
-            printf("EDT raw=0x%010llx\n", (unsigned long long)raw);
-            dshot_raw_dump_remaining--;
-        }
-#endif
+static void weapon_apply_telemetry_locked(const dshot_telemetry_t* t) {
+    last_dshot_telemetry_rx_ms = t->timestamp_ms;
 
-        dshot_telemetry_raw++;
-        bool matched_request = (dshot_telemetry_pending > 0);
-        if (matched_request) {
-            dshot_telemetry_pending--;
-        }
-        if (!matched_request) {
-            // Drain RX frames to avoid FIFO backpressure, but only spend decode cycles
-            // when we intentionally scheduled a decode (bounded rate).
-            dshot_telemetry_discarded++;
+    if (t->fresh & DSHOT_FRESH_ERPM) {
+        uint32_t rpm = t->stopped ? 0 : dshot_erpm_to_rpm(t->erpm, WEAPON_POLE_PAIRS);
+        if (!weapon_rpm_plausible_locked(rpm)) {
+            dshot_telemetry_plausibility_reject++;
         } else {
-            uint64_t decode_start_us = time_us_64();
-            bool decoded = dshot_decode_telemetry_raw(MOTOR_WEAPON, raw, &telem);
-            dshot_telemetry_decode_us += time_us_64() - decode_start_us;
-            dshot_telemetry_decode_frames++;
-            if (!decoded) {
-                dshot_telemetry_decode_fail++;
-            } else {
-                uint32_t rpm = dshot_erpm_to_rpm(telem.erpm, WEAPON_POLE_PAIRS);
-                if (rpm > WEAPON_TELEM_MAX_RPM) {
-                    dshot_telemetry_plausibility_reject++;
-                    dshot_telemetry_decode_fail++;
-                } else {
-                    // Temporal consistency gate: reject large RPM jumps
-                    uint32_t rpm_delta = (rpm > filtered_rpm)
-                                         ? (rpm - filtered_rpm)
-                                         : (filtered_rpm - rpm);
-                    if (telem_filter_primed && rpm_delta > WEAPON_TELEM_MAX_RPM_DELTA) {
-                        dshot_telemetry_plausibility_reject++;
-                        dshot_telemetry_decode_fail++;
-                    } else {
-                        dshot_telemetry_responses++;
-
-                        // IIR filter
-                        if (!telem_filter_primed) {
-                            filtered_rpm = rpm;
-                            filtered_voltage_cV = telem.voltage_cV;
-                            filtered_current_cA = telem.current_cA;
-                            filtered_temperature_C = telem.temperature_C;
-                            telem_filter_primed = true;
-                        } else {
-                            // RPM: alpha = NUM/DEN (fast)
-                            filtered_rpm = (uint32_t)((int32_t)filtered_rpm +
-                                (WEAPON_TELEM_RPM_ALPHA_NUM *
-                                 ((int32_t)rpm - (int32_t)filtered_rpm)) /
-                                WEAPON_TELEM_RPM_ALPHA_DEN);
-                            // V/I/T: slow alpha with range validation
-                            if (telem.voltage_cV >= WEAPON_TELEM_MIN_VOLTAGE_CV &&
-                                telem.voltage_cV <= WEAPON_TELEM_MAX_VOLTAGE_CV) {
-                                filtered_voltage_cV = (uint16_t)((int32_t)filtered_voltage_cV +
-                                    (WEAPON_TELEM_SLOW_ALPHA_NUM *
-                                     ((int32_t)telem.voltage_cV - (int32_t)filtered_voltage_cV)) /
-                                    WEAPON_TELEM_SLOW_ALPHA_DEN);
-                            }
-                            if (telem.current_cA <= WEAPON_TELEM_MAX_CURRENT_CA) {
-                                filtered_current_cA = (uint16_t)((int32_t)filtered_current_cA +
-                                    (WEAPON_TELEM_SLOW_ALPHA_NUM *
-                                     ((int32_t)telem.current_cA - (int32_t)filtered_current_cA)) /
-                                    WEAPON_TELEM_SLOW_ALPHA_DEN);
-                            }
-                            if (telem.temperature_C <= WEAPON_TELEM_MAX_TEMP_C) {
-                                filtered_temperature_C = (uint8_t)((int32_t)filtered_temperature_C +
-                                    (WEAPON_TELEM_SLOW_ALPHA_NUM *
-                                     ((int32_t)telem.temperature_C - (int32_t)filtered_temperature_C)) /
-                                    WEAPON_TELEM_SLOW_ALPHA_DEN);
-                            }
-                        }
-
-                        last_weapon_telem.erpm = telem.erpm;
-                        last_weapon_telem.rpm = filtered_rpm;
-                        last_weapon_telem.voltage_cV = filtered_voltage_cV;
-                        last_weapon_telem.current_cA = filtered_current_cA;
-                        last_weapon_telem.temperature_C = filtered_temperature_C;
-                        last_weapon_telem.crc = telem.crc;
-                        last_weapon_telem.valid = telem.valid;
-                        last_weapon_telem.timestamp_ms = telem.timestamp_ms;
-                        last_weapon_telem_valid = true;
-                        last_dshot_telemetry_rx_ms = telem.timestamp_ms;
-#if HITL_CONSOLE
-                        hitl_latency_on_rpm_update(filtered_rpm);
-#endif
-                    }
-                }
+            filtered_rpm = telem_filter_primed
+                ? (uint32_t)((int32_t)filtered_rpm +
+                             (WEAPON_TELEM_RPM_ALPHA_NUM * ((int32_t)rpm - (int32_t)filtered_rpm)) /
+                             WEAPON_TELEM_RPM_ALPHA_DEN)
+                : rpm;
+            if (rpm == 0) {
+                filtered_rpm = 0;
             }
-        }
-
-        // Bail if we have exceeded the time or frame budget.
-        if (frames_read >= WEAPON_TELEM_DRAIN_MAX_FRAMES ||
-            (time_us_64() - drain_start_us) >= WEAPON_TELEM_DRAIN_BUDGET_US) {
-            break;
+            telem_filter_primed = true;
+            rpm_last_accepted = rpm;
+            last_weapon_telem.erpm = t->stopped ? 0 : t->erpm;
+            last_weapon_telem.rpm = filtered_rpm;
+            last_weapon_telem.erpm_ms = t->erpm_ms;
+            last_weapon_telem.timestamp_ms = t->erpm_ms;
+            last_weapon_telem.valid = true;
+            last_weapon_telem_valid = true;
+#if HITL_CONSOLE
+            hitl_latency_on_rpm_update(filtered_rpm);
+#endif
         }
     }
+    // AM32 already smooths voltage and temperature; use them as sent.
+    if ((t->fresh & DSHOT_FRESH_VOLT) &&
+        t->voltage_cV >= WEAPON_TELEM_MIN_VOLTAGE_CV && t->voltage_cV <= WEAPON_TELEM_MAX_VOLTAGE_CV) {
+        last_weapon_telem.voltage_cV = t->voltage_cV;
+        last_weapon_telem.voltage_ms = t->voltage_ms;
+    }
+    if ((t->fresh & DSHOT_FRESH_TEMP) && t->temperature_C <= WEAPON_TELEM_MAX_TEMP_C) {
+        last_weapon_telem.temperature_C = t->temperature_C;
+        last_weapon_telem.temperature_ms = t->temperature_ms;
+    }
+#if WEAPON_ESC_HAS_CURRENT_SENSE
+    if ((t->fresh & DSHOT_FRESH_CURR) && t->current_cA <= WEAPON_TELEM_MAX_CURRENT_CA) {
+        last_weapon_telem.current_cA = t->current_cA;
+        last_weapon_telem.current_ms = t->current_ms;
+    }
+#endif
+}
+
+// Reads the reply to the previous frame, if one has been captured.  A capture
+// fills the whole 4-word RX FIFO, so there is at most one per call.
+static void weapon_poll_telemetry_locked(void) {
+    uint8_t rx_level = 0;
+    if (!dshot_get_fifo_levels(MOTOR_WEAPON, NULL, &rx_level) || rx_level < DSHOT_RX_WORDS) {
+        return;
+    }
+    dshot_telemetry_t t;
+    uint64_t start_us = time_us_64();
+    bool ok = dshot_read_telemetry(MOTOR_WEAPON, &t);
+    dshot_telemetry_decode_us += time_us_64() - start_us;
+    dshot_telemetry_decode_frames++;
+    dshot_telemetry_raw++;
+    if (!ok) {
+        dshot_telemetry_decode_fail++;
+        return;
+    }
+    dshot_telemetry_responses++;
+    weapon_apply_telemetry_locked(&t);
 }
 
 static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool force_send) {
     if (!dshot_initialized) {
         return;
     }
-
-    if (dshot_telemetry_pending > 0 &&
-        last_dshot_telemetry_time != 0 &&
-        (now_ms - last_dshot_telemetry_time) > WEAPON_DSHOT_TELEMETRY_TIMEOUT_MS) {
-        dshot_telemetry_pending = 0;
-    }
-
     (void)force_send;
-    // Keep a stable send cadence (bounded by WEAPON_DSHOT_UPDATE_MS). Bursting
-    // packets can destabilize bidirectional turnaround / telemetry capture.
+
+    // Read the reply to the previous frame first: sending drains the RX FIFO.
+    weapon_poll_telemetry_locked();
+
+    // Keep a stable send cadence (bounded by WEAPON_DSHOT_UPDATE_MS).
     bool should_send = (last_dshot_send_time == 0) ||
                        (now_ms - last_dshot_send_time >= WEAPON_DSHOT_UPDATE_MS);
-
-    // Drain before sending to avoid RX FIFO backpressure blocking the PIO SM.
-    weapon_poll_telemetry_locked();
-
-    if (should_send) {
-        dshot_last_throttle = throttle;
-        dshot_send_attempts++;
-        bool telemetry_allowed = (weapon_state == WEAPON_STATE_ARMING ||
-                                  weapon_state == WEAPON_STATE_ARMED ||
-                                  weapon_state == WEAPON_STATE_SPINNING);
-        // Many ESCs (including AM32-based units) are most reliable if the telemetry
-        // request bit is asserted on every packet. We do that while armed, but only
-        // decode at a bounded rate (DP decoder is expensive).
-        bool tx_request_bit = telemetry_allowed;
-        bool decode_due = telemetry_allowed &&
-                          (last_dshot_telemetry_time == 0 ||
-                           (now_ms - last_dshot_telemetry_time) >= dshot_telemetry_interval_ms);
-#if INTEGRATION_TEST_AUTO
-        if (now_ms - last_dshot_debug_log_ms > 1000) {
-            printf("DShot send throttle=%u tlm_bit=%u tlm_decode=%u\n",
-                   throttle, tx_request_bit ? 1u : 0u, decode_due ? 1u : 0u);
-            last_dshot_debug_log_ms = now_ms;
-        }
-#endif
-        if (dshot_send_throttle(MOTOR_WEAPON, throttle, tx_request_bit)) {
-            dshot_send_successes++;
-            last_dshot_send_time = now_ms;
-#if HITL_CONSOLE
-            if (throttle > 0) {
-                hitl_latency_on_dshot_sent(throttle);
-            }
-#endif
-            if (tx_request_bit) {
-                dshot_telemetry_reqbit_tx++;
-            }
-            if (decode_due) {
-                last_dshot_telemetry_time = now_ms;
-                dshot_telemetry_requests++;
-                // EDT cycles through frame types (RPM/V/I/T). Decoding a small burst per
-                // interval avoids getting "stuck" sampling only one type, which can leave
-                // RPM stale and make HITL latency measurements meaningless.
-                uint32_t budget = WEAPON_DSHOT_TELEMETRY_BURST;
-                while (budget-- > 0 && dshot_telemetry_pending < WEAPON_DSHOT_TELEMETRY_MAX_PENDING) {
-                    dshot_telemetry_pending++;
-                }
-            }
-        } else {
-            dshot_send_failures++;
-#if INTEGRATION_TEST_AUTO
-            if (now_ms - last_dshot_fail_log_ms > 1000) {
-                printf("WARN: DShot send failures=%u\n", dshot_send_failures);
-                last_dshot_fail_log_ms = now_ms;
-            }
-#endif
-        }
+    if (!should_send) {
+        return;
     }
 
-    // Drain again to capture the response immediately after TX.
-    weapon_poll_telemetry_locked();
+    int setup_cmd = weapon_dshot_setup_frame_locked(now_ms);
+    uint16_t frame = setup_cmd >= 0 ? (uint16_t)setup_cmd : throttle;
+    bool telemetry_allowed = (weapon_state == WEAPON_STATE_ARMING ||
+                              weapon_state == WEAPON_STATE_ARMED ||
+                              weapon_state == WEAPON_STATE_SPINNING);
+    // Commands go out with the telemetry bit clear, as dshot_send_command()
+    // always sent them; throttle frames request telemetry while armed.
+    bool tx_request_bit = telemetry_allowed && setup_cmd < 0;
+
+    dshot_last_throttle = frame;
+    dshot_send_attempts++;
+    if (dshot_send_throttle(MOTOR_WEAPON, frame, tx_request_bit)) {
+        dshot_send_successes++;
+        last_dshot_send_time = now_ms;
+        if (setup_cmd >= 0) {
+            weapon_dshot_setup_frame_sent_locked(now_ms);
+        }
+#if HITL_CONSOLE
+        if (setup_cmd < 0 && throttle > 0) {
+            hitl_latency_on_dshot_sent(throttle);
+        }
+#endif
+        if (tx_request_bit) {
+            dshot_telemetry_reqbit_tx++;
+            dshot_telemetry_requests++;
+        }
+    } else {
+        dshot_send_failures++;
+#if INTEGRATION_TEST_AUTO
+        if (now_ms - last_dshot_fail_log_ms > 1000) {
+            printf("WARN: DShot send failures=%u\n", dshot_send_failures);
+            last_dshot_fail_log_ms = now_ms;
+        }
+#endif
+    }
 }
 
 static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
@@ -373,11 +353,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
             last_dshot_telemetry_rx_ms = 0;
             last_weapon_telem_valid = false;
             memset(&last_weapon_telem, 0, sizeof(last_weapon_telem));
-            filtered_rpm = 0;
-            filtered_voltage_cV = 0;
-            filtered_current_cA = 0;
-            filtered_temperature_C = 0;
-            telem_filter_primed = false;
+            weapon_reset_telemetry_filter_locked();
             // Reset GPIO to SIO after DShot (PIO cleanup)
             gpio_set_function(PIN_WEAPON_PWM, GPIO_FUNC_SIO);
             gpio_put(PIN_WEAPON_PWM, 0);
@@ -422,9 +398,9 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                 dshot_config_t dshot_config = {
                     .gpio_pin = PIN_WEAPON_PWM,
                     .speed = DSHOT_SPEED_300,  // 300kbit/s recommended for RP2040
-                    // Bidirectional mode is required for DShot telemetry (EDT).
-                    // Hardware must provide a pull-up on the signal line (external resistor).
-                    .bidirectional = true,
+                    // Keep this explicit so normal unidirectional AM32 ESCs are stable.
+                    // Enable only when the ESC and wiring support single-wire bidirectional EDT.
+                    .bidirectional = (WEAPON_DSHOT_BIDIRECTIONAL != 0),
                     .pole_pairs = WEAPON_POLE_PAIRS
                 };
                 if (dshot_init(MOTOR_WEAPON, &dshot_config)) {
@@ -447,11 +423,7 @@ static bool weapon_set_control_mode(weapon_control_mode_t new_mode) {
                     last_dshot_telemetry_rx_ms = 0;
                     last_weapon_telem_valid = false;
                     memset(&last_weapon_telem, 0, sizeof(last_weapon_telem));
-                    filtered_rpm = 0;
-                    filtered_voltage_cV = 0;
-                    filtered_current_cA = 0;
-                    filtered_temperature_C = 0;
-                    telem_filter_primed = false;
+                    weapon_reset_telemetry_filter_locked();
                     dshot_setup_pending = false;
                     dshot_setup_done = false;
                     DEBUG_PRINT("Weapon control mode: DShot300\n");
@@ -549,11 +521,7 @@ bool weapon_init(void) {
     last_dshot_telemetry_rx_ms = 0;
     last_weapon_telem_valid = false;
     memset(&last_weapon_telem, 0, sizeof(last_weapon_telem));
-    filtered_rpm = 0;
-    filtered_voltage_cV = 0;
-    filtered_current_cA = 0;
-    filtered_temperature_C = 0;
-    telem_filter_primed = false;
+    weapon_reset_telemetry_filter_locked();
 
     motor_control_set_pulse(MOTOR_WEAPON, PWM_MIN_PULSE);
 
@@ -576,8 +544,11 @@ bool weapon_init(void) {
         // during the arming phase.  The ESC retains these settings as long as
         // it stays powered, so a single setup at boot is sufficient.
         dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE);
-        dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
-        // SPIN_DIRECTION_NORMAL omitted — see arming setup comment.
+        dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_OFF);
+        dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_SPIN_DIRECTION_NORMAL);
+        if (WEAPON_DSHOT_USE_3D) {
+            dshot_send_command(MOTOR_WEAPON, DSHOT_CMD_3D_MODE_ON);
+        }
         dshot_setup_done = true;
     } else {
         DEBUG_PRINT("Weapon system initialized in PWM mode (DShot init failed)\n");
@@ -628,7 +599,6 @@ void weapon_update(void) {
                 case WEAPON_MODE_DSHOT:
                     if (dshot_initialized) {
                         weapon_send_dshot_locked(current_time, 0, true);
-                        weapon_run_dshot_setup_locked(current_time);
                     }
                     break;
 
@@ -644,7 +614,7 @@ void weapon_update(void) {
 
             if (ready_to_arm && (current_time - arm_start_time > WEAPON_ARM_TIMEOUT)) {
                 weapon_state = WEAPON_STATE_ARMED;
-                DEBUG_PRINT("Weapon armed\n");
+                printf("WPN state ARMED (arm took %lu ms)\n", (unsigned long)(current_time - arm_start_time));
                 status_set_weapon(WEAPON_STATUS_ARMED, LED_EFFECT_SOLID);
             }
             break;
@@ -657,6 +627,10 @@ void weapon_update(void) {
                 // Prime phase: 0=idle, 1=pulse (new dir min DShot), 2=reset (DShot=0)
                 static uint8_t prime_phase = 0;
                 static uint32_t prime_start_ms = 0;
+                int8_t effective_speed = current_speed;
+                if (!WEAPON_DSHOT_USE_3D && effective_speed < 0) {
+                    effective_speed = 0;
+                }
 
                 bool speed_changed = false;
                 if (current_speed != target_speed) {
@@ -672,36 +646,41 @@ void weapon_update(void) {
                         reversal_active = true;
                     }
 
-                    // Direction-change prime: trigger on ANY start from
-                    // zero, not just during reversals.  This handles:
-                    //   - Initial start after arming (ESC may need dir flip)
-                    //   - Slow direction change (stop, wait, new direction)
-                    //   - Fast reversal through zero (ramp crosses zero)
-                    // Phase 1: send min DShot in target direction → ESC
-                    //   flips its internal direction flag.
-                    // Phase 2: send DShot=0 → BEMF timeout resets running.
                     bool in_prime = false;
-                    if (current_speed == 0 && target_speed != 0) {
-                        if (prime_phase == 0) {
-                            prime_phase = 1;
-                            prime_start_ms = current_time;
-                        }
-                        if (prime_phase == 1) {
-                            in_prime = true;
-                            if (current_time - prime_start_ms >= WEAPON_PRIME_PULSE_MS) {
-                                prime_phase = 2;
+                    if (WEAPON_DSHOT_USE_3D) {
+                        // Direction-change prime: trigger on ANY start from
+                        // zero, not just during reversals.  This handles:
+                        //   - Initial start after arming (ESC may need dir flip)
+                        //   - Slow direction change (stop, wait, new direction)
+                        //   - Fast reversal through zero (ramp crosses zero)
+                        // Phase 1: send min DShot in target direction → ESC
+                        //   flips its internal direction flag.
+                        // Phase 2: send DShot=0 → BEMF timeout resets running.
+                        if (effective_speed == 0 && target_speed != 0) {
+                            if (prime_phase == 0) {
+                                prime_phase = 1;
                                 prime_start_ms = current_time;
                             }
-                        } else if (prime_phase == 2) {
-                            if (current_time - prime_start_ms >= WEAPON_PRIME_RESET_MS) {
-                                // Prime complete — keep reversal_active so
-                                // ramp-up uses fast spindown rate.
-                                prime_phase = 0;
-                                prime_start_ms = 0;
-                            } else {
+                            if (prime_phase == 1) {
                                 in_prime = true;
+                                if (current_time - prime_start_ms >= WEAPON_PRIME_PULSE_MS) {
+                                    prime_phase = 2;
+                                    prime_start_ms = current_time;
+                                }
+                            } else if (prime_phase == 2) {
+                                if (current_time - prime_start_ms >= WEAPON_PRIME_RESET_MS) {
+                                    // Prime complete — keep reversal_active so
+                                    // ramp-up uses fast spindown rate.
+                                    prime_phase = 0;
+                                    prime_start_ms = 0;
+                                } else {
+                                    in_prime = true;
+                                }
                             }
                         }
+                    } else {
+                        prime_phase = 0;
+                        prime_start_ms = 0;
                     }
 
                     if (!in_prime) {
@@ -779,8 +758,10 @@ void weapon_update(void) {
                         } else if (prime_phase == 2) {
                             // Prime reset: DShot=0 triggers BEMF timeout.
                             dshot_throttle = 0;
+                        } else if (WEAPON_DSHOT_USE_3D) {
+                            dshot_throttle = dshot_throttle_from_percent_3d(effective_speed);
                         } else {
-                            dshot_throttle = dshot_throttle_from_percent_3d(current_speed);
+                            dshot_throttle = dshot_throttle_from_percent_unidir((uint8_t)abs(effective_speed));
                         }
                         weapon_send_dshot_locked(current_time, dshot_throttle, speed_changed);
                         break;
@@ -843,6 +824,9 @@ bool weapon_arm(void) {
     weapon_state = WEAPON_STATE_ARMING;
     arm_start_time = to_ms_since_boot(get_absolute_time());
     mutex_enter_blocking(&mode_mutex);
+    // Start every arming with fresh telemetry: a filter left over from a
+    // previous spin must not gate the new readings.
+    weapon_reset_telemetry_filter_locked();
     if (control_mode == WEAPON_MODE_DSHOT && dshot_initialized) {
         // Always re-run DShot setup commands (EDT enable, 3D mode, spin
         // direction) during arming.  The boot-time setup in weapon_init()
@@ -914,6 +898,9 @@ bool weapon_set_speed(int8_t speed_percent) {
     }
 
     speed_percent = (int8_t)CLAMP(speed_percent, -MAX_WEAPON_SPEED, MAX_WEAPON_SPEED);
+    if (!WEAPON_DSHOT_USE_3D && speed_percent < 0) {
+        speed_percent = 0;
+    }
     target_speed = speed_percent;
 
     // Apply exponential curve to weapon speed for better control feel.
@@ -1005,6 +992,17 @@ bool weapon_get_telemetry(weapon_telemetry_t* telemetry) {
     return ok;
 }
 
+bool weapon_get_telemetry_snapshot(weapon_telemetry_t* telemetry) {
+    if (telemetry == NULL) {
+        return false;
+    }
+    mutex_enter_blocking(&mode_mutex);
+    memcpy(telemetry, &last_weapon_telem, sizeof(*telemetry));
+    bool ok = last_weapon_telem_valid;
+    mutex_exit(&mode_mutex);
+    return ok;
+}
+
 uint32_t weapon_get_dshot_failures(void) {
     return dshot_send_failures;
 }
@@ -1070,11 +1068,7 @@ void weapon_reset_dshot_telemetry_counts(void) {
     dshot_telemetry_decode_frames = 0;
     last_weapon_telem_valid = false;
     memset(&last_weapon_telem, 0, sizeof(last_weapon_telem));
-    filtered_rpm = 0;
-    filtered_voltage_cV = 0;
-    filtered_current_cA = 0;
-    filtered_temperature_C = 0;
-    telem_filter_primed = false;
+    weapon_reset_telemetry_filter_locked();
     mutex_exit(&mode_mutex);
 }
 

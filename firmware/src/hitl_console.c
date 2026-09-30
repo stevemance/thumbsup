@@ -12,9 +12,11 @@
 
 #include "config.h"
 #include "hitl_overrides.h"
+#include "bluetooth_platform.h"
 #include "pico/stdlib.h"
 #include "system_status.h"
 #include "motor_control.h"
+#include "dshot.h"
 #include "weapon.h"
 
 #define HITL_LINE_MAX 160
@@ -99,11 +101,16 @@ static void hitl_print_help(void) {
     printf("  HITL BTADDR\n");
     printf("  HITL BTKEYS CLEAR\n");
     printf("  HITL BTKEYS LIST\n");
+    printf("  HITL AUTOSCAN <0|1>\n");
     printf("  HITL TELEM\n");
     printf("  HITL TELEMSTATS\n");
     printf("  HITL TELEMRATE <ms>\n");
     printf("  HITL BATTERY <mv>\n");
     printf("  HITL BATTERY OFF\n");
+    printf("  HITL PWMHZ <50..490>\n");
+    printf("  HITL RXSTATS [RESET]\n");
+    printf("  HITL EDTSTATS [RESET]\n");
+    printf("  HITL WEAPON <-100..100|OFF>   (armed only; overrides triggers)\n");
     printf("  HITL LATENCY ARM <rpm_threshold>\n");
     printf("  HITL LATENCY DISARM\n");
 }
@@ -223,8 +230,7 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
     bool telem_ok = weapon_get_telemetry(&telem);
     uint32_t age = weapon_get_telemetry_age_ms();
 
-    // Derive weapon command from the current gamepad inputs for debugging.
-    // This mirrors the competition mapping logic (signed stick + unsigned pedals).
+    // Raw stick/pedal values for debugging (no longer drive the weapon).
     int32_t w_raw_ry = gp ? CLAMP(gp->axis_ry, -512, 511) : 0;
     int32_t w_stick = 0;
     if (abs(w_raw_ry) > TRIGGER_THRESHOLD) {
@@ -249,10 +255,15 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
             w_brk = CLAMP(w_brk, 0, 100);
         }
     }
-    // Pedals (unsigned) override stick only if their value exceeds stick magnitude.
-    int32_t w_cmd = w_stick;
-    if (w_thr > abs(w_cmd)) w_cmd = w_thr;
-    if (w_brk > abs(w_cmd)) w_cmd = w_brk;
+    // The weapon is commanded by the triggers (ZR forward, ZL reverse); w_cmd
+    // shows the raw trigger request.  The robot's latch (first pressed wins,
+    // release required after arming) is reflected in target.
+    int32_t w_cmd = 0;
+    if (gp) {
+        bool fwd = (gp->buttons & BTN_TRIGGER_R) || gp->throttle >= WEAPON_TRIGGER_ANALOG_ON;
+        bool rev = (gp->buttons & BTN_TRIGGER_L) || gp->brake >= WEAPON_TRIGGER_ANALOG_ON;
+        w_cmd = fwd == rev ? 0 : (fwd ? WEAPON_TRIGGER_SPEED : -WEAPON_TRIGGER_SPEED);
+    }
 
     printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu weapon=%s speed=%d target=%d thr=%u mode=%s "
            "x=%d y=%d rx=%d ry=%d p_brk=%ld p_thr=%ld w_stick=%ld w_thr=%ld w_brk=%ld w_cmd=%ld buttons=0x%04x dpad=0x%02x dl_us=%u dr_us=%u telem=%u age_ms=",
@@ -380,6 +391,26 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
         return;
     }
 
+    if (streq_case(cmd, "AUTOSCAN")) {
+        char* sub = strtok_r(NULL, " \t", &save);
+        if (!sub) {
+            printf("HITL AUTOSCAN %u\n", bluetooth_platform_get_autoscan() ? 1u : 0u);
+            return;
+        }
+        if (streq_case(sub, "1") || streq_case(sub, "ON")) {
+            bluetooth_platform_set_autoscan(true);
+            printf("HITL AUTOSCAN 1\n");
+            return;
+        }
+        if (streq_case(sub, "0") || streq_case(sub, "OFF")) {
+            bluetooth_platform_set_autoscan(false);
+            printf("HITL AUTOSCAN 0\n");
+            return;
+        }
+        printf("ERR HITL AUTOSCAN expects <0|1>\n");
+        return;
+    }
+
     if (streq_case(cmd, "TELEM")) {
         hitl_print_telem();
         return;
@@ -471,6 +502,82 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
         }
         hitl_overrides_set_battery_mv((uint32_t)mv);
         printf("HITL BATTERY mv=%lu\n", mv);
+        return;
+    }
+
+    if (streq_case(cmd, "WEAPON")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        if (value && streq_case(value, "OFF")) {
+            hitl_overrides_clear_weapon_pct();
+            if (weapon_is_armed()) {
+                weapon_set_speed(0);
+            }
+            printf("HITL WEAPON off\n");
+            return;
+        }
+        long pct = value ? strtol(value, NULL, 0) : 0;
+        if (!value || pct < -100 || pct > 100) {
+            printf("ERR HITL WEAPON expects -100..100|OFF\n");
+            return;
+        }
+        hitl_overrides_set_weapon_pct((int8_t)pct);
+        if (weapon_is_armed()) {
+            weapon_set_speed((int8_t)pct);
+        }
+        printf("HITL WEAPON pct=%ld armed=%u\n", pct, weapon_is_armed() ? 1u : 0u);
+        return;
+    }
+
+    if (streq_case(cmd, "EDTSTATS")) {
+        char* arg = strtok_r(NULL, " \t", &save);
+        dshot_rx_stats_t st;
+        if (!dshot_get_rx_stats(MOTOR_WEAPON, &st)) {
+            printf("ERR HITL EDTSTATS dshot not initialized\n");
+            return;
+        }
+        weapon_telemetry_t wt = {0};
+        weapon_get_telemetry_snapshot(&wt);
+        uint32_t now = to_ms_since_boot(get_absolute_time());
+#define AGE(ms) ((ms) ? (long)(now - (ms)) : -1L)
+        printf("HITL EDTSTATS sent=%lu read=%lu ok=%lu no_start=%lu bitcount=%lu gcr=%lu crc=%lu "
+               "erpm=%lu stopped=%lu temp=%lu volt=%lu curr=%lu dbg=%lu stress=%lu event=%lu "
+               "e00=%lu eff=%lu discarded_words=%lu edt_active=%u "
+               "rpm=%lu rpm_age=%ld v=%.2f v_age=%ld t=%u t_age=%ld i_age=%ld\n",
+               (unsigned long)st.frames_sent, (unsigned long)st.replies_read,
+               (unsigned long)st.results[DSHOT_RX_OK], (unsigned long)st.results[DSHOT_RX_NO_START],
+               (unsigned long)st.results[DSHOT_RX_BITCOUNT], (unsigned long)st.results[DSHOT_RX_GCR],
+               (unsigned long)st.results[DSHOT_RX_CRC],
+               (unsigned long)st.kinds[DSHOT_FRAME_ERPM], (unsigned long)st.kinds[DSHOT_FRAME_STOPPED],
+               (unsigned long)st.kinds[DSHOT_FRAME_TEMP], (unsigned long)st.kinds[DSHOT_FRAME_VOLT],
+               (unsigned long)st.kinds[DSHOT_FRAME_CURR],
+               (unsigned long)(st.kinds[DSHOT_FRAME_DEBUG1] + st.kinds[DSHOT_FRAME_DEBUG2]),
+               (unsigned long)st.kinds[DSHOT_FRAME_STRESS], (unsigned long)st.kinds[DSHOT_FRAME_EVENT],
+               (unsigned long)st.edt_enabled_events, (unsigned long)st.edt_disabled_events,
+               (unsigned long)st.discarded_words,
+               dshot_extended_telemetry_active(MOTOR_WEAPON) ? 1u : 0u,
+               (unsigned long)wt.rpm, AGE(wt.erpm_ms), wt.voltage_cV / 100.0f, AGE(wt.voltage_ms),
+               wt.temperature_C, AGE(wt.temperature_ms), AGE(wt.current_ms));
+#undef AGE
+        if (arg && streq_case(arg, "RESET")) {
+            dshot_reset_rx_stats(MOTOR_WEAPON);
+        }
+        return;
+    }
+
+    if (streq_case(cmd, "RXSTATS")) {
+        char* arg = strtok_r(NULL, " \t", &save);
+        bluetooth_platform_print_rx_stats(arg && streq_case(arg, "RESET"));
+        return;
+    }
+
+    if (streq_case(cmd, "PWMHZ")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        unsigned long hz = value ? strtoul(value, NULL, 0) : 0;
+        if (!motor_control_set_drive_frame_rate((uint32_t)hz)) {
+            printf("ERR HITL PWMHZ expects 50..490\n");
+            return;
+        }
+        printf("HITL PWMHZ hz=%lu\n", hz);
         return;
     }
 

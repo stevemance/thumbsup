@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "motor_control.h"
+#include "dshot_rx.h"
 
 /**
  * DShot Protocol Implementation
@@ -75,9 +76,38 @@ typedef struct {
     uint8_t crc;                // CRC checksum
     bool valid;                 // True if telemetry is valid
     uint32_t timestamp_ms;      // When telemetry was received
-    uint8_t type;               // EDT type nibble (internal/debug)
-    uint16_t value;             // Raw 12-bit EDT payload (internal/debug)
+    uint8_t type;               // Kind of the most recent frame (dshot_frame_kind_t)
+    uint16_t value;             // Raw 12-bit payload of the most recent frame
+    uint8_t fresh;              // DSHOT_FRESH_* bits: fields updated by the most recent frame
+    bool stopped;               // ESC reported "not turning" (0xFFF) more recently than an eRPM
+    uint32_t erpm_ms;           // Per-field receive times (0 = never received)
+    uint32_t voltage_ms;
+    uint32_t current_ms;
+    uint32_t temperature_ms;
 } dshot_telemetry_t;
+
+#define DSHOT_FRESH_ERPM  0x01   // eRPM or stopped frame
+#define DSHOT_FRESH_VOLT  0x02
+#define DSHOT_FRESH_CURR  0x04
+#define DSHOT_FRESH_TEMP  0x08
+#define DSHOT_FRESH_EVENT 0x10
+
+// AM32 2.20 sends EDT current as amps/2 per step; the EDT spec (and newer
+// AM32) use 1 A per step.  Centi-amps per step:
+#ifndef DSHOT_EDT_CURRENT_CA_PER_STEP
+#define DSHOT_EDT_CURRENT_CA_PER_STEP 50
+#endif
+
+// Receive statistics (bidirectional mode).
+typedef struct {
+    uint32_t frames_sent;          // telemetry-capable frames transmitted
+    uint32_t replies_read;         // captures read from the PIO
+    uint32_t results[DSHOT_RX_RESULT_COUNT];      // decode outcome counts
+    uint32_t kinds[DSHOT_FRAME_KIND_COUNT];       // valid frames by kind
+    uint32_t edt_enabled_events;   // 0xE00
+    uint32_t edt_disabled_events;  // 0xEFF
+    uint32_t discarded_words;      // RX words drained unread before a send
+} dshot_rx_stats_t;
 
 // DShot configuration
 typedef struct {
@@ -135,24 +165,16 @@ bool dshot_send_command(motor_channel_t motor, dshot_command_t cmd);
 bool dshot_read_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 
 /**
- * Read raw EDT telemetry samples (42 samples, 2x oversampled).
- *
- * @param motor Motor channel
- * @param raw_data Output raw frame bits
- * @return true if a frame was read
+ * Read one raw reply capture (DSHOT_RX_WORDS words of line samples) without
+ * decoding it.  For diagnostics; normal code uses dshot_read_telemetry().
  */
-bool dshot_read_telemetry_raw(motor_channel_t motor, uint64_t* raw_data);
+bool dshot_read_telemetry_raw(motor_channel_t motor, uint32_t words[DSHOT_RX_WORDS]);
 
 /**
- * Decode raw EDT telemetry samples and update last telemetry.
- *
- * @param motor Motor channel
- * @param raw_samples Raw 64-bit samples from dshot_read_telemetry_raw
- * @param telemetry Output decoded telemetry (optional)
- * @return true if telemetry decoded successfully
+ * Receive statistics since init or the last reset.
  */
-bool dshot_decode_telemetry_raw(motor_channel_t motor, uint64_t raw_samples,
-                                dshot_telemetry_t* telemetry);
+bool dshot_get_rx_stats(motor_channel_t motor, dshot_rx_stats_t* stats);
+void dshot_reset_rx_stats(motor_channel_t motor);
 
 /**
  * Convert electrical RPM to mechanical RPM
@@ -173,7 +195,7 @@ uint32_t dshot_erpm_to_rpm(uint32_t erpm, uint8_t pole_pairs);
 bool dshot_get_telemetry(motor_channel_t motor, dshot_telemetry_t* telemetry);
 
 /**
- * Check whether extended telemetry is active for a motor.
+ * True once the ESC has acknowledged EDT enable (0xE00) or sent any EDT frame.
  *
  * @param motor Motor channel
  * @return true if extended telemetry is active

@@ -43,9 +43,7 @@ static void setup_pwm_pin(uint8_t pin, uint8_t* slice, uint8_t* channel) {
 
     pwm_config cfg = pwm_get_default_config();
 
-    uint32_t clock_freq = 125000000;
-    uint32_t divider = clock_freq / (PWM_FREQUENCY * PWM_WRAP_VALUE);
-    pwm_config_set_clkdiv(&cfg, divider);
+    pwm_config_set_clkdiv(&cfg, (float)clock_get_hz(clk_sys) / PWM_TICK_HZ);
     pwm_config_set_wrap(&cfg, PWM_WRAP_VALUE - 1);
 
     pwm_init(*slice, &cfg, false);
@@ -95,7 +93,7 @@ bool motor_control_init(void) {
             motors[i].target_pulse_us = PWM_NEUTRAL_PULSE;
         }
         if (motors[i].pwm_enabled) {
-            uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+            uint32_t pulse_cycles = motors[i].current_pulse_us;
             #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
             #else
@@ -132,7 +130,7 @@ bool motor_control_update(void) {
                 motors[i].current_pulse_us -= step;
             }
 
-            uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+            uint32_t pulse_cycles = motors[i].current_pulse_us;
             #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
             #else
@@ -146,6 +144,19 @@ bool motor_control_update(void) {
         }
     }
 
+    return true;
+}
+
+// Changes the drive PWM frame rate at runtime (HITL experiments).  Pulse widths
+// stay in microseconds, so only the frame period changes.
+bool motor_control_set_drive_frame_rate(uint32_t hz) {
+    if (!initialized || hz < 50 || hz > 490) {
+        return false;
+    }
+    const motor_channel_t drive[] = {MOTOR_LEFT_DRIVE, MOTOR_RIGHT_DRIVE};
+    for (int i = 0; i < 2; i++) {
+        pwm_set_wrap(motors[drive[i]].pwm_slice, (uint16_t)(PWM_TICK_HZ / hz - 1));
+    }
     return true;
 }
 
@@ -178,7 +189,15 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
         pulse_us = CLAMP(pulse_us, PWM_MIN_PULSE, PWM_MAX_PULSE);
     }
 
+    // Apply immediately.  The drive ESCs get the new width at the next PWM
+    // frame; any ramping here adds directly to stick-to-wheel latency.
     motors[channel].target_pulse_us = pulse_us;
+    if (motors[channel].pwm_enabled && motors[channel].current_pulse_us != pulse_us) {
+        motors[channel].current_pulse_us = pulse_us;
+        #if !DISABLE_MOTOR_OUTPUT
+        pwm_set_chan_level(motors[channel].pwm_slice, motors[channel].pwm_channel, pulse_us);
+        #endif
+    }
 
     return true;
 }
@@ -197,6 +216,7 @@ bool motor_control_set_speed(motor_channel_t channel, int8_t speed) {
 
     uint16_t pulse = speed_to_pulse(speed);
 
+#ifdef DEBUG_MODE
     // DEBUG: Log motor commands (only for drive motors)
     static uint32_t last_motor_debug = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -209,6 +229,7 @@ bool motor_control_set_speed(motor_channel_t channel, int8_t speed) {
             last_motor_debug = now;
         }
     }
+#endif
 
     return motor_control_set_pulse(channel, pulse);
 }
@@ -228,7 +249,7 @@ void motor_control_stop_all(void) {
         }
 
         if (motors[i].pwm_enabled) {
-            uint32_t pulse_cycles = (motors[i].current_pulse_us * PWM_WRAP_VALUE) / 20000;
+            uint32_t pulse_cycles = motors[i].current_pulse_us;
             #if !DISABLE_MOTOR_OUTPUT
             pwm_set_chan_level(motors[i].pwm_slice, motors[i].pwm_channel, pulse_cycles);
             #endif
@@ -280,7 +301,7 @@ bool motor_control_enable_weapon_pwm(void) {
     motors[MOTOR_WEAPON].current_pulse_us = PWM_MIN_PULSE;
     motors[MOTOR_WEAPON].target_pulse_us = PWM_MIN_PULSE;
 
-    uint32_t pulse_cycles = (PWM_MIN_PULSE * PWM_WRAP_VALUE) / 20000;
+    uint32_t pulse_cycles = PWM_MIN_PULSE;
     #if !DISABLE_MOTOR_OUTPUT
     pwm_set_chan_level(motors[MOTOR_WEAPON].pwm_slice,
                        motors[MOTOR_WEAPON].pwm_channel,

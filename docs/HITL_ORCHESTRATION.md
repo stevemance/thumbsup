@@ -34,6 +34,7 @@ HITL console commands (robot):
 - `HITL BTADDR`
 - `HITL BTKEYS CLEAR`
 - `HITL BTKEYS LIST`
+- `HITL AUTOSCAN <0|1>` (resume BT inquiry after disconnect; HITL builds default 0, competition builds are always 1)
 - `HITL BATTERY <mv>`
 - `HITL BATTERY OFF`
 - `HITL TELEM`
@@ -68,10 +69,12 @@ Serial commands (gamepad):
 The orchestrator:
 
 1. Builds robot + gamepad UF2s
-2. Flashes both Picos without BOOTSEL using `picotool` (reset-to-BOOTSEL)
-3. Reboots both into application mode at the start of the test for clean state
-4. Runs an automated smoke suite with pass/fail
-5. Emits logs + a JSON report under `hitl_logs/`
+2. Runs AM32 ESC provisioning (check config drift, write only if needed)
+   - Provision step best-effort powers `--psu-channel` during ESC config operations.
+3. Flashes both Picos without BOOTSEL using `picotool` (reset-to-BOOTSEL)
+4. Reboots both into application mode at the start of the test for clean state
+5. Runs an automated smoke suite with pass/fail
+6. Emits logs + a JSON report under `hitl_logs/`
 
 Relevant files:
 
@@ -81,6 +84,16 @@ Run:
 
 ```bash
 python3 tools/hitl_orchestrator.py --suite smoke
+```
+
+AM32 provisioning controls:
+
+```bash
+# Skip AM32 config drift check/provisioning
+python3 tools/hitl_orchestrator.py --suite smoke --no-am32-provision
+
+# Override expected config file (.bin or hex text)
+python3 tools/hitl_orchestrator.py --suite smoke --am32-config config/am32/weapon_esc_expected.hexcfg
 ```
 
 Drive PWM end-to-end (no motor power required):
@@ -93,6 +106,12 @@ Disconnect failsafe (drive outputs return to neutral after controller disconnect
 
 ```bash
 python3 tools/hitl_orchestrator.py --suite disconnect_failsafe
+```
+
+Disconnect re-pair (drop the link while the weapon spins and the drive moves; robot must stop, then re-discover and reconnect the emulator by itself):
+
+```bash
+python3 tools/hitl_orchestrator.py --suite disconnect_repair --psu-channel 1
 ```
 
 Active weapon spin suite (requires PSU channel powering the ESC/motor):
@@ -145,6 +164,8 @@ Artifacts:
 - `hitl_logs/run_*/steps/*/drive_spin_result.json`
 - `hitl_logs/run_*/steps/*/drive_e2e_result.json`
 - `hitl_logs/run_*/steps/*/disconnect_failsafe_result.json`
+- `hitl_logs/run_*/steps/*/disconnect_repair_result.json` (timings: disconnect detect, outputs safe, re-pair)
+- `hitl_logs/run_*/steps/*/am32_provision_result.json`
 - `hitl_logs/latest_orchestrator_report.json`
 
 ## Reports (MD/PDF + Plots)
@@ -199,7 +220,7 @@ Setup details are in `docs/hitl_device_setup.md`.
 The intended direction is to add suites that validate robot subsystems using the same production code path:
 
 1. **Drive HITL**
-   - Add orchestrator sequences that command sticks (LX/LY) and validate:
+   - Add orchestrator sequences that command sticks (LY throttle, RX turn) and validate:
      - Motor PWM outputs (via existing status or additional HITL status fields)
      - Safety behavior (failsafe cutoff, deadzones)
      - Optional: PSU current signature via `labctl psu snapshot` or scope capture

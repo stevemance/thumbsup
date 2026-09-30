@@ -8,6 +8,7 @@
 
 #include <pico/time.h>
 #include <hardware/watchdog.h>
+#include <hardware/gpio.h>
 #if !SERIAL_GAMEPAD
 #include <pico/cyw43_arch.h>
 #include <btstack.h>
@@ -28,6 +29,7 @@
 #include "trim_mode.h"
 #include "calibration_mode.h"
 #include "motor_linearization.h"
+#include "hitl_overrides.h"
 #include "hitl_console.h"
 
 #if SERIAL_GAMEPAD
@@ -71,6 +73,23 @@ static uint16_t last_buttons = 0;
 static uint32_t last_button_change_time = 0;
 #define DEBOUNCE_TIME_MS 100  // Minimum time between button state changes
 
+// Bluetooth inquiry policy.
+//
+// Inquiry (periodic BR/EDR scan + autoconnect) is stopped once a controller is
+// ready because it generates CYW43 SPI traffic that contends with BT data.  It
+// MUST be restarted on disconnect: a controller that drops into pairing mode
+// waits to be *discovered*, and without inquiry the robot can never find it
+// again (only a controller that pages us on its own would reconnect).
+//
+// HITL builds default this off because the emulator initiates connections and
+// a concurrent robot-side autoconnect races it.  The HITL console can turn it
+// on at runtime (HITL AUTOSCAN 1) so the disconnect/re-pair path is testable.
+#if HITL_NO_SCAN
+static bool bt_autoscan_enabled = false;
+#else
+static bool bt_autoscan_enabled = true;
+#endif
+
 // Previous controller state for edge detection (file-scope so disconnect can clear).
 static uni_gamepad_t inject_prev = {0};
 static bool inject_prev_valid = false;
@@ -85,17 +104,41 @@ static btstack_timer_source_t hitl_timer;
 static uni_gamepad_t hitl_last_gp;
 static bool hitl_last_gp_valid = false;
 
+static void require_weapon_trigger_release(void);
+
+// Stops the drive and weapon if they are being commanded but controller
+// reports have stopped arriving (link stalled without a disconnect).
+static void check_report_staleness(uint32_t now_ms) {
+    if (last_controller_input == 0 || now_ms - last_controller_input <= REPORT_STALE_TIMEOUT_MS) {
+        return;
+    }
+    bool driving = motor_control_get_target_pulse(MOTOR_LEFT_DRIVE) != PWM_NEUTRAL_PULSE ||
+                   motor_control_get_target_pulse(MOTOR_RIGHT_DRIVE) != PWM_NEUTRAL_PULSE;
+    if (!driving && weapon_get_target_speed() == 0) {
+        return;
+    }
+    printf("SAFETY: no controller report for %lu ms - outputs to neutral\n",
+           (unsigned long)(now_ms - last_controller_input));
+    drive_stop();
+    weapon_set_speed(0);
+    require_weapon_trigger_release();
+    // Make the next report go through full processing even if unchanged.
+    memset(&ctl_prev, 0, sizeof(ctl_prev));
+}
+
 static void hitl_timer_handler(btstack_timer_source_t* ts) {
     // Fast keepalive tick:
     // - Keep DShot frames flowing even when there is no controller traffic.
     //   Some ESCs will start beeping if they don't see frequent DShot updates.
     //   We target WEAPON_DSHOT_UPDATE_MS (2ms) for robustness.
+    uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+    check_report_staleness(now_ms);
+
     motor_control_update();
     weapon_update();
 
     // Slow housekeeping tick (avoid expensive work at 500Hz).
     static uint32_t last_slow_ms = 0;
-    uint32_t now_ms = to_ms_since_boot(get_absolute_time());
     if (last_slow_ms == 0 || (now_ms - last_slow_ms) >= 20) {
         hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
         status_update();
@@ -123,6 +166,111 @@ static void hitl_timer_handler(btstack_timer_source_t* ts) {
 // Platform Overrides
 //
 #if !SERIAL_GAMEPAD
+static btstack_packet_callback_registration_t link_event_registration;
+
+// Poll-latency negotiation.  Some controllers (the PB Tails Crush) reject a
+// Guaranteed QoS request, so fall back to Best Effort, then to an HCI Flow
+// Specification for the incoming direction.
+enum { LINK_QOS_GUARANTEED, LINK_QOS_BEST_EFFORT, LINK_QOS_FLOW_SPEC, LINK_QOS_DONE };
+static int link_qos_step = LINK_QOS_DONE;
+static hci_con_handle_t link_qos_handle = HCI_CON_HANDLE_INVALID;
+static btstack_timer_source_t link_qos_timer;
+
+static void link_qos_try_next(btstack_timer_source_t* ts) {
+    UNUSED(ts);
+#if BT_QOS_LATENCY_US
+    if (link_qos_handle == HCI_CON_HANDLE_INVALID) {
+        return;
+    }
+    switch (link_qos_step) {
+    case LINK_QOS_GUARANTEED:
+        gap_qos_set(link_qos_handle, HCI_SERVICE_TYPE_GUARANTEED, 1000, 0, BT_QOS_LATENCY_US, 0xFFFFFFFF);
+        break;
+    case LINK_QOS_BEST_EFFORT:
+        gap_qos_set(link_qos_handle, HCI_SERVICE_TYPE_BEST_EFFORT, 1000, 0, BT_QOS_LATENCY_US, 0xFFFFFFFF);
+        break;
+    case LINK_QOS_FLOW_SPEC:
+        if (!hci_can_send_command_packet_now()) {
+            btstack_run_loop_set_timer(&link_qos_timer, 10);
+            btstack_run_loop_add_timer(&link_qos_timer);
+            return;
+        }
+        // flags, flow direction 1 = incoming (controller -> robot), service type,
+        // token rate, token bucket size, peak bandwidth, access latency (us).
+        hci_send_cmd(&hci_flow_specification, link_qos_handle, 0, 1, HCI_SERVICE_TYPE_BEST_EFFORT,
+                     1000, 0, 0, BT_QOS_LATENCY_US);
+        break;
+    default:
+        break;
+    }
+#endif
+}
+
+static void link_qos_start(hci_con_handle_t handle) {
+    link_qos_handle = handle;
+    link_qos_step = LINK_QOS_GUARANTEED;
+    link_qos_timer.process = &link_qos_try_next;
+    link_qos_try_next(&link_qos_timer);
+}
+
+static void link_qos_result(uint8_t status) {
+    if (status == 0 || link_qos_step >= LINK_QOS_FLOW_SPEC) {
+        link_qos_step = LINK_QOS_DONE;
+        return;
+    }
+    link_qos_step++;
+    btstack_run_loop_set_timer(&link_qos_timer, 10);
+    btstack_run_loop_add_timer(&link_qos_timer);
+}
+
+// Logs the link-layer state that drives report latency: role, sniff/active
+// mode and the QoS (poll latency) the radio actually granted.
+static void link_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
+    UNUSED(channel);
+    if (packet_type != HCI_EVENT_PACKET) {
+        return;
+    }
+    switch (hci_event_packet_get_type(packet)) {
+    case HCI_EVENT_ROLE_CHANGE:
+        if (size >= 10) {
+            printf("BT LINK role_change status=%u role=%s\n", packet[2],
+                   packet[9] == 0 ? "central" : "peripheral");
+        }
+        break;
+    case HCI_EVENT_MODE_CHANGE:
+        if (size >= 8) {
+            printf("BT LINK mode_change status=%u mode=%u interval=%u\n",
+                   packet[2], packet[5], little_endian_read_16(packet, 6));
+        }
+        break;
+    case HCI_EVENT_QOS_SETUP_COMPLETE:
+        if (size >= 23) {
+            printf("BT LINK qos status=%u service=%u latency_us=%lu\n", packet[2], packet[6],
+                   (unsigned long)little_endian_read_32(packet, 15));
+            link_qos_result(packet[2]);
+        }
+        break;
+    case HCI_EVENT_FLOW_SPECIFICATION_COMPLETE:
+        if (size >= 24) {
+            printf("BT LINK flow_spec status=%u dir=%u service=%u latency_us=%lu\n", packet[2],
+                   packet[6], packet[7], (unsigned long)little_endian_read_32(packet, 20));
+            link_qos_result(packet[2]);
+        }
+        break;
+    case HCI_EVENT_COMMAND_STATUS:
+        // QoS/Flow Spec rejected before any complete event arrives.
+        if (size >= 6 && packet[2] != 0 && link_qos_step != LINK_QOS_DONE &&
+            (little_endian_read_16(packet, 4) == HCI_OPCODE_HCI_QOS_SETUP ||
+             little_endian_read_16(packet, 4) == HCI_OPCODE_HCI_FLOW_SPECIFICATION)) {
+            printf("BT LINK qos_cmd_status=%u opcode=0x%04x\n", packet[2], little_endian_read_16(packet, 4));
+            link_qos_result(packet[2]);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 static void my_platform_init(int argc, const char **argv) {
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
@@ -145,6 +293,13 @@ static void my_platform_init(int argc, const char **argv) {
 
     hitl_console_init();
 
+    link_event_registration.callback = &link_event_handler;
+    hci_add_event_handler(&link_event_registration);
+
+    gpio_init(PIN_LATENCY_MARKER);
+    gpio_set_dir(PIN_LATENCY_MARKER, GPIO_OUT);
+    gpio_put(PIN_LATENCY_MARKER, 0);
+
     hitl_last_gp_valid = false;
     memset(&hitl_last_gp, 0, sizeof(hitl_last_gp));
     hitl_timer.process = &hitl_timer_handler;
@@ -164,17 +319,22 @@ static void my_platform_on_init_complete(void) {
     // errors like "ACL Connection Already Exists" / L2CAP failures.
     //
     // Note: HID status/console output (HITL_CONSOLE) is orthogonal to scan/autoconnect.
-#if HITL_NO_SCAN
-    uni_bt_enable_new_connections_unsafe(false);
-#else
-    uni_bt_enable_new_connections_unsafe(true);
-#endif
+    if (bt_autoscan_enabled) {
+        uni_bt_start_scanning_and_autoconnect_unsafe();
+    } else {
+        uni_bt_stop_scanning_unsafe();
+    }
 
     // Based on runtime condition, you can delete or list the stored BT keys.
     // Keep stored keys so HITL pairing can be stable across reboots.
     // If you need to reset pairing, add an explicit action/command instead of
     // wiping keys on every boot.
     uni_bt_list_keys_unsafe();
+
+    // Competition firmware should not enforce an allowlist; always clear and
+    // disable it at boot so fresh controllers can pair without manual steps.
+    uni_bt_allowlist_remove_all();
+    uni_bt_allowlist_set_enabled(false);
 
     // Turn off LED once init is done.
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
@@ -192,6 +352,16 @@ static uni_error_t my_platform_on_device_discovered(bd_addr_t addr,
         logi("Ignoring keyboard\n");
         return UNI_ERROR_IGNORE_DEVICE;
     }
+
+#if !HITL_CONSOLE
+    // Competition builds must never bind to the bench's HITL gamepad emulator.
+    // It advertises as a generic gamepad and, if it is powered anywhere nearby,
+    // autoconnect will grab it, stop scanning, and lock the real controller out.
+    if (name && strncmp(name, "ThumbsUp HITL Gamepad", 21) == 0) {
+        logi("Ignoring HITL gamepad emulator: %s\n", name);
+        return UNI_ERROR_IGNORE_DEVICE;
+    }
+#endif
 
     return UNI_ERROR_SUCCESS;
 }
@@ -221,6 +391,14 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
 
     // Update system status LED
     status_set_system(SYSTEM_STATUS_FAILSAFE, LED_EFFECT_BLINK_FAST);
+
+    // Resume inquiry so a controller in pairing mode can be discovered again.
+    // on_device_ready() stopped it to reduce CYW43 SPI contention while a
+    // controller was connected; page scan alone is not enough to re-pair.
+    if (bt_autoscan_enabled) {
+        logi("thumbsup_platform: restarting BT scan after disconnect\n");
+        uni_bt_start_scanning_and_autoconnect_unsafe();
+    }
 
     hitl_console_set_controller_ready(false);
     hitl_console_set_controller_connected(false);
@@ -270,6 +448,13 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
 
     active_con_handle = d->conn.handle;
 
+    printf("BT LINK ready role=%s\n",
+           gap_get_role(active_con_handle) == HCI_ROLE_MASTER ? "central" : "peripheral");
+    link_qos_start(active_con_handle);
+#if BT_PREFER_PERIPHERAL_ROLE
+    printf("BT LINK requesting role=peripheral status=%u\n", gap_request_role(d->conn.btaddr, HCI_ROLE_SLAVE));
+#endif
+
     hitl_console_set_controller_ready(true);
     return UNI_ERROR_SUCCESS;
 }
@@ -283,7 +468,65 @@ static bool controller_axes_neutral(const uni_gamepad_t* gp) {
     return (abs(gp->axis_x)  <= STICK_DEADZONE) &&
            (abs(gp->axis_y)  <= STICK_DEADZONE) &&
            (abs(gp->axis_rx) <= STICK_DEADZONE) &&
-           (abs(gp->axis_ry) <= STICK_DEADZONE);
+           (abs(gp->axis_ry) <= STICK_DEADZONE) &&
+           !(gp->buttons & (BTN_TRIGGER_L | BTN_TRIGGER_R)) &&
+           gp->brake < WEAPON_TRIGGER_ANALOG_ON &&
+           gp->throttle < WEAPON_TRIGGER_ANALOG_ON;
+}
+
+// Maps a raw -512..511 axis to -127..127 with a deadzone rescaled so output
+// starts at 0 at the deadzone edge.
+static int32_t axis_with_deadzone(int32_t raw, int32_t deadzone) {
+    raw = CLAMP(raw, -512, 511);
+    if (abs(raw) <= deadzone) {
+        return 0;
+    }
+    int32_t scaled = raw > 0 ? ((raw - deadzone) * 511) / (511 - deadzone)
+                             : ((raw + deadzone) * 512) / (512 - deadzone);
+    return CLAMP((scaled * 127) / 512, -127, 127);
+}
+
+static void read_drive_sticks(const uni_gamepad_t* gp, int32_t* forward, int32_t* turn) {
+    // Forward stick push is negative.  Turn is negated so +turn = clockwise
+    // with the right motor mounted reversed.
+    *forward = axis_with_deadzone(gp->axis_y, THROTTLE_DEADZONE);
+#if DRIVE_LAYOUT_SPLIT
+    *turn = axis_with_deadzone(-gp->axis_rx, TURN_DEADZONE);
+#else
+    *turn = axis_with_deadzone(-gp->axis_x, TURN_DEADZONE);
+#endif
+}
+
+// Trigger weapon state.  +1 = forward (ZR), -1 = reverse (ZL), 0 = off.
+// After arming, e-stop, reconnect or the neutral guard, both triggers must be
+// seen released before a trigger can spin the weapon again, so a trigger held
+// through arming never spins it up on its own.
+static int8_t weapon_trigger_dir = 0;
+static bool weapon_trigger_release_required = true;
+
+static void require_weapon_trigger_release(void) {
+    weapon_trigger_dir = 0;
+    weapon_trigger_release_required = true;
+}
+
+static int8_t update_weapon_trigger_dir(const uni_gamepad_t* gp) {
+    bool fwd = (gp->buttons & BTN_TRIGGER_R) || gp->throttle >= WEAPON_TRIGGER_ANALOG_ON;
+    bool rev = (gp->buttons & BTN_TRIGGER_L) || gp->brake >= WEAPON_TRIGGER_ANALOG_ON;
+
+    if (!fwd && !rev) {
+        weapon_trigger_release_required = false;
+        weapon_trigger_dir = 0;
+    } else if (weapon_trigger_release_required) {
+        weapon_trigger_dir = 0;
+    } else if (weapon_trigger_dir > 0 && !fwd) {
+        weapon_trigger_dir = rev ? -1 : 0;
+    } else if (weapon_trigger_dir < 0 && !rev) {
+        weapon_trigger_dir = fwd ? 1 : 0;
+    } else if (weapon_trigger_dir == 0 && fwd != rev) {
+        // Both pressed in the same report from idle: neither wins.
+        weapon_trigger_dir = fwd ? 1 : -1;
+    }
+    return weapon_trigger_dir;
 }
 
 static void note_controller_activity(void) {
@@ -297,6 +540,38 @@ static void note_controller_activity(void) {
 }
 
 static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
+    // Emergency stop (both shoulder buttons).  Checked before any service-mode
+    // dispatch so no mode can swallow it.
+    if ((gp->buttons & (BTN_L1 | BTN_R1)) ==
+        (BTN_L1 | BTN_R1)) {
+        bool was_emergency_stop = emergency_stop;
+        emergency_stop = true;
+        armed_state = false;
+        drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
+        drive_update(&stop_cmd);
+        weapon_disarm();
+        require_weapon_trigger_release();
+
+        // CRITICAL: Ensure motor outputs are driven to a safe state even if the
+        // user keeps holding the emergency stop buttons. Without this, we can
+        // get stuck in this early-return path and never call motor_control_update(),
+        // leaving PWM outputs at the last commanded value.
+        motor_control_stop_all();
+
+        if (!was_emergency_stop) {
+            logi("EMERGENCY STOP TRIGGERED\n");
+        }
+        status_set_system(SYSTEM_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
+        status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
+        last_buttons = gp->buttons;
+
+        // Keep the rest of the system responsive / observable while e-stop is held.
+        motor_control_update();
+        weapon_update();
+        safety_update();
+        return;
+    }
+
     // Check for mode activations BEFORE state-change handling to allow hold timers to work
     // Check for test mode activation first
     test_mode_check_activation(gp);
@@ -335,39 +610,8 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         }
 
         // Allow full driving control in trim mode
-        // Drive control using left stick with proper deadzone handling
-        int32_t raw_forward = gp->axis_y; // Forward stick push is negative
-        int32_t raw_turn = gp->axis_x;
-
-        // Validate input ranges
-        raw_forward = CLAMP(raw_forward, -512, 511);
-        raw_turn = CLAMP(raw_turn, -512, 511);
-
-        // Apply deadzone with proper scaling
         int32_t forward = 0, turn = 0;
-
-        if (abs(raw_forward) > STICK_DEADZONE) {
-            if (raw_forward > 0) {
-                forward = ((raw_forward - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
-            } else {
-                forward = ((raw_forward + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
-            }
-        }
-        if (abs(raw_turn) > STICK_DEADZONE) {
-            if (raw_turn > 0) {
-                turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
-            } else {
-                turn = ((raw_turn + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
-            }
-        }
-
-        // Scale to -127/127 range
-        if (forward != 0) {
-            forward = CLAMP((forward * 127) / 512, -127, 127);
-        }
-        if (turn != 0) {
-            turn = CLAMP((turn * 127) / 512, -127, 127);
-        }
+        read_drive_sticks(gp, &forward, &turn);
 
         // Convert to percentage for trim sample capture (-100 to +100)
         int8_t forward_percent = (int8_t)((forward * 100) / 127);
@@ -395,36 +639,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         return;
     }
 
-    // Emergency stop (Both shoulder buttons pressed)
-    if ((gp->buttons & (BTN_L1 | BTN_R1)) ==
-        (BTN_L1 | BTN_R1)) {
-        bool was_emergency_stop = emergency_stop;
-        emergency_stop = true;
-        armed_state = false;
-        drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
-        drive_update(&stop_cmd);
-        weapon_disarm();
-
-        // CRITICAL: Ensure motor outputs are driven to a safe state even if the
-        // user keeps holding the emergency stop buttons. Without this, we can
-        // get stuck in this early-return path and never call motor_control_update(),
-        // leaving PWM outputs at the last commanded value.
-        motor_control_stop_all();
-
-        if (!was_emergency_stop) {
-            logi("EMERGENCY STOP TRIGGERED\n");
-        }
-        status_set_system(SYSTEM_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
-        status_set_weapon(WEAPON_STATUS_EMERGENCY, LED_EFFECT_BLINK_FAST);
-        last_buttons = gp->buttons;
-
-        // Keep the rest of the system responsive / observable while e-stop is held.
-        motor_control_update();
-        weapon_update();
-        safety_update();
-        return;
-    }
-
     // SAFETY: Clear emergency stop only after holding A button for required time
     // Only process if emergency stop is actually active
     if (emergency_stop && (gp->buttons & BTN_A)) {
@@ -437,6 +651,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
             if (hold_time >= SAFETY_BUTTON_HOLD_TIME) {
                 emergency_stop = false;
                 emergency_clear_in_progress = false;
+                require_weapon_trigger_release();
                 logi("Emergency stop cleared after %ums hold\n", hold_time);
                 status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
                 status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
@@ -476,6 +691,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
         }
 
         // Hold all outputs in a safe idle state while the guard is active.
+        require_weapon_trigger_release();
         drive_control_t stop_cmd = { .forward = 0, .turn = 0, .enabled = false };
         drive_update(&stop_cmd);
         weapon_set_speed(0);
@@ -513,6 +729,7 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
             if (!armed_state) {
                 if (weapon_arm()) {
                     armed_state = true;
+                    require_weapon_trigger_release();
                     logi("Weapon ARMED\n");
                 } else {
                     armed_state = false;
@@ -529,40 +746,8 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
 
     // Only process movement if not emergency stopped
     if (!emergency_stop) {
-        // Drive control using left stick with proper deadzone handling
-        int32_t raw_forward = gp->axis_y; // Forward stick push is negative
-        int32_t raw_turn = gp->axis_x;
-
-        // SAFETY: Validate input ranges from controller
-        raw_forward = CLAMP(raw_forward, -512, 511);
-        raw_turn = CLAMP(raw_turn, -512, 511);
-
-        // Apply deadzone with proper scaling (use configured deadzone from config.h)
         int32_t forward = 0, turn = 0;
-
-        if (abs(raw_forward) > STICK_DEADZONE) {
-            // Scale deadzone-adjusted input to full range
-            if (raw_forward > 0) {
-                forward = ((raw_forward - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
-            } else {
-                forward = ((raw_forward + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
-            }
-        }
-        if (abs(raw_turn) > STICK_DEADZONE) {
-            if (raw_turn > 0) {
-                turn = ((raw_turn - STICK_DEADZONE) * 511) / (511 - STICK_DEADZONE);
-            } else {
-                turn = ((raw_turn + STICK_DEADZONE) * 512) / (512 - STICK_DEADZONE);
-            }
-        }
-
-        // Scale to -127/127 with overflow protection
-        if (forward != 0) {
-            forward = CLAMP((forward * 127) / 512, -127, 127);
-        }
-        if (turn != 0) {
-            turn = CLAMP((turn * 127) / 512, -127, 127);
-        }
+        read_drive_sticks(gp, &forward, &turn);
 
         drive_control_t drive_cmd = {
             .forward = forward,
@@ -582,51 +767,16 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
             logi("Weapon state desync: cleared armed_state (disarmed)\n");
         }
 
-        // Weapon control with right stick Y-axis (only if armed)
+        // Weapon on the triggers (only if armed): hold to spin, release to stop.
+        int8_t weapon_dir = update_weapon_trigger_dir(gp);
         if (armed_state) {
-            // Weapon speed can be commanded either by analog pedals (0-1023, forward only)
-            // or by right-stick Y (signed: +Y = forward, -Y = reverse).
-            // Pedals override stick only when their magnitude exceeds stick magnitude.
-
-            // Signed stick mapping (-100..+100%).
-            int32_t stick_speed = 0;
-            int32_t raw_weapon = CLAMP(gp->axis_ry, -512, 511);
-            if (abs(raw_weapon) > TRIGGER_THRESHOLD) {
-                if (raw_weapon > 0) {
-                    stick_speed = ((raw_weapon - TRIGGER_THRESHOLD) * 100) / (511 - TRIGGER_THRESHOLD);
-                } else {
-                    stick_speed = ((raw_weapon + TRIGGER_THRESHOLD) * 100) / (512 - TRIGGER_THRESHOLD);
-                }
-                stick_speed = CLAMP(stick_speed, -100, 100);
+            int32_t weapon_speed = weapon_dir * WEAPON_TRIGGER_SPEED;
+            int8_t override_pct = 0;
+            if (hitl_overrides_get_weapon_pct(&override_pct)) {
+                weapon_speed = override_pct;
             }
-
-            // Pedal mapping (0-100%, forward-only). We consider both throttle & brake and
-            // take the max so whichever control is active wins.
-            int32_t pedal_speed = 0;
-            int32_t raw_throttle = CLAMP(gp->throttle, 0, 1023);
-            if (raw_throttle > TRIGGER_THRESHOLD) {
-                pedal_speed = (raw_throttle * 100) / 1023;
-                pedal_speed = CLAMP(pedal_speed, 0, 100);
-            }
-
-            int32_t brake_speed = 0;
-            int32_t raw_brake = CLAMP(gp->brake, 0, 1023);
-            if (raw_brake > TRIGGER_THRESHOLD) {
-                brake_speed = (raw_brake * 100) / 1023;
-                brake_speed = CLAMP(brake_speed, 0, 100);
-            }
-
-            // Pedals (unsigned) override stick only if their value exceeds stick magnitude.
-            int32_t weapon_speed = stick_speed;
-            if (pedal_speed > abs(weapon_speed)) {
-                weapon_speed = pedal_speed;
-            }
-            if (brake_speed > abs(weapon_speed)) {
-                weapon_speed = brake_speed;
-            }
-
 #if HITL_CONSOLE
-            hitl_latency_on_ry_change(raw_weapon);
+            hitl_latency_on_ry_change(weapon_speed);
 #endif
             weapon_set_speed((int8_t)weapon_speed);
         } else {
@@ -647,6 +797,55 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
 }
 
 #if !SERIAL_GAMEPAD
+// Report inter-arrival statistics, to measure the real controller's report
+// period (HITL RXSTATS).
+static const uint16_t rx_bin_edges_ms[] = {5, 10, 13, 16, 20, 30, 50, 100};
+#define RX_BIN_COUNT (sizeof(rx_bin_edges_ms) / sizeof(rx_bin_edges_ms[0]) + 1)
+static uint64_t rx_last_us = 0;
+static uint32_t rx_count = 0, rx_min_us = UINT32_MAX, rx_max_us = 0;
+static uint64_t rx_sum_us = 0;
+static uint32_t rx_bins[RX_BIN_COUNT];
+
+static void note_report_interval(void) {
+    uint64_t now = time_us_64();
+    if (rx_last_us != 0) {
+        uint32_t dt = (uint32_t)(now - rx_last_us);
+        rx_count++;
+        rx_sum_us += dt;
+        if (dt < rx_min_us) rx_min_us = dt;
+        if (dt > rx_max_us) rx_max_us = dt;
+        size_t b = 0;
+        while (b < RX_BIN_COUNT - 1 && dt >= (uint32_t)rx_bin_edges_ms[b] * 1000u) b++;
+        rx_bins[b]++;
+    }
+    rx_last_us = now;
+}
+
+void bluetooth_platform_print_rx_stats(bool reset) {
+    printf("HITL RXSTATS n=%lu min_us=%lu avg_us=%lu max_us=%lu bins_ms=",
+           (unsigned long)rx_count, (unsigned long)(rx_count ? rx_min_us : 0),
+           (unsigned long)(rx_count ? rx_sum_us / rx_count : 0), (unsigned long)rx_max_us);
+    for (size_t b = 0; b < RX_BIN_COUNT; b++) {
+        if (b < RX_BIN_COUNT - 1) {
+            printf("<%u:%lu,", rx_bin_edges_ms[b], (unsigned long)rx_bins[b]);
+        } else {
+            printf(">=%u:%lu\n", rx_bin_edges_ms[b - 1], (unsigned long)rx_bins[b]);
+        }
+    }
+    if (reset) {
+        rx_count = 0; rx_sum_us = 0; rx_min_us = UINT32_MAX; rx_max_us = 0;
+        memset(rx_bins, 0, sizeof(rx_bins));
+    }
+}
+
+static bool gamepad_is_deflected(const uni_gamepad_t* gp) {
+    const int32_t threshold = 256;  // half of the +/-512 axis range
+    return abs(gp->axis_x) > threshold || abs(gp->axis_y) > threshold ||
+           abs(gp->axis_rx) > threshold || abs(gp->axis_ry) > threshold ||
+           gp->brake > 2 * threshold || gp->throttle > 2 * threshold ||
+           (gp->buttons & (BTN_TRIGGER_L | BTN_TRIGGER_R));
+}
+
 static void my_platform_on_controller_data(uni_hid_device_t *d,
                                            uni_controller_t *ctl) {
     bool state_changed = true;
@@ -657,6 +856,8 @@ static void my_platform_on_controller_data(uni_hid_device_t *d,
     switch (ctl->klass) {
     case UNI_CONTROLLER_CLASS_GAMEPAD:
         gp = &ctl->gamepad;
+        gpio_put(PIN_LATENCY_MARKER, gamepad_is_deflected(gp));
+        note_report_interval();
         hitl_last_gp = *gp;
         hitl_last_gp_valid = true;
 
@@ -757,6 +958,14 @@ void system_set_armed(bool armed) {
 
 void system_set_failsafe(bool active) {
     emergency_stop = active;
+}
+
+void bluetooth_platform_set_autoscan(bool enabled) {
+    bt_autoscan_enabled = enabled;
+}
+
+bool bluetooth_platform_get_autoscan(void) {
+    return bt_autoscan_enabled;
 }
 
 void bluetooth_platform_inject_gamepad(const uni_gamepad_t* gp) {

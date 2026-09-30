@@ -76,6 +76,8 @@ sequenceDiagram
   participant PSU as Rigol DP832 (labctl)
 
   Host->>Host: build UF2s (optional)
+  Host->>Robot: flash am32_flasher_service (optional default-on AM32 provision step)
+  Host->>Robot: read AM32 config, compare, write only if drifted
   Host->>Robot: picotool reboot -u/-a (no BOOTSEL)
   Host->>Pad: picotool reboot -u/-a (no BOOTSEL)
   Host->>PSU: labctl psu set --on (active suites)
@@ -96,18 +98,37 @@ The entrypoint is:
 python3 tools/hitl_orchestrator.py --suite <suite>
 ```
 
+By default, orchestrator also performs an `AM32 Provision` step before flashing competition firmware:
+
+- Flashes `am32_flasher_service` to the robot Pico
+- Best-effort enables `--psu-channel` so the ESC is powered during config checks
+- Reads ESC config
+- Compares to `config/am32/weapon_esc_expected.hexcfg`
+- Writes only if different, then verifies via readback
+
+Controls:
+
+```bash
+# Disable AM32 provisioning for a run
+python3 tools/hitl_orchestrator.py --suite smoke --no-am32-provision
+
+# Override expected config source
+python3 tools/hitl_orchestrator.py --suite smoke --am32-config <path>
+```
+
 Common suites:
 
 - `smoke`: connectivity + arming + failsafe state machine (safe, does not spin motors)
 - `drive_e2e`: asserts the drive PWM outputs move and return to neutral (safe)
 - `drive_spin`: requires PSU power; uses PSU current to confirm the drive motors actually spin (includes left-only/right-only checks)
 - `disconnect_failsafe`: actively drives, disconnects controller, and asserts outputs go neutral quickly
+- `disconnect_repair`: requires PSU power; spins weapon + drives, drops the controller link, asserts outputs go safe and PSU current returns to baseline, then requires the robot to re-discover and reconnect the emulator *on its own* (no emulator-initiated connect) and re-arm/spin afterwards. This is the path a real controller in pairing mode needs.
 - `estop_drive`: actively drives and asserts emergency-stop brings outputs + PSU current back to baseline
 - `weapon_disarmed_guard`: commands weapon throttle while disarmed and asserts current does *not* rise
 - `weapon_spin`: requires PSU power; spins weapon and validates via PSU current and (optionally) DShot telemetry
 - `weapon_latency`: requires PSU power; measures controller->motor response latency using PSU current + robot status markers
 - `estop_weapon`: spins weapon then asserts emergency-stop cuts it and current returns to baseline
-- `safety_active`: runs the active safety invariants (estop drive + disconnect failsafe + weapon guard + estop weapon)
+- `safety_active`: runs the active safety invariants (estop drive + disconnect failsafe + disconnect re-pair + weapon guard + estop weapon)
 - `full_e2e`: runs the full suite (smoke + drive + safety + weapon)
 
 Examples:
@@ -162,6 +183,8 @@ Key files:
 - `report.md`: human-readable report (includes inline plots)
 - `report.pdf`: PDF report with the same plots + a summary page
 - `steps/*/robot_serial.log`, `steps/*/gamepad_serial.log`: raw serial logs
+- `steps/*/am32_provision_result.json`: AM32 drift-check/apply summary (if provision step enabled)
+- `steps/*/config_before.bin`, `steps/*/config_after.bin`: AM32 config snapshots
 - `steps/*/psu_current_samples.json`: sampled current with phase labels
 - `plots/*.png`: generated plot images
 
@@ -190,10 +213,12 @@ flowchart TB
 Different checks are used depending on the subsystem:
 
 - **Drive**:
+  - Suites command throttle on the left stick (`AXIS LY`) and turn on the right stick (`AXIS RX`, `--drive-turn-axis`).
   - Robot reports `dl_us` / `dr_us` (drive PWM pulses in microseconds).
   - Active drive tests also sample PSU current; a current delta above a threshold is treated as "motors really spun".
   - Left-only / right-only phases prevent false PASS when one motor is disconnected.
 - **Weapon**:
+  - The weapon is driven with the emulator triggers (`BTN R2 1` forward, `BTN L2 1` reverse, release both to stop) at a fixed 100%; suites release both triggers after arming because the firmware needs a release edge before a press counts. `--spin-axis` / `--guard-axis` / `--zero-cross-axis` / `--soak-axis` only select direction now (magnitude ignored).
   - Active weapon tests sample PSU current; optionally require DShot telemetry (`--require-telemetry`).
 - **Safety**:
   - Emergency stop is verified by checking `failsafe=1`, outputs return to neutral/off, and current returns close to baseline.

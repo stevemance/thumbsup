@@ -22,6 +22,7 @@ import statistics
 import subprocess
 import sys
 import time
+from binascii import hexlify
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -269,6 +270,314 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _load_expected_am32_config(config_path: Path) -> bytes:
+    """Load expected AM32 config from .bin, hex text, or YAML."""
+    if not config_path.exists():
+        raise RuntimeError(f"expected AM32 config not found: {config_path}")
+
+    suffix = config_path.suffix.lower()
+    if suffix in {".yaml", ".yml"}:
+        try:
+            import am32_config_codec as codec
+        except Exception as exc:
+            raise RuntimeError(f"failed to import AM32 YAML codec: {exc}") from exc
+        payload = codec.load_yaml_mapping(config_path)
+        image = codec.encode_yaml_to_image(payload)
+        if len(image) != 192:
+            raise RuntimeError(f"{config_path}: compiled YAML image length was {len(image)} (expected 192)")
+        return image
+
+    raw = config_path.read_bytes()
+    if len(raw) == 192:
+        return raw
+
+    text = config_path.read_text(encoding="utf-8")
+    hex_text = re.sub(r"\s+", "", text)
+    if len(hex_text) != 384 or re.search(r"[^0-9a-fA-F]", hex_text):
+        raise RuntimeError(
+            f"{config_path}: expected 192-byte binary or 384 hex chars (ignoring whitespace)"
+        )
+    return bytes.fromhex(hex_text)
+
+
+def _am32_diff_summary(expected: bytes, observed: bytes) -> dict[str, object]:
+    if len(expected) != len(observed):
+        raise RuntimeError(f"AM32 config length mismatch: expected {len(expected)} got {len(observed)}")
+    diffs = [{"offset": i, "expected": expected[i], "observed": observed[i]} for i in range(len(expected)) if expected[i] != observed[i]]
+    return {
+        "size": len(expected),
+        "diff_count": len(diffs),
+        "first_diffs": diffs[:32],
+    }
+
+
+def _build_am32_service_firmware(repo_root: Path, out_dir: Path | None = None) -> Path:
+    env = os.environ.copy()
+    if "PICO_SDK_PATH" not in env or not env["PICO_SDK_PATH"]:
+        env["PICO_SDK_PATH"] = str(Path.home() / "pico" / "pico-sdk")
+
+    build_dir = repo_root / "firmware" / "tests" / "build"
+
+    cfg = run_cmd(
+        ["cmake", "-S", str(repo_root / "firmware" / "tests"), "-B", str(build_dir)],
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+    bld = run_cmd(
+        ["cmake", "--build", str(build_dir), "-j", str(os.cpu_count() or 4), "--target", "am32_flasher_service"],
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+
+    if out_dir is not None:
+        (out_dir / "build_am32_service_configure.log").write_text(
+            (cfg.stdout or "") + ("\n" + cfg.stderr if cfg.stderr else ""),
+            encoding="utf-8",
+        )
+        (out_dir / "build_am32_service_build.log").write_text(
+            (bld.stdout or "") + ("\n" + bld.stderr if bld.stderr else ""),
+            encoding="utf-8",
+        )
+
+    uf2 = build_dir / "am32_flasher_service.uf2"
+    if not uf2.exists():
+        raise RuntimeError(f"am32_flasher_service UF2 not found after build: {uf2}")
+    return uf2
+
+
+def _run_am32_flasher_cmd(
+    repo_root: Path,
+    port: str,
+    cmd_args: list[str],
+    *,
+    retries: int = 4,
+    retry_delay_s: float = 1.0,
+) -> tuple[subprocess.CompletedProcess, list[dict[str, object]]]:
+    flasher_py = repo_root / "tools" / "am32_pico_flasher.py"
+    if not flasher_py.exists():
+        raise RuntimeError(f"missing AM32 flasher tool: {flasher_py}")
+
+    attempts: list[dict[str, object]] = []
+    last_detail = "unknown error"
+    full_cmd = [sys.executable, str(flasher_py), "--port", port, *cmd_args]
+
+    for attempt in range(1, max(1, retries) + 1):
+        result = run_cmd(full_cmd, check=False, capture_output=True)
+        detail = ((result.stderr or "").strip() or (result.stdout or "").strip() or "unknown error")
+        attempts.append(
+            {
+                "attempt": attempt,
+                "returncode": result.returncode,
+                "stdout": result.stdout or "",
+                "stderr": result.stderr or "",
+            }
+        )
+        if result.returncode == 0:
+            return result, attempts
+
+        last_detail = detail
+        is_retryable = (
+            "ESC not in bootloader mode" in detail
+            or "Timed out" in detail
+            or "timeout" in detail.lower()
+            or "ERR ENTER" in detail
+        )
+        if attempt < retries and is_retryable:
+            time.sleep(retry_delay_s)
+            continue
+        raise RuntimeError(f"command failed: {' '.join(full_cmd)}\n{detail}")
+
+    raise RuntimeError(f"command failed after retries: {' '.join(full_cmd)}\n{last_detail}")
+
+
+def _do_am32_provision(
+    repo_root: Path,
+    expected_config_path: Path,
+    service_uf2_path: Path,
+    build_service_firmware: bool = True,
+    robot_port: str = "/dev/ttyHITL_ROBOT",
+    psu_channel: int | None = None,
+    psu_voltage: float = 12.6,
+    psu_current: float = 5.0,
+    out_dir: Path | None = None,
+) -> str:
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    expected = _load_expected_am32_config(expected_config_path)
+    if out_dir is not None:
+        (out_dir / "expected_config.bin").write_bytes(expected)
+        (out_dir / "expected_config.hexcfg").write_text(hexlify(expected).decode("ascii") + "\n", encoding="utf-8")
+
+    psu_was_forced_on = False
+    try:
+        if psu_channel is not None:
+            psu_before = {}
+            try:
+                psu_before = labctl_psu_snapshot(psu_channel)
+            except Exception:
+                psu_before = {}
+            if out_dir is not None:
+                (out_dir / "psu_snapshot_before.json").write_text(json.dumps(psu_before, indent=2), encoding="utf-8")
+
+            before_status = str(
+                (psu_before.get("values", {}).get(str(psu_channel), {}) if isinstance(psu_before, dict) else {}).get("status", "")
+            ).upper()
+            try:
+                labctl_psu_set(psu_channel, psu_voltage, psu_current)
+                psu_was_forced_on = before_status != "ON"
+                time.sleep(0.25)
+            except Exception as exc:
+                psu_was_forced_on = False
+                if out_dir is not None:
+                    (out_dir / "psu_power_enable_warning.txt").write_text(
+                        f"warning: unable to force PSU channel {psu_channel} on: {exc}\n",
+                        encoding="utf-8",
+                    )
+
+        if build_service_firmware:
+            service_uf2 = _build_am32_service_firmware(repo_root, out_dir=out_dir)
+        else:
+            service_uf2 = service_uf2_path if service_uf2_path.is_absolute() else (repo_root / service_uf2_path)
+            if not service_uf2.exists():
+                raise RuntimeError(f"AM32 service UF2 not found: {service_uf2}")
+
+        current_robot_tty = resolve_robot_port(timeout_s=10.0)
+        robot_usb_ser = get_usb_serial_for_tty(current_robot_tty)
+        picotool_flash_via_reset(
+            robot_usb_ser,
+            str(service_uf2),
+            log_path=(out_dir / "picotool_am32_service.log") if out_dir is not None else None,
+        )
+
+        wait_port = robot_port if robot_port else current_robot_tty
+        wait_for_tty_ready(wait_port, 15)
+        active_port = wait_port
+        if not Path(active_port).exists():
+            active_port = resolve_robot_port(timeout_s=10.0)
+
+        probe, probe_attempts = _run_am32_flasher_cmd(
+            repo_root,
+            active_port,
+            ["probe"],
+            retries=4,
+            retry_delay_s=1.2,
+        )
+        if out_dir is not None:
+            (out_dir / "am32_probe.log").write_text(
+                (probe.stdout or "") + ("\n" + probe.stderr if probe.stderr else ""),
+                encoding="utf-8",
+            )
+            (out_dir / "am32_probe_attempts.json").write_text(json.dumps(probe_attempts, indent=2), encoding="utf-8")
+
+        before_path = (out_dir / "config_before.bin") if out_dir is not None else (repo_root / ".tmp_am32_before.bin")
+        read_before, read_before_attempts = _run_am32_flasher_cmd(
+            repo_root,
+            active_port,
+            ["read-config", "--out", str(before_path)],
+            retries=3,
+            retry_delay_s=0.8,
+        )
+        if out_dir is not None:
+            (out_dir / "am32_read_before.log").write_text(
+                (read_before.stdout or "") + ("\n" + read_before.stderr if read_before.stderr else ""),
+                encoding="utf-8",
+            )
+            (out_dir / "am32_read_before_attempts.json").write_text(json.dumps(read_before_attempts, indent=2), encoding="utf-8")
+
+        before = before_path.read_bytes()
+        if len(before) != 192:
+            raise RuntimeError(f"unexpected AM32 config size from ESC: {len(before)}")
+
+        before_summary = _am32_diff_summary(expected, before)
+        if out_dir is not None:
+            (out_dir / "config_before.hexcfg").write_text(hexlify(before).decode("ascii") + "\n", encoding="utf-8")
+            (out_dir / "config_diff_before.json").write_text(json.dumps(before_summary, indent=2), encoding="utf-8")
+
+        if before == expected:
+            if out_dir is not None:
+                (out_dir / "am32_provision_result.json").write_text(
+                    json.dumps(
+                        {
+                            "changed": False,
+                            "message": "ESC config already matches expected",
+                            "expected_config_path": str(expected_config_path),
+                            "service_uf2": str(service_uf2),
+                            "port": active_port,
+                            "diff": before_summary,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            return "AM32 config already matched expected"
+
+        expected_path = (out_dir / "config_expected.bin") if out_dir is not None else (repo_root / ".tmp_am32_expected.bin")
+        expected_path.write_bytes(expected)
+        write_cfg, write_attempts = _run_am32_flasher_cmd(
+            repo_root,
+            active_port,
+            ["write-config", "--input", str(expected_path)],
+            retries=3,
+            retry_delay_s=0.8,
+        )
+        if out_dir is not None:
+            (out_dir / "am32_write.log").write_text(
+                (write_cfg.stdout or "") + ("\n" + write_cfg.stderr if write_cfg.stderr else ""),
+                encoding="utf-8",
+            )
+            (out_dir / "am32_write_attempts.json").write_text(json.dumps(write_attempts, indent=2), encoding="utf-8")
+
+        after_path = (out_dir / "config_after.bin") if out_dir is not None else (repo_root / ".tmp_am32_after.bin")
+        read_after, read_after_attempts = _run_am32_flasher_cmd(
+            repo_root,
+            active_port,
+            ["read-config", "--out", str(after_path)],
+            retries=3,
+            retry_delay_s=0.8,
+        )
+        if out_dir is not None:
+            (out_dir / "am32_read_after.log").write_text(
+                (read_after.stdout or "") + ("\n" + read_after.stderr if read_after.stderr else ""),
+                encoding="utf-8",
+            )
+            (out_dir / "am32_read_after_attempts.json").write_text(json.dumps(read_after_attempts, indent=2), encoding="utf-8")
+
+        after = after_path.read_bytes()
+        if len(after) != 192:
+            raise RuntimeError(f"unexpected AM32 config size after write: {len(after)}")
+        if after != expected:
+            after_summary = _am32_diff_summary(expected, after)
+            if out_dir is not None:
+                (out_dir / "config_diff_after.json").write_text(json.dumps(after_summary, indent=2), encoding="utf-8")
+            raise RuntimeError(f"AM32 config verify failed after write: {after_summary['diff_count']} bytes differ")
+
+        if out_dir is not None:
+            (out_dir / "config_after.hexcfg").write_text(hexlify(after).decode("ascii") + "\n", encoding="utf-8")
+            (out_dir / "am32_provision_result.json").write_text(
+                json.dumps(
+                    {
+                        "changed": True,
+                        "message": "ESC config updated to expected",
+                        "expected_config_path": str(expected_config_path),
+                        "service_uf2": str(service_uf2),
+                        "port": active_port,
+                        "diff_before": before_summary,
+                        "diff_after": {"diff_count": 0},
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+        return f"AM32 config updated ({before_summary['diff_count']} byte diffs)"
+    finally:
+        if psu_channel is not None and psu_was_forced_on:
+            labctl_psu_off(psu_channel)
+
+
 @dataclass
 class StepResult:
     name: str
@@ -370,6 +679,90 @@ def wait_for_robot_condition(
     raise RuntimeError(f"timeout waiting for robot condition; last_status={last_status}")
 
 
+# Competition control mapping (firmware DRIVE_LAYOUT_SPLIT / WEAPON_TRIGGER_*):
+# - drive: throttle = left stick Y (AXIS LY), turn = right stick X (AXIS RX)
+# - weapon: hold R2 = forward spin, hold L2 = reverse spin, at a fixed 100%;
+#   releasing spins down.  After arming / e-stop clear / reconnect / neutral
+#   guard the firmware needs both triggers seen released before a press counts.
+# Robot-side (Bluepad32) STATUS `buttons` bits for the digital triggers.
+ROBOT_BTN_TRIGGER_L = 0x0040
+ROBOT_BTN_TRIGGER_R = 0x0080
+# Neutral commands for every control the competition firmware reads.
+GAMEPAD_NEUTRAL_CMDS = (
+    "AXIS LX 0", "AXIS LY 0", "AXIS RX 0", "AXIS RY 0",
+    "BTN R2 0", "BTN L2 0",
+    "BTN A 0", "BTN B 0", "BTN L1 0", "BTN R1 0",
+)
+_weapon_magnitude_note_logged = False
+
+
+def weapon_release(gamepad_log: SerialLogger) -> None:
+    """Release both weapon triggers (weapon spins down / release edge after arming)."""
+    gamepad_log.send_line("BTN R2 0")
+    gamepad_log.send_line("BTN L2 0")
+
+
+def weapon_press(gamepad_log: SerialLogger, direction: int) -> None:
+    """Hold one weapon trigger: direction > 0 -> R2 (forward), < 0 -> L2 (reverse), 0 -> release.
+
+    Sends exactly one emulator command (one HID report / HITL CMD edge) so latency
+    suites can timestamp it.  Callers release the other trigger beforehand; if
+    both are held the firmware keeps whichever was pressed first.
+    """
+    if direction > 0:
+        gamepad_log.send_line("BTN R2 1")
+    elif direction < 0:
+        gamepad_log.send_line("BTN L2 1")
+    else:
+        weapon_release(gamepad_log)
+
+
+def weapon_reverse(gamepad_log: SerialLogger, direction: int) -> None:
+    """Direction reversal: release the held trigger, then press the other, as consecutive commands."""
+    if direction > 0:
+        gamepad_log.send_line("BTN L2 0")
+        gamepad_log.send_line("BTN R2 1")
+    elif direction < 0:
+        gamepad_log.send_line("BTN R2 0")
+        gamepad_log.send_line("BTN L2 1")
+    else:
+        weapon_release(gamepad_log)
+
+
+def weapon_command(gamepad_log: SerialLogger, axis_value: int) -> None:
+    """Map a legacy signed RY weapon command onto the triggers (magnitude is ignored)."""
+    global _weapon_magnitude_note_logged
+    if axis_value != 0 and not _weapon_magnitude_note_logged:
+        print(f"NOTE: weapon is trigger-controlled at a fixed 100%; axis magnitude {axis_value} is ignored "
+              "(only its sign selects R2 forward / L2 reverse)")
+        _weapon_magnitude_note_logged = True
+    weapon_press(gamepad_log, axis_value)
+
+
+def gamepad_neutral(gamepad_log: SerialLogger) -> None:
+    for cmd in GAMEPAD_NEUTRAL_CMDS:
+        gamepad_log.send_line(cmd)
+
+
+def status_weapon_cmd_dir(s: dict[str, str]) -> int:
+    """Weapon trigger direction the robot currently sees (+1 R2, -1 L2, 0 none/both)."""
+    try:
+        buttons = int(s.get("buttons") or "0", 16)
+    except ValueError:
+        return 0
+    fwd = bool(buttons & ROBOT_BTN_TRIGGER_R)
+    rev = bool(buttons & ROBOT_BTN_TRIGGER_L)
+    return (1 if fwd else 0) - (1 if rev else 0)
+
+
+def status_triggers_released(s: dict[str, str]) -> bool:
+    try:
+        buttons = int(s.get("buttons") or "0", 16)
+    except ValueError:
+        return False
+    return not (buttons & (ROBOT_BTN_TRIGGER_L | ROBOT_BTN_TRIGGER_R))
+
+
 def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, timeout_s: float) -> None:
     # Tear down any lingering BT connection from a previous run before
     # attempting a fresh connect.  Without this, the robot's BT stack may
@@ -400,10 +793,41 @@ def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, ti
             pump_logs=[gamepad_log],
         )
 
+    def settle_neutral_guard() -> None:
+        # Keep emulator at neutral and give the firmware's 500ms neutral-guard
+        # time to clear before any movement/arming commands.  The guard also
+        # requires both weapon triggers released.
+        gamepad_log.send_line("AXIS LX 0")
+        gamepad_log.send_line("AXIS LY 0")
+        gamepad_log.send_line("AXIS RX 0")
+        gamepad_log.send_line("AXIS RY 0")
+        weapon_release(gamepad_log)
+        try:
+            wait_for_robot_condition(
+                robot_log,
+                timeout_s=4.0,
+                predicate=lambda s: (
+                    s.get("ready") == "1"
+                    and s.get("conn") == "1"
+                    and abs(int(s.get("x") or 0)) <= 20
+                    and abs(int(s.get("y") or 0)) <= 20
+                    and abs(int(s.get("rx") or 0)) <= 20
+                    and abs(int(s.get("ry") or 0)) <= 20
+                    and status_triggers_released(s)
+                ),
+                pump_logs=[gamepad_log],
+            )
+        except Exception:
+            # Some adapters may not report all axes in every sample; keep a
+            # deterministic dwell so guard timing still clears.
+            pass
+        time.sleep(0.7)
+
     # Attempt 1: use existing keys (most stable / fastest).
     gamepad_log.send_line(f"CONNECT {btaddr}")
     try:
         wait_ready(timeout_s)
+        settle_neutral_guard()
         return
     except RuntimeError:
         pass
@@ -415,6 +839,7 @@ def ensure_robot_ready(robot_log: SerialLogger, gamepad_log: SerialLogger, *, ti
     time.sleep(0.8)
     gamepad_log.send_line(f"CONNECT {btaddr}")
     wait_ready(timeout_s * 3.0)
+    settle_neutral_guard()
 
 
 def step(name: str):
@@ -444,6 +869,9 @@ def step(name: str):
                 )
         return wrapped
     return deco
+
+
+do_am32_provision = step("AM32 Provision")(_do_am32_provision)
 
 
 @step("Build Firmware")
@@ -516,7 +944,7 @@ def do_flash(repo_root: Path, flash_robot: bool, flash_gamepad: bool, out_dir: P
             str(repo_root / "firmware" / "build" / "thumbsup_hitl.uf2"),
             log_path=(out_dir / "picotool_robot.log") if out_dir is not None else None,
         )
-        wait_for_tty_ready("/dev/ttyHITL_ROBOT", 10)
+        wait_for_tty_ready(resolve_robot_port(timeout_s=15.0), 15)
 
     if flash_gamepad:
         gamepad_tty = resolve_gamepad_port()
@@ -532,7 +960,7 @@ def do_flash(repo_root: Path, flash_robot: bool, flash_gamepad: bool, out_dir: P
             str(repo_root / "controller_emulator" / "build" / "thumbsup_controller_emulator.uf2"),
             log_path=(out_dir / "picotool_gamepad.log") if out_dir is not None else None,
         )
-        wait_for_tty_ready("/dev/ttyHITL_GAMEPAD", 10)
+        wait_for_tty_ready(resolve_gamepad_port(timeout_s=15.0), 15)
 
     return "flashed"
 
@@ -680,14 +1108,7 @@ def do_drive_e2e(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS LX 0")
-                gamepad_log.send_line("AXIS LY 0")
-                gamepad_log.send_line("AXIS RX 0")
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
                 gamepad_log.send_line("BTN L3 0")
                 gamepad_log.send_line("BTN R3 0")
             except Exception:
@@ -751,13 +1172,13 @@ def do_drive_e2e(
             drive_turn_axis = max(-127, min(127, int(drive_turn_axis)))
 
             # Baseline: sticks neutral -> neutral pulses.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             s0 = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=30))
             drive_states["neutral"] = s0
 
             # Forward: LY negative (competition code treats negative Y as forward).
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
             s_fwd = wait_for_robot_condition(
                 robot_log,
@@ -767,9 +1188,9 @@ def do_drive_e2e(
             drive_states["forward"] = s_fwd
             time.sleep(drive_hold_s)
 
-            # Turn in place: LX non-zero, LY 0. Expect both pulses on same side of neutral.
+            # Turn in place: RX non-zero, LY 0. Expect both pulses on same side of neutral.
             gamepad_log.send_line("AXIS LY 0")
-            gamepad_log.send_line(f"AXIS LX {drive_turn_axis}")
+            gamepad_log.send_line(f"AXIS RX {drive_turn_axis}")
             s_turn = wait_for_robot_condition(
                 robot_log,
                 timeout_s=4.0,
@@ -779,13 +1200,13 @@ def do_drive_e2e(
             time.sleep(drive_hold_s)
 
             # Stop: back to neutral.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             s_stop = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=40))
             drive_states["stop"] = s_stop
 
             # Validate emergency stop halts drive outputs.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
             wait_for_robot_condition(
                 robot_log,
@@ -811,7 +1232,7 @@ def do_drive_e2e(
             drive_states["estop_clear"] = s_clear
 
             # Final neutral.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             s_final = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=40))
             drive_states["final"] = s_final
@@ -882,14 +1303,7 @@ def do_disconnect_failsafe(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS LX 0")
-                gamepad_log.send_line("AXIS LY 0")
-                gamepad_log.send_line("AXIS RX 0")
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
             except Exception:
                 pass
 
@@ -941,7 +1355,7 @@ def do_disconnect_failsafe(
             drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
 
             # Start driving so we can assert the disconnect drives outputs back to neutral.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
             s_move = wait_for_robot_condition(
                 robot_log,
@@ -999,6 +1413,334 @@ def do_disconnect_failsafe(
             gamepad_log.close()
 
     return "disconnect failsafe passed"
+
+
+def wait_for_robot_line(
+    robot_log: SerialLogger,
+    *,
+    needle: str,
+    timeout_s: float,
+    pump_logs: list[SerialLogger] | None = None,
+) -> str:
+    """Wait for a raw robot serial line containing `needle`."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        line = robot_log.read_line()
+        for other in pump_logs or []:
+            other.read_line()
+        if line and needle in line:
+            return line
+        if not line:
+            time.sleep(0.01)
+    raise RuntimeError(f"timeout waiting for robot line containing {needle!r}")
+
+
+@step("Disconnect Re-Pair Test")
+def do_disconnect_repair(
+    repo_root: Path,
+    psu_channel: int | None,
+    psu_voltage: float,
+    psu_current: float,
+    psu_off_first: bool,
+    leave_psu_on: bool,
+    spin_axis: int,
+    spin_baseline_s: float,
+    spin_sample_interval_s: float,
+    spin_settle_s: float,
+    spin_current_delta_a: float,
+    spin_min_current_a: float,
+    spin_return_tol_a: float,
+    drive_forward_axis: int,
+    drive_min_delta_us: int,
+    repair_timeout_s: float,
+    out_dir: Path | None = None,
+) -> str:
+    """
+    Drop the controller link while the weapon is spinning and the drive is moving,
+    then require the robot to re-pair on its own.
+
+    Unlike `disconnect_failsafe`, the emulator never sends CONNECT after the drop.
+    It stays discoverable and the robot must resume Bluetooth inquiry and
+    autoconnect to it, which is the path a real controller in pairing mode needs.
+
+    Signals checked:
+    - PSU current rises while spinning, and returns to baseline after the drop.
+    - Robot reports conn=0/failsafe=1, weapon DISARMED/speed=0, drive pulses neutral.
+    - Robot logs that it restarted BT scanning, then reports conn=1/ready=1/failsafe=0
+      within `repair_timeout_s` without any emulator-initiated connect.
+    - Weapon can be re-armed and spun again after the re-pair.
+    """
+    if psu_channel is None:
+        raise RuntimeError("psu_channel is required for disconnect_repair")
+
+    if psu_off_first:
+        labctl_psu_off(psu_channel)
+
+    robot_port = resolve_robot_port()
+    gamepad_port = resolve_gamepad_port()
+
+    robot_usb_ser = get_usb_serial_for_tty(robot_port)
+    gamepad_usb_ser = get_usb_serial_for_tty(gamepad_port)
+    picotool_reboot_application(robot_usb_ser)
+    wait_for_tty_reenumerate(robot_port, 15)
+    picotool_reboot_application(gamepad_usb_ser)
+    wait_for_tty_reenumerate(gamepad_port, 15)
+
+    labctl_psu_set(psu_channel, psu_voltage, psu_current)
+
+    with serial.Serial(robot_port, 115200, timeout=0.05, write_timeout=1.0) as robot_ser, \
+            serial.Serial(gamepad_port, 115200, timeout=0.05, write_timeout=1.0) as gamepad_ser:
+        if out_dir is None:
+            out_dir = repo_root / "hitl_logs" / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        robot_log = SerialLogger(robot_ser, out_dir / "robot_serial.log", "ROBOT")
+        gamepad_log = SerialLogger(gamepad_ser, out_dir / "gamepad_serial.log", "GAMEPAD")
+        suite_t0 = time.monotonic()
+        psu_samples: list[dict] = []
+        states: dict[str, dict[str, str]] = {}
+        timings: dict[str, float] = {}
+
+        def neutral_all() -> None:
+            gamepad_neutral(gamepad_log)
+
+        def cleanup_best_effort() -> None:
+            try:
+                neutral_all()
+            except Exception:
+                pass
+            try:
+                # Leave the HITL robot in its default no-inquiry policy for later suites.
+                robot_log.send_line("HITL AUTOSCAN 0")
+            except Exception:
+                pass
+            if not leave_psu_on:
+                try:
+                    labctl_psu_off(psu_channel)
+                except Exception:
+                    pass
+
+        def psu_sample_current(phase: str) -> float | None:
+            value = labctl_psu_measure(psu_channel, "current")
+            psu_samples.append({"t_s": round(time.monotonic() - suite_t0, 3), "phase": phase, "current_a": value})
+            return value
+
+        def drain_robot_serial(max_s: float) -> None:
+            deadline = time.monotonic() + max_s
+            while time.monotonic() < deadline:
+                if not robot_log.read_line():
+                    break
+
+        def sample_current_window(phase: str, duration_s: float, *, settle_s: float = 0.0) -> list[float]:
+            values: list[float] = []
+            start_t = time.monotonic()
+            next_sample = start_t
+            while True:
+                now = time.monotonic()
+                elapsed = now - start_t
+                if elapsed >= max(0.0, float(duration_s)):
+                    break
+                drain_robot_serial(0.02)
+                if now < next_sample:
+                    time.sleep(min(0.01, next_sample - now))
+                    continue
+                current = psu_sample_current(phase)
+                if current is not None and elapsed >= max(0.0, float(settle_s)):
+                    values.append(current)
+                next_sample += max(0.05, float(spin_sample_interval_s))
+            return values
+
+        def tail_median(values: list[float], n: int = 3) -> float | None:
+            if not values:
+                return None
+            return statistics.median(values[-max(1, min(int(n), len(values))):])
+
+        def get_pulses(s: dict[str, str]) -> tuple[int, int]:
+            return int(s.get("dl_us") or 0), int(s.get("dr_us") or 0)
+
+        def drive_neutral(s: dict[str, str], *, tol_us: int = 60) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) <= tol_us and abs(dr - 1500) <= tol_us
+
+        def drive_moving(s: dict[str, str]) -> bool:
+            dl, dr = get_pulses(s)
+            return abs(dl - 1500) >= drive_min_delta_us and abs(dr - 1500) >= drive_min_delta_us
+
+        def arm_and_wait() -> dict[str, str]:
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+            # Firmware needs both triggers seen released after arming before a press spins.
+            weapon_release(gamepad_log)
+            s = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("armed") == "1", pump_logs=[gamepad_log])
+            wait_for_robot_condition(
+                robot_log, timeout_s=20.0,
+                predicate=lambda s: s.get("weapon") in ("ARMED", "SPINNING"),
+                pump_logs=[gamepad_log],
+            )
+            return s
+
+        def spin_and_measure(phase: str) -> tuple[dict[str, str], float]:
+            weapon_command(gamepad_log, spin_axis)
+            s = wait_for_robot_condition(
+                robot_log, timeout_s=6.0,
+                predicate=lambda s: s.get("weapon") == "SPINNING" or (s.get("speed") and s.get("speed") != "0"),
+                pump_logs=[gamepad_log],
+            )
+            values = sample_current_window(phase, 2.0, settle_s=spin_settle_s)
+            if not values:
+                raise RuntimeError(f"no PSU current samples during {phase}")
+            return s, statistics.median(values)
+
+        spin_axis = max(0, min(127, int(spin_axis)))
+        drive_forward_axis = max(-127, min(127, int(drive_forward_axis)))
+
+        try:
+            start = time.monotonic()
+            while time.monotonic() - start < 3.0:
+                robot_log.read_line()
+                gamepad_log.read_line()
+
+            gamepad_log.send_line("RESET")
+            wait_for_robot_condition(robot_log, timeout_s=12.0, predicate=lambda s: "t_ms" in s, pump_logs=[gamepad_log])
+
+            robot_log.send_line("HITL BATTERY 12500")
+            wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: s.get("batt_mv") == "12500", pump_logs=[gamepad_log])
+
+            # Initial connection is emulator-initiated (same as every other suite).
+            ensure_robot_ready(robot_log, gamepad_log, timeout_s=40.0)
+            time.sleep(0.7)
+            wait_for_robot_condition(robot_log, timeout_s=5.0, predicate=lambda s: s.get("failsafe") == "0", pump_logs=[gamepad_log])
+
+            states["armed"] = arm_and_wait()
+
+            weapon_release(gamepad_log)
+            time.sleep(0.2)
+            baseline_values = sample_current_window("baseline", spin_baseline_s)
+            if not baseline_values:
+                raise RuntimeError("no PSU current samples for baseline")
+            baseline_med = statistics.median(baseline_values)
+
+            # Spin the weapon and drive forward at the same time.
+            gamepad_log.send_line("AXIS RX 0")
+            gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
+            s_spin, run_med = spin_and_measure("run")
+            states["spinning"] = s_spin
+            s_move = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=drive_moving, pump_logs=[gamepad_log])
+            states["moving"] = s_move
+            run_delta = run_med - baseline_med
+            run_ok = (run_delta >= float(spin_current_delta_a)) and (run_med >= float(spin_min_current_a))
+
+            # Enable the competition inquiry policy on the HITL robot for the drop.
+            robot_log.send_line("HITL AUTOSCAN 1")
+            wait_for_robot_line(robot_log, needle="HITL AUTOSCAN 1", timeout_s=3.0, pump_logs=[gamepad_log])
+
+            # Drop the link while everything is running.  The emulator keeps its
+            # last axis state, so the robot must stop on its own.
+            t_drop = time.monotonic()
+            gamepad_log.send_line("DISCONNECT")
+            s_disc = wait_for_robot_condition(
+                robot_log, timeout_s=10.0,
+                predicate=lambda s: s.get("conn") == "0" and s.get("failsafe") == "1",
+                pump_logs=[gamepad_log],
+            )
+            timings["disconnect_detect_s"] = round(time.monotonic() - t_drop, 3)
+            states["disconnected"] = s_disc
+
+            s_stop = wait_for_robot_condition(
+                robot_log, timeout_s=6.0,
+                predicate=lambda s: s.get("weapon") == "DISARMED" and s.get("speed") == "0" and drive_neutral(s),
+                pump_logs=[gamepad_log],
+            )
+            timings["outputs_safe_s"] = round(time.monotonic() - t_drop, 3)
+            states["stopped_after_disconnect"] = s_stop
+
+            drop_values = sample_current_window("after_drop", 1.4, settle_s=0.2)
+            drop_tail = tail_median(drop_values, n=3)
+            return_ok = (drop_tail is not None) and (drop_tail <= baseline_med + float(spin_return_tol_a))
+
+            # The robot must have resumed inquiry on its own.  The log line is
+            # emitted in the disconnect callback, i.e. while we were waiting on
+            # status lines above, so look it up in the persisted serial log
+            # rather than waiting for it live.
+            scan_line = ""
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not scan_line:
+                drain_robot_serial(0.05)
+                for raw in (out_dir / "robot_serial.log").read_text(encoding="utf-8", errors="replace").splitlines():
+                    if "\tRX\t" in raw and "restarting BT scan after disconnect" in raw and raw.split("\t")[0].strip() and float(raw.split("\t")[0]) >= (t_drop - suite_t0) - 0.5:
+                        scan_line = raw.split("\tRX\t", 1)[1]
+                        break
+                if not scan_line:
+                    time.sleep(0.1)
+            if not scan_line:
+                raise RuntimeError("robot did not restart BT scanning after disconnect")
+
+            # Put the emulator at neutral so the re-paired session starts clean, then
+            # wait for the robot to discover + connect WITHOUT sending CONNECT.
+            neutral_all()
+            t_wait = time.monotonic()
+            s_repair = wait_for_robot_condition(
+                robot_log, timeout_s=float(repair_timeout_s),
+                predicate=lambda s: s.get("conn") == "1" and s.get("ready") == "1",
+                pump_logs=[gamepad_log],
+            )
+            timings["repair_s"] = round(time.monotonic() - t_wait, 3)
+            states["repaired"] = s_repair
+
+            time.sleep(0.7)  # neutral guard
+            s_clear = wait_for_robot_condition(
+                robot_log, timeout_s=5.0,
+                predicate=lambda s: s.get("failsafe") == "0" and s.get("conn") == "1" and s.get("ready") == "1",
+                pump_logs=[gamepad_log],
+            )
+            states["failsafe_cleared"] = s_clear
+
+            # Prove the re-paired link is fully usable: arm and spin again.
+            states["rearmed"] = arm_and_wait()
+            s_spin2, rerun_med = spin_and_measure("rerun")
+            states["spinning_after_repair"] = s_spin2
+            rerun_delta = rerun_med - baseline_med
+            rerun_ok = (rerun_delta >= float(spin_current_delta_a)) and (rerun_med >= float(spin_min_current_a))
+
+            weapon_release(gamepad_log)
+            wait_for_robot_condition(robot_log, timeout_s=6.0, predicate=lambda s: s.get("speed") == "0", pump_logs=[gamepad_log])
+            gamepad_log.send_line("BTN B 1")
+            time.sleep(0.12)
+            gamepad_log.send_line("BTN B 0")
+
+            result = {
+                "ok": bool(run_ok and return_ok and rerun_ok),
+                "psu_channel": psu_channel,
+                "spin_axis": spin_axis,
+                "drive_forward_axis": drive_forward_axis,
+                "repair_timeout_s": float(repair_timeout_s),
+                "thresholds": {
+                    "delta_a": float(spin_current_delta_a),
+                    "min_current_a": float(spin_min_current_a),
+                    "return_tol_a": float(spin_return_tol_a),
+                    "drive_min_delta_us": int(drive_min_delta_us),
+                },
+                "baseline": {"median_a": baseline_med, "samples": len(baseline_values)},
+                "run": {"median_a": run_med, "delta_a": run_delta, "ok": run_ok},
+                "after_drop": {"tail_median_a": drop_tail, "ok": return_ok, "samples": len(drop_values)},
+                "rerun": {"median_a": rerun_med, "delta_a": rerun_delta, "ok": rerun_ok},
+                "scan_restart_line": scan_line.strip(),
+                "timings": timings,
+                "states": states,
+            }
+            (out_dir / "disconnect_repair_result.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+            (out_dir / "psu_current_samples.json").write_text(json.dumps(psu_samples, indent=2, sort_keys=True), encoding="utf-8")
+
+            if not result["ok"]:
+                raise RuntimeError(f"disconnect re-pair failed (result={result})")
+
+        finally:
+            cleanup_best_effort()
+            robot_log.close()
+            gamepad_log.close()
+
+    return "disconnect re-pair passed"
 
 
 @step("Drive Spin Test")
@@ -1069,14 +1811,7 @@ def do_drive_spin(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS LX 0")
-                gamepad_log.send_line("AXIS LY 0")
-                gamepad_log.send_line("AXIS RX 0")
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
             except Exception:
                 pass
             if not leave_psu_on:
@@ -1170,7 +1905,7 @@ def do_drive_spin(
             drive_hold_s = max(0.6, float(drive_hold_s))
 
             # Baseline: neutral sticks.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             s0 = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=35), pump_logs=[gamepad_log])
             states["neutral"] = s0
@@ -1196,7 +1931,7 @@ def do_drive_spin(
 
             def find_single_side_lx(stop_side: str, ly: int) -> tuple[int, dict[str, str]]:
                 """
-                Find an LX value that keeps the requested stop_side motor near neutral while LY is held.
+                Find a turn (RX) value that keeps the requested stop_side motor near neutral while LY is held.
 
                 stop_side: "left" or "right" (which motor should be ~1500us)
                 Returns: (lx, status_dict)
@@ -1227,7 +1962,7 @@ def do_drive_spin(
                     best: tuple[tuple[int, int, int], int, dict[str, str]] | None = None
                     for lx in cands:
                         lx = clamp_axis(lx)
-                        gamepad_log.send_line(f"AXIS LX {lx}")
+                        gamepad_log.send_line(f"AXIS RX {lx}")
                         gamepad_log.send_line(f"AXIS LY {ly}")
                         try:
                             # Wait for any meaningful deviation on the active side before scoring.
@@ -1269,7 +2004,7 @@ def do_drive_spin(
                 return found
 
             # Left-only (right motor canceled).
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             lx_left, s_left = find_single_side_lx("right", single_forward_axis)
@@ -1279,14 +2014,14 @@ def do_drive_spin(
 
             # Stop after left-only.
             gamepad_log.send_line("AXIS LY 0")
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             s_stop_left = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             states["stop_left"] = s_stop_left
             stop_left_values = sample_current_window("stop_left", 1.0, settle_s=0.0)
             stop_left_med = statistics.median(stop_left_values) if stop_left_values else None
 
             # Right-only (left motor canceled).
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             lx_right, s_right = find_single_side_lx("left", single_forward_axis)
@@ -1296,14 +2031,14 @@ def do_drive_spin(
 
             # Stop after right-only.
             gamepad_log.send_line("AXIS LY 0")
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             s_stop_right = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             states["stop_right"] = s_stop_right
             stop_right_values = sample_current_window("stop_right", 1.0, settle_s=0.0)
             stop_right_med = statistics.median(stop_right_values) if stop_right_values else None
 
             # Forward run.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
             s_fwd = wait_for_robot_condition(
                 robot_log,
@@ -1324,7 +2059,7 @@ def do_drive_spin(
 
             # Turn run (in-place).
             gamepad_log.send_line("AXIS LY 0")
-            gamepad_log.send_line(f"AXIS LX {drive_turn_axis}")
+            gamepad_log.send_line(f"AXIS RX {drive_turn_axis}")
             s_turn = wait_for_robot_condition(
                 robot_log,
                 timeout_s=4.0,
@@ -1336,7 +2071,7 @@ def do_drive_spin(
             turn_med = statistics.median(turn_values) if turn_values else None
 
             # Stop again.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             s_stop2 = wait_for_robot_condition(robot_log, timeout_s=4.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             states["stop2"] = s_stop2
             stop2_values = sample_current_window("stop2", 1.0, settle_s=0.0)
@@ -1510,14 +2245,7 @@ def do_estop_drive(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS LX 0")
-                gamepad_log.send_line("AXIS LY 0")
-                gamepad_log.send_line("AXIS RX 0")
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
             except Exception:
                 pass
             if not leave_psu_on:
@@ -1605,7 +2333,7 @@ def do_estop_drive(
             drive_hold_s = max(0.6, float(drive_hold_s))
 
             # Baseline.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line("AXIS LY 0")
             s0 = wait_for_robot_condition(robot_log, timeout_s=3.0, predicate=lambda s: near_neutral(s, tol_us=45), pump_logs=[gamepad_log])
             states["neutral"] = s0
@@ -1615,7 +2343,7 @@ def do_estop_drive(
                 raise RuntimeError("no PSU current samples for baseline")
 
             # Start driving.
-            gamepad_log.send_line("AXIS LX 0")
+            gamepad_log.send_line("AXIS RX 0")
             gamepad_log.send_line(f"AXIS LY {drive_forward_axis}")
             s_move = wait_for_robot_condition(
                 robot_log,
@@ -1758,11 +2486,7 @@ def do_weapon_disarmed_guard(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
             except Exception:
                 pass
             if not leave_psu_on:
@@ -1835,7 +2559,7 @@ def do_weapon_disarmed_guard(
             states["disarmed"] = s_dis
 
             # Baseline while disarmed and stopped.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             baseline_values = sample_current_window("baseline", guard_baseline_s, settle_s=0.0)
             baseline_med = statistics.median(baseline_values) if baseline_values else None
             if baseline_med is None:
@@ -1847,12 +2571,24 @@ def do_weapon_disarmed_guard(
                 guard_axis = 0
             guard_hold_s = max(0.4, float(guard_hold_s))
 
-            gamepad_log.send_line(f"AXIS RY {guard_axis}")
+            weapon_command(gamepad_log, guard_axis)
+            if guard_axis != 0:
+                # Prove the robot actually sees the trigger held, and that it does
+                # not turn into a weapon target while disarmed.
+                s_cmd = wait_for_robot_condition(
+                    robot_log,
+                    timeout_s=3.0,
+                    predicate=lambda s: status_weapon_cmd_dir(s) > 0,
+                    pump_logs=[gamepad_log],
+                )
+                states["disarmed_cmd_seen"] = s_cmd
+                if s_cmd.get("armed") != "0" or (s_cmd.get("target") or "0") != "0":
+                    raise RuntimeError(f"weapon target set while disarmed: {s_cmd}")
             run_values = sample_current_window("disarmed_cmd", guard_hold_s, settle_s=0.2)
             run_med = statistics.median(run_values) if run_values else None
 
             # Stop.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             s_after = wait_for_robot_condition(
                 robot_log,
                 timeout_s=5.0,
@@ -1957,11 +2693,7 @@ def do_estop_weapon(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
             except Exception:
                 pass
             if not leave_psu_on:
@@ -2050,7 +2782,8 @@ def do_estop_weapon(
                 spin_axis = 0
             spin_hold_s = max(0.8, float(spin_hold_s))
 
-            gamepad_log.send_line("AXIS RY 0")
+            # Release edge after arming (firmware ignores a trigger held through arming).
+            weapon_release(gamepad_log)
             time.sleep(0.2)
 
             baseline_values = sample_current_window("baseline", spin_baseline_s, settle_s=0.0)
@@ -2059,7 +2792,7 @@ def do_estop_weapon(
                 raise RuntimeError("no PSU current samples for baseline")
 
             # Spin.
-            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            weapon_command(gamepad_log, spin_axis)
             s_spin = wait_for_robot_condition(
                 robot_log,
                 timeout_s=6.0,
@@ -2108,7 +2841,7 @@ def do_estop_weapon(
             states["cleared"] = s_clear
 
             # Stop commanding.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
 
             result = {
                 "ok": bool(run_ok and return_ok),
@@ -2203,11 +2936,7 @@ def do_weapon_spin(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
                 # Only attempt to disarm if we armed during this suite. Avoids accidental arm at teardown.
                 if weapon_armed:
                     gamepad_log.send_line("BTN B 1")
@@ -2269,7 +2998,8 @@ def do_weapon_spin(
             spin_hold_s = max(0.0, float(spin_hold_s))
 
             # Establish baseline PSU current draw while armed and commanded stopped.
-            gamepad_log.send_line("AXIS RY 0")
+            # This also provides the trigger release edge the firmware requires after arming.
+            weapon_release(gamepad_log)
             time.sleep(0.2)
 
             telemetry_rpms: list[int] = []
@@ -2342,7 +3072,7 @@ def do_weapon_spin(
             baseline_med = statistics.median(baseline_values) if baseline_values else None
 
             # Start spin and sample during the entire hold (optionally skipping the first settle period).
-            gamepad_log.send_line(f"AXIS RY {spin_axis}")
+            weapon_command(gamepad_log, spin_axis)
             run_values = sample_current_window("run", spin_hold_s, settle_s=spin_settle_s)
             run_med = statistics.median(run_values) if run_values else None
 
@@ -2357,7 +3087,7 @@ def do_weapon_spin(
             ok = telemetry_ok if require_telemetry else (telemetry_ok or current_ok)
 
             # Stop.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             wait_for_robot_condition(robot_log, timeout_s=10.0, predicate=lambda s: s.get("speed") == "0")
 
             # Disarm.
@@ -2515,7 +3245,13 @@ def do_weapon_latency(
 
     Two-layer measurement:
     - Layer 1 (precise): Robot firmware time_us_64() timestamps internal events
-      (gamepad RY change -> target set -> DShot sent -> RPM threshold crossed).
+      (weapon trigger press -> target set -> DShot sent -> RPM threshold crossed).
+      The firmware still labels the first event `ry_nonzero`; it now fires on the
+      trigger-derived weapon command (+100/-100/0) rather than the raw right stick.
+
+    The weapon is trigger-controlled at a fixed 100%, so `spin_axis` /
+    `spin_axis_seq` only select forward (R2) vs no-spin; their magnitudes are
+    ignored and are kept for CLI compatibility and in the per-cycle JSON.
     - Layer 2 (approximate): Host time.monotonic() timestamps command send and
       response arrival (~5-10ms USB serial uncertainty).
 
@@ -2559,11 +3295,7 @@ def do_weapon_latency(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
                 robot_log.send_line("HITL LATENCY DISARM")
                 if weapon_armed:
                     time.sleep(0.2)
@@ -2629,6 +3361,7 @@ def do_weapon_latency(
                         rpm = 0
                     time_series.append({
                         "t_s": t_host,
+                        "trig": status_weapon_cmd_dir(kv),
                         "target": target,
                         "speed": speed,
                         "thr": thr,
@@ -2687,7 +3420,8 @@ def do_weapon_latency(
                     kv = parse_kv_payload(m.group(1))
                     t_ms = kv.get("t_ms")
                     # Only capture the first SENT after CMD was recorded
-                    # (ignore the continuous stream of idle ry=0 reports).
+                    # (ignore the continuous stream of idle reports).  The line is
+                    # "t_ms=<ms> ry=<n>" plus an optional "buttons=0x<hex>" field.
                     if t_ms and "emu_cmd_ms" in emu_events and "emu_sent_ms" not in emu_events:
                         try:
                             emu_events["emu_sent_ms"] = int(t_ms)
@@ -2803,19 +3537,24 @@ def do_weapon_latency(
 
             cycles: list[dict] = []
 
-            # Ensure the weapon is commanded stopped before starting.
-            gamepad_log.send_line("AXIS RY 0")
+            if any(v not in (0, 127) for v in axis_seq):
+                print(f"NOTE: weapon_latency: axis values {sorted(set(axis_seq))} are ignored; "
+                      "every cycle is an R2 press (100%) / release")
+
+            # Ensure the weapon is commanded stopped before starting.  This is also
+            # the trigger release edge the firmware requires after arming.
+            weapon_release(gamepad_log)
             time.sleep(0.25)
 
             # Warm-up: right after boot/arm, some ESCs ignore the first few throttle
             # updates or telemetry can be "stuck" on stale values. Do a short spin-up
             # and stop before the measured cycles so the first measured cycle is stable.
             warm_axis = axis_seq[0] if axis_seq else spin_axis
-            gamepad_log.send_line(f"AXIS RY {warm_axis}")
+            weapon_command(gamepad_log, warm_axis)
             deadline = time.monotonic() + min(1.5, max(0.8, latency_hold_s))
             while time.monotonic() < deadline:
                 drain_both(0.02)
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             deadline = time.monotonic() + 1.5
             while time.monotonic() < deadline:
                 drain_both(0.02)
@@ -2859,10 +3598,10 @@ def do_weapon_latency(
                 time.sleep(0.05)
                 drain_both(0.02)
 
-                # Step up: send AXIS RY command.
+                # Step up: press the weapon trigger (single emulator command).
                 t_host_cmd = time.monotonic()
                 t_host_cmd_s = round(t_host_cmd - suite_t0, 6)
-                gamepad_log.send_line(f"AXIS RY {axis}")
+                weapon_command(gamepad_log, axis)
 
                 # Tight-poll for firmware RESULT or timeout.
                 tight_poll(timeout_s=10.0, until_key="fw_rpm_seen_us")
@@ -2872,10 +3611,10 @@ def do_weapon_latency(
                 while time.monotonic() < hold_deadline:
                     drain_both(0.02)
 
-                # Step down: send AXIS RY 0.
+                # Step down: release the weapon trigger.
                 t_host_down = time.monotonic()
                 t_host_down_s = round(t_host_down - suite_t0, 6)
-                gamepad_log.send_line("AXIS RY 0")
+                weapon_release(gamepad_log)
 
                 # Wait for spindown (DOWN line) or rpm=0 in STATUS, or timeout.
                 down_deadline = time.monotonic() + 10.0
@@ -2994,7 +3733,7 @@ def do_weapon_latency(
                 cycles.append(cycle_result)
 
             # Stop + disarm.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             robot_log.send_line("HITL LATENCY DISARM")
             wait_for_robot_condition(
                 robot_log,
@@ -3206,11 +3945,7 @@ def do_weapon_zero_cross(
 
         def cleanup_best_effort() -> None:
             try:
-                gamepad_log.send_line("AXIS RY 0")
-                gamepad_log.send_line("BTN A 0")
-                gamepad_log.send_line("BTN B 0")
-                gamepad_log.send_line("BTN L1 0")
-                gamepad_log.send_line("BTN R1 0")
+                gamepad_neutral(gamepad_log)
                 if weapon_armed:
                     time.sleep(0.2)
                     gamepad_log.send_line("BTN B 1")
@@ -3244,6 +3979,7 @@ def do_weapon_zero_cross(
             weapon_state = kv.get("weapon", "")
             time_series.append({
                 "t_s": t_host,
+                "trig": status_weapon_cmd_dir(kv),
                 "speed": speed,
                 "target": target,
                 "weapon": weapon_state,
@@ -3309,12 +4045,20 @@ def do_weapon_zero_cross(
 
             cycles: list[dict] = []
 
+            if axis != 127:
+                print(f"NOTE: weapon_zero_cross: --zero-cross-axis magnitude {axis} is ignored; "
+                      "reversal is R2 (forward, 100%) <-> L2 (reverse, 100%)")
+
+            # Trigger release edge after arming (firmware ignores triggers held through arming).
+            weapon_release(gamepad_log)
+            time.sleep(0.1)
+
             # Warm-up spin: ensures ESC is responding before measured cycles.
-            gamepad_log.send_line(f"AXIS RY {axis}")
+            weapon_command(gamepad_log, axis)
             deadline = time.monotonic() + min(2.0, zero_cross_hold_s)
             while time.monotonic() < deadline:
                 drain_both(0.02)
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             wait_for_robot_condition(
                 robot_log,
                 timeout_s=12.0,
@@ -3341,7 +4085,7 @@ def do_weapon_zero_cross(
                         )
 
                         time_series.clear()
-                        gamepad_log.send_line(f"AXIS RY {from_axis}")
+                        weapon_command(gamepad_log, from_axis)
 
                         expected_sign = 1 if from_axis > 0 else -1
                         try:
@@ -3378,7 +4122,8 @@ def do_weapon_zero_cross(
                     time_series.clear()
                     t0 = time.monotonic()
                     t0_rel = round(t0 - suite_t0, 6)
-                    gamepad_log.send_line(f"AXIS RY {to_axis}")
+                    # Release the held trigger and press the opposite one back-to-back.
+                    weapon_reverse(gamepad_log, to_axis)
 
                     # Poll until speed crosses into the target direction or timeout.
                     target_sign = 1 if to_axis > 0 else -1
@@ -3434,12 +4179,12 @@ def do_weapon_zero_cross(
 
                     if stuck_at_zero:
                         # Motor stuck — try to recover for next reversal.
-                        gamepad_log.send_line("AXIS RY 0")
+                        weapon_release(gamepad_log)
                         time.sleep(1.0)
                         drain_both(0.1)
 
                 # Stop between cycles.
-                gamepad_log.send_line("AXIS RY 0")
+                weapon_release(gamepad_log)
                 wait_for_robot_condition(
                     robot_log,
                     timeout_s=12.0,
@@ -3456,7 +4201,7 @@ def do_weapon_zero_cross(
                 })
 
             # Disarm.
-            gamepad_log.send_line("AXIS RY 0")
+            weapon_release(gamepad_log)
             time.sleep(0.25)
             for attempt in range(2):
                 gamepad_log.send_line("BTN B 1")
@@ -3549,6 +4294,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="ThumbsUp HITL orchestrator")
     parser.add_argument("--no-build", action="store_true", help="skip firmware builds")
     parser.add_argument("--no-flash", action="store_true", help="skip flashing")
+    parser.add_argument(
+        "--no-am32-provision",
+        action="store_true",
+        help="skip AM32 config drift check/provisioning (normally runs before firmware flash)",
+    )
+    parser.add_argument(
+        "--am32-config",
+        default="config/am32/weapon_esc_expected.hexcfg",
+        help="expected AM32 config file (.bin, hex text, or YAML; default: config/am32/weapon_esc_expected.hexcfg)",
+    )
+    parser.add_argument(
+        "--am32-service-uf2",
+        default="firmware/tests/build/am32_flasher_service.uf2",
+        help="AM32 flasher service UF2 path (used when --no-am32-service-build)",
+    )
+    parser.add_argument(
+        "--no-am32-service-build",
+        action="store_true",
+        help="do not build am32_flasher_service; use --am32-service-uf2 as-is",
+    )
+    parser.add_argument(
+        "--am32-port",
+        default="/dev/ttyHITL_ROBOT",
+        help="robot USB CDC port for AM32 provision step (default: /dev/ttyHITL_ROBOT)",
+    )
     parser.add_argument("--no-report", action="store_true", help="skip generating report.md/report.pdf")
     parser.add_argument("--run-dir", help="override output directory under hitl_logs/")
     parser.add_argument("--no-psu-off", action="store_true", help="do not force PSU off at start")
@@ -3567,10 +4337,10 @@ def main() -> None:
     parser.add_argument("--psu-voltage", type=float, default=12.6, help="PSU voltage for active motor tests")
     parser.add_argument("--psu-current", type=float, default=5.0, help="PSU current limit for active motor tests")
     parser.add_argument("--leave-psu-on", action="store_true", help="leave PSU output enabled after suite")
-    parser.add_argument("--spin-axis", type=int, default=60, help="Weapon spin command (RY axis -127..127)")
+    parser.add_argument("--spin-axis", type=int, default=60, help="Weapon spin command; sign selects trigger (>0 R2 forward, 0 none), magnitude ignored (triggers are fixed 100%%)")
     parser.add_argument(
         "--spin-axis-seq",
-        help="Optional comma-separated list of spin axis values to cycle per latency cycle (e.g. 20,40,60,80).",
+        help="Optional comma-separated list of spin axis values per latency cycle (kept for compatibility; magnitudes are ignored, every cycle is an R2 press).",
     )
     parser.add_argument("--spin-hold-s", type=float, default=5.0, help="Seconds to hold weapon command")
     parser.add_argument("--spin-baseline-s", type=float, default=2.0, help="Seconds to sample baseline current before spin")
@@ -3586,7 +4356,7 @@ def main() -> None:
         default=1000,
         help="Minimum RPM to treat as 'spinning' when using telemetry-based checks (filters idle/garbage RPM).",
     )
-    parser.add_argument("--guard-axis", type=int, default=80, help="Weapon guard command (RY axis -127..127) while disarmed")
+    parser.add_argument("--guard-axis", type=int, default=80, help="Weapon command while disarmed; >0 holds R2 (magnitude ignored)")
     parser.add_argument("--guard-hold-s", type=float, default=1.5, help="Seconds to hold disarmed weapon command")
     parser.add_argument("--guard-baseline-s", type=float, default=1.5, help="Seconds to sample baseline current before disarmed command")
     parser.add_argument("--guard-sample-interval-s", type=float, default=0.2, help="PSU current sample interval during guard test (s)")
@@ -3598,17 +4368,18 @@ def main() -> None:
     parser.add_argument("--latency-telem-rate-ms", type=int, default=2, help="Weapon telemetry decode interval during latency test (ms)")
     parser.add_argument("--latency-status-rate-ms", type=int, default=10, help="Robot HITL STATUS interval during latency test (ms)")
     parser.add_argument("--soak-cycles", type=int, default=20, help="Number of cycles for latency soak test")
-    parser.add_argument("--soak-axis", type=int, default=60, help="Fixed axis value for latency soak test")
+    parser.add_argument("--soak-axis", type=int, default=60, help="Weapon command for latency soak test (>0 = R2 press; magnitude ignored)")
     parser.add_argument("--soak-baseline-s", type=float, default=0.8, help="Baseline seconds per cycle for soak test")
     parser.add_argument("--soak-hold-s", type=float, default=1.5, help="Hold seconds per cycle for soak test")
     parser.add_argument("--soak-max-drift-ms", type=float, default=2.0, help="Max acceptable drift slope (ms/cycle) for soak test")
     parser.add_argument("--soak-max-latency-ms", type=float, default=300.0, help="Max acceptable single-cycle latency (ms) for soak test")
-    parser.add_argument("--zero-cross-axis", type=int, default=100, help="Weapon zero-cross command magnitude (RY axis 1..127, mapped to ±axis)")
+    parser.add_argument("--zero-cross-axis", type=int, default=100, help="Weapon zero-cross command (kept for compatibility; reversal is R2 <-> L2 at fixed 100%%)")
     parser.add_argument("--zero-cross-hold-s", type=float, default=3.0, help="Seconds to hold each direction before reversal")
     parser.add_argument("--zero-cross-max-ms", type=float, default=1000.0, help="Max allowed reversal time (ms), ~690ms expected with prime sequence")
     parser.add_argument("--zero-cross-cycles", type=int, default=2, help="Number of full round-trip reversal cycles")
+    parser.add_argument("--repair-timeout-s", type=float, default=60.0, help="Max seconds for the robot to re-discover and reconnect the emulator after a drop")
     parser.add_argument("--drive-forward-axis", type=int, default=-80, help="Drive forward command (LY axis -127..127)")
-    parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (LX axis -127..127)")
+    parser.add_argument("--drive-turn-axis", type=int, default=80, help="Drive turn command (RX axis -127..127)")
     parser.add_argument("--drive-hold-s", type=float, default=0.6, help="Seconds to hold each drive command")
     parser.add_argument("--drive-min-delta-us", type=int, default=60, help="Min PWM pulse delta from neutral to treat as moving")
     parser.add_argument("--drive-spin-hold-s", type=float, default=2.0, help="Seconds to hold each active drive command")
@@ -3629,6 +4400,7 @@ def main() -> None:
             "weapon_zero_cross",
             "drive_e2e",
             "disconnect_failsafe",
+            "disconnect_repair",
             "drive_spin",
             "estop_drive",
             "safety_active",
@@ -3711,6 +4483,23 @@ def main() -> None:
         if not results[-1].ok:
             exit_code = 1
 
+    if not args.no_flash and not args.no_am32_provision and exit_code == 0:
+        results.append(
+            do_am32_provision(
+                repo_root=repo_root,
+                expected_config_path=(Path(args.am32_config) if Path(args.am32_config).is_absolute() else (repo_root / args.am32_config)),
+                service_uf2_path=(Path(args.am32_service_uf2) if Path(args.am32_service_uf2).is_absolute() else (repo_root / args.am32_service_uf2)),
+                build_service_firmware=not args.no_am32_service_build,
+                robot_port=args.am32_port,
+                psu_channel=args.psu_channel,
+                psu_voltage=args.psu_voltage,
+                psu_current=args.psu_current,
+                out_dir=alloc_step_dir("AM32 Provision"),
+            )
+        )
+        if not results[-1].ok:
+            exit_code = 1
+
     if not args.no_flash and exit_code == 0:
         results.append(
             do_flash(
@@ -3769,6 +4558,28 @@ def main() -> None:
                     spin_min_current_a=args.spin_min_current_a,
                     spin_return_tol_a=args.spin_return_tol_a,
                     out_dir=alloc_step_dir("E-Stop While Weapon Spinning Test"),
+                )
+            )
+        elif args.suite == "disconnect_repair":
+            results.append(
+                do_disconnect_repair(
+                    repo_root,
+                    args.psu_channel,
+                    args.psu_voltage,
+                    args.psu_current,
+                    psu_off_first=not args.no_psu_off,
+                    leave_psu_on=args.leave_psu_on,
+                    spin_axis=args.spin_axis,
+                    spin_baseline_s=args.spin_baseline_s,
+                    spin_sample_interval_s=args.spin_sample_interval_s,
+                    spin_settle_s=args.spin_settle_s,
+                    spin_current_delta_a=args.spin_current_delta_a,
+                    spin_min_current_a=args.spin_min_current_a,
+                    spin_return_tol_a=args.spin_return_tol_a,
+                    drive_forward_axis=args.drive_forward_axis,
+                    drive_min_delta_us=args.drive_min_delta_us,
+                    repair_timeout_s=args.repair_timeout_s,
+                    out_dir=alloc_step_dir("Disconnect Re-Pair Test"),
                 )
             )
         elif args.suite == "drive_e2e":
@@ -3946,6 +4757,28 @@ def main() -> None:
                 )
             if results[-1].ok:
                 results.append(
+                    do_disconnect_repair(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        spin_axis=args.spin_axis,
+                        spin_baseline_s=args.spin_baseline_s,
+                        spin_sample_interval_s=args.spin_sample_interval_s,
+                        spin_settle_s=args.spin_settle_s,
+                        spin_current_delta_a=args.spin_current_delta_a,
+                        spin_min_current_a=args.spin_min_current_a,
+                        spin_return_tol_a=args.spin_return_tol_a,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_min_delta_us=args.drive_min_delta_us,
+                        repair_timeout_s=args.repair_timeout_s,
+                        out_dir=alloc_step_dir("Disconnect Re-Pair Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
                     do_weapon_disarmed_guard(
                         repo_root,
                         args.psu_channel,
@@ -4051,6 +4884,28 @@ def main() -> None:
                         drive_forward_axis=args.drive_forward_axis,
                         drive_min_delta_us=args.drive_min_delta_us,
                         out_dir=alloc_step_dir("Disconnect Failsafe Test"),
+                    )
+                )
+            if results[-1].ok:
+                results.append(
+                    do_disconnect_repair(
+                        repo_root,
+                        args.psu_channel,
+                        args.psu_voltage,
+                        args.psu_current,
+                        psu_off_first=not args.no_psu_off,
+                        leave_psu_on=args.leave_psu_on,
+                        spin_axis=args.spin_axis,
+                        spin_baseline_s=args.spin_baseline_s,
+                        spin_sample_interval_s=args.spin_sample_interval_s,
+                        spin_settle_s=args.spin_settle_s,
+                        spin_current_delta_a=args.spin_current_delta_a,
+                        spin_min_current_a=args.spin_min_current_a,
+                        spin_return_tol_a=args.spin_return_tol_a,
+                        drive_forward_axis=args.drive_forward_axis,
+                        drive_min_delta_us=args.drive_min_delta_us,
+                        repair_timeout_s=args.repair_timeout_s,
+                        out_dir=alloc_step_dir("Disconnect Re-Pair Test"),
                     )
                 )
             if results[-1].ok:

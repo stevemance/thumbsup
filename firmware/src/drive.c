@@ -47,8 +47,9 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
     int8_t turn_before_expo = turn;
 
     forward = drive_apply_expo(forward, current_expo);
-    turn = drive_apply_expo(turn, current_expo);
+    turn = drive_apply_expo(turn, TURN_EXPO);
 
+#ifdef DEBUG_MODE
     // DEBUG: Log expo transformation
     static uint32_t last_expo_debug = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -59,6 +60,7 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
         }
         last_expo_debug = now;
     }
+#endif
 
     // SAFETY: Use 32-bit arithmetic to prevent overflow during scaling
     // Input range is -127 to +127, scale to percentage values
@@ -89,6 +91,7 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
     output.left_speed = (int8_t)CLAMP(left, -100, 100);
     output.right_speed = (int8_t)CLAMP(right, -100, 100);
 
+#ifdef DEBUG_MODE
     // DEBUG: Log final output speeds with real units
     static uint32_t last_mix_debug = 0;
     uint32_t now2 = to_ms_since_boot(get_absolute_time());
@@ -104,6 +107,7 @@ drive_output_t drive_mix(int8_t forward, int8_t turn) {
         }
         last_mix_debug = now2;
     }
+#endif
 
     return output;
 }

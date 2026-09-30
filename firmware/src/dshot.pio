@@ -108,39 +108,36 @@ tx_bit_zero:
     jmp x--, tx_bitloop
 
 tx_done:
-    set pins, 1     [31]    ; Hold line high briefly for ESC invert detect
-    nop             [31]    ; Keep driving high a bit longer
-    set pindirs, 0          ; Release line (idle high via pull-up)
-    ; Allow turnaround before telemetry arrives.
-    nop             [31]
-    nop             [31]
+    set pins, 1     [15]    ; Finish the frame high (~3 us)
+    set pindirs, 0  [31]    ; Release the line (idle high via pull-up) and let it settle
 
     ; === RECEIVE PHASE ===
-    ; Wait for telemetry start bit (falling edge to low), then sample mid-bit.
-    ; Use a tighter polling loop with a bounded timeout.
+    ; The ESC's reply starts ~26 us after our last edge (measured on AM32).
+    ; Poll for its start bit every 2 cycles (0.42 us at DShot300) for up to
+    ; ~110 us; a missed or late start bit used to make the C side guess the
+    ; bit alignment and accept wrong frames.
+    set y, 7
+wait_outer:
     set x, 31
 wait_low:
-    jmp pin, wait_low_dec
+    jmp pin, still_high
     jmp got_low
-wait_low_dec:
-    jmp x--, wait_low [4]
+still_high:
+    jmp x--, wait_low
+    jmp y--, wait_outer
     jmp rx_timeout
 
 got_low:
-    ; Telemetry oversampling: 42 samples (21 bits @ 2x).
-    set x, 31       [2]     ; Delay to mid-bit before sampling (2x oversample)
-
-rx_bitloop0:
-    in pins, 1      [4]     ; Sample at ~1.25us cadence (2x oversample)
-    jmp x--, rx_bitloop0
-
-    set x, 9
-rx_bitloop1:
-    in pins, 1      [4]
-    jmp x--, rx_bitloop1
-
-    ; Push telemetry data
-    push block
+    ; 128 samples, 2 cycles apart (~6 per telemetry bit), autopushed as 4
+    ; words; the RX FIFO holds exactly 4 so this never stalls.  Word
+    ; boundaries add 2 cycles (see dshot_rx.c).
+    set y, 3
+rx_word:
+    set x, 31
+rx_bit:
+    in pins, 1
+    jmp x--, rx_bit
+    jmp y--, rx_word
 
 rx_timeout:
     ; Stay released between frames (idle high)

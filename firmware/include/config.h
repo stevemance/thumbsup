@@ -26,9 +26,47 @@
 // Battery Monitoring
 #define PIN_BATTERY_ADC     26   // GP26/ADC0 - Battery voltage divider
 
+// Latency marker: driven high while the last received gamepad report has a
+// deflected stick or pressed trigger.  Probed by the HITL logic analyzer; a
+// single gpio_put per report, so it is left enabled in competition builds.
+#define PIN_LATENCY_MARKER  15   // GP15 - HITL latency marker output
+
+// Bluetooth Classic poll latency requested from the radio (HCI QoS Setup) once
+// the controller is ready.  Without it the CYW43 polls the controller at its
+// default interval (up to 25 ms), which adds 0-25 ms to every report.
+// 0 disables the request.
+#ifndef BT_QOS_LATENCY_US
+#define BT_QOS_LATENCY_US   1250
+#endif
+
+// Ask the controller to take the central role once it is ready.  As central
+// it transmits each report as soon as it has one instead of waiting to be
+// polled.  The PB Tails Crush rejects every QoS request, and with the robot as
+// central ~10% of its reports arrived after 20-45 ms gaps; as peripheral, 0.2%
+// (max 27 ms), with ~7.3 ms between reports.
+#ifndef BT_PREFER_PERIPHERAL_ROLE
+#define BT_PREFER_PERIPHERAL_ROLE 1
+#endif
+
+// Report-age failsafe: if the drive or weapon is being commanded and no
+// controller report has arrived for this long, command neutral.  The Crush
+// streams every ~7 ms (max gap seen 27 ms after the role switch).  Neutral
+// commands are unaffected, so a controller that only reports on change is
+// safe at rest.
+#define REPORT_STALE_TIMEOUT_MS 250
+
 // PWM Configuration
-#define PWM_FREQUENCY       50   // 50Hz for standard servo/ESC control
-#define PWM_WRAP_VALUE      20000 // For 50Hz at 125MHz clock
+// Drive PWM frame rate.  The counter ticks at 1 MHz, so one count is one
+// microsecond of pulse width.
+// The Kingmodel SAX2 drive ESC only reacts after ~5 frames, so its latency
+// scales with the frame period (HITL, Sep 2026: 50 Hz ~95-115 ms, 100 Hz
+// ~50-60 ms, 142 Hz ~40-50 ms).  At >=160 Hz it ignores the signal entirely
+// and the drive goes dead, so keep a wide margin below that.
+#ifndef PWM_FREQUENCY
+#define PWM_FREQUENCY       100
+#endif
+#define PWM_TICK_HZ         1000000
+#define PWM_WRAP_VALUE      (PWM_TICK_HZ / PWM_FREQUENCY)
 
 // PWM Pulse Widths (in microseconds)
 #define PWM_MIN_PULSE       1000  // Minimum pulse width (full reverse/stop)
@@ -63,7 +101,9 @@
 #define MAX_SPIN_TIME_MS    149     // Time for 360° spin at max speed (ms)
 
 // Control Parameters
-#define STICK_DEADZONE      15    // Joystick deadzone (0-127 scale)
+#define STICK_DEADZONE      15    // Neutral-guard deadzone (raw -512..511 scale)
+#define THROTTLE_DEADZONE   24    // Throttle stick deadzone (raw -512..511 scale)
+#define TURN_DEADZONE       32    // Turn stick deadzone (raw scale); absorbs snap-back bounce
 #define TRIGGER_THRESHOLD   20    // Minimum trigger value to activate
 #define MAX_DRIVE_SPEED     75    // Maximum drive speed percentage (75% of max for better control)
 #define MAX_TURN_SPEED      70    // Maximum turn rate percentage (70% turn sensitivity)
@@ -75,7 +115,22 @@
 // NOTE: Increased from 30% to 70% for better low-speed control
 // Higher expo = more gradual at center stick, maintains full speed at full stick
 // See docs/CONTROL_ANALYSIS.md for detailed explanation
-#define DRIVE_EXPO          70    // Drive exponential curve (0-100, 0=linear)
+#define DRIVE_EXPO          70    // Throttle exponential curve (0-100, 0=linear)
+// Turn gets its own, much flatter curve.  At 70% cubic expo the last 20% of
+// stick travel carried most of the turn rate, so a flick-to-aim landed on the
+// steepest part of the curve.
+#define TURN_EXPO           30    // Turn exponential curve (0-100, 0=linear)
+
+// Split-stick drive: left stick Y = throttle, right stick X = turn.
+// 0 restores the original single-left-stick arcade layout.
+#ifndef DRIVE_LAYOUT_SPLIT
+#define DRIVE_LAYOUT_SPLIT  1
+#endif
+
+// Weapon on the triggers: hold ZR = forward spin, hold ZL = reverse spin,
+// release = spin down.  First trigger pressed wins while both are held.
+#define WEAPON_TRIGGER_SPEED 100  // Weapon speed (%) while a trigger is held
+#define WEAPON_TRIGGER_ANALOG_ON 512  // Analog trigger level (0..1023) counted as pressed
 #define WEAPON_EXPO         20    // Weapon exponential curve
 
 // Real-Unit Conversion Helpers
@@ -127,6 +182,8 @@
 #define WEAPON_PRIME_PULSE_MS 20    // Send min-DShot in new direction (ms)
 #define WEAPON_PRIME_RESET_MS 30    // Send DShot=0 to reset ESC state (ms)
 #define WEAPON_DSHOT_UPDATE_MS     2   // Minimum DShot update interval (ms) (500 Hz)
+#define WEAPON_DSHOT_BIDIRECTIONAL 1   // 0=standard DShot TX, 1=single-wire bidirectional EDT
+#define WEAPON_DSHOT_USE_3D       1   // 1=enable DShot 3D mode, 0=use unidirectional control
 #define WEAPON_DSHOT_TELEMETRY_MS  50  // Telemetry request interval (ms)
 #define WEAPON_DSHOT_TELEMETRY_BURST 4  // Decode up to N consecutive EDT frames per interval (helps catch RPM/V/I/T cycle)
 #define WEAPON_DSHOT_TELEMETRY_MAX_PENDING 8  // Max outstanding telemetry frames to decode (budget / FIFO drain)
@@ -144,7 +201,17 @@
 #define WEAPON_TELEM_SLOW_ALPHA_NUM    1
 #define WEAPON_TELEM_SLOW_ALPHA_DEN    4
 // Max RPM change per frame (rejects noise spikes, generous for real spinup)
-#define WEAPON_TELEM_MAX_RPM_DELTA     5000
+// Largest believable change between consecutive accepted RPM readings
+// (~2-4 ms apart).  The weapon's spin-up ramp is ~9 rpm/ms, so real steps are
+// a few tens of rpm; this only catches corrupted frames.
+#define WEAPON_TELEM_MAX_RPM_STEP      2000
+// Accept a new level after this many mutually consistent out-of-step
+// readings, so the check can never lock telemetry out.
+#define WEAPON_TELEM_RPM_RESYNC        3
+// The rig's AT32F421 AM32 ESC reports a constant 62 A (0x6 frames, raw 124)
+// at rest and at full speed: no working current sensor.  Current telemetry
+// is ignored unless this is set for an ESC that measures it.
+#define WEAPON_ESC_HAS_CURRENT_SENSE   0
 // Range bounds for V/I/T at weapon layer
 #define WEAPON_TELEM_MAX_VOLTAGE_CV    2520   // 25.2V (2x nominal 3S)
 #define WEAPON_TELEM_MIN_VOLTAGE_CV    500    // 5V minimum
@@ -241,8 +308,8 @@
 #define BTN_Y               0x0008
 #define BTN_L1              0x0010
 #define BTN_R1              0x0020
-#define BTN_BACK            0x0040
-#define BTN_START           0x0080
+#define BTN_TRIGGER_L       0x0040  // ZL / LT (digital on Switch-class controllers)
+#define BTN_TRIGGER_R       0x0080  // ZR / RT
 #define BTN_L3              0x0100
 #define BTN_R3              0x0200
 

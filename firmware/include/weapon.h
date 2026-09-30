@@ -27,7 +27,11 @@ typedef struct {
     uint8_t temperature_C;   // Temperature in Celsius
     uint8_t crc;             // CRC from ESC telemetry
     bool valid;              // True if telemetry is valid
-    uint32_t timestamp_ms;   // When telemetry was received
+    uint32_t timestamp_ms;   // When the RPM (eRPM or stopped frame) was received
+    uint32_t erpm_ms;        // Per-field receive times; 0 = not received since arming
+    uint32_t voltage_ms;
+    uint32_t current_ms;     // stays 0 when WEAPON_ESC_HAS_CURRENT_SENSE is 0
+    uint32_t temperature_ms;
 } weapon_telemetry_t;
 
 // Core weapon control functions
@@ -42,6 +46,8 @@ int8_t weapon_get_target_speed(void);
 bool weapon_is_armed(void);
 void weapon_emergency_stop(void);
 bool weapon_get_telemetry(weapon_telemetry_t* telemetry);
+// Latest per-field values and receive times, regardless of age.
+bool weapon_get_telemetry_snapshot(weapon_telemetry_t* telemetry);
 uint32_t weapon_get_dshot_failures(void);
 uint16_t weapon_get_dshot_last_throttle(void);
 void weapon_get_dshot_send_counts(uint32_t* attempts, uint32_t* successes);

@@ -49,6 +49,7 @@ set(CORE_SOURCES
     src/motor_linearization.c
     src/am32_config.c
     src/dshot.c
+    src/dshot_rx.c
     src/hitl_overrides.c
     src/hitl_console.c
     src/safety_test.c

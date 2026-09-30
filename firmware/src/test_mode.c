@@ -50,9 +50,9 @@ void test_mode_check_activation(test_mode_gamepad_ptr gp_ptr) {
     uni_gamepad_t *gp = (uni_gamepad_t*)gp_ptr;
     uint32_t current_time = to_ms_since_boot(get_absolute_time());
 
-    // Check if both L and R buttons are pressed
-    // On Switch controller: L=0x0040, R=0x0080
-    bool both_triggers = (gp->buttons & 0x0040) && (gp->buttons & 0x0080);
+    // Minus + Plus held.  (ZL+ZR used to enter test mode, but the triggers now
+    // drive the weapon and test mode freezes all outputs.)
+    bool both_triggers = (gp->misc_buttons & MISC_BUTTON_SELECT) && (gp->misc_buttons & MISC_BUTTON_START);
 
     if (both_triggers) {
         if (!activation_buttons_held) {
@@ -67,7 +67,7 @@ void test_mode_check_activation(test_mode_gamepad_ptr gp_ptr) {
                 // Entering test mode - clear screen and hide cursor
                 printf(ANSI_CLEAR_SCREEN ANSI_HOME ANSI_HIDE_CURSOR);
                 printf(ANSI_BOLD ANSI_CYAN "=== CONTROLLER TEST MODE ===" ANSI_NORMAL "\n");
-                printf("Hold L+R shoulder buttons for 1 second to exit\n\n");
+                printf("Hold Minus+Plus for 1 second to exit\n\n");
                 // Set LED to show test mode active
                 status_set_system(SYSTEM_STATUS_TEST_MODE, LED_EFFECT_PULSE);
             } else {

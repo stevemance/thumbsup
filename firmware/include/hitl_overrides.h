@@ -18,5 +18,12 @@ void hitl_overrides_set_battery_mv(uint32_t mv);
 void hitl_overrides_clear_battery_mv(void);
 bool hitl_overrides_get_battery_mv(uint32_t* out_mv);
 
+// Weapon speed override (-100..100 %), used to sweep throttle for telemetry
+// validation.  Only applies while the weapon is armed; the triggers are
+// ignored while it is set.
+void hitl_overrides_set_weapon_pct(int8_t pct);
+void hitl_overrides_clear_weapon_pct(void);
+bool hitl_overrides_get_weapon_pct(int8_t* out_pct);
+
 #endif  // HITL_OVERRIDES_H
 

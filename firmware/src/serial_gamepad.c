@@ -245,9 +245,13 @@ static void print_telem_raw(int count) {
     int seen = 0;
     absolute_time_t start = get_absolute_time();
     while (seen < count && absolute_time_diff_us(start, get_absolute_time()) < 500000) {
-        uint64_t raw = 0;
-        if (dshot_read_telemetry_raw(MOTOR_WEAPON, &raw)) {
-            printf("EDT raw=0x%010llx\n", (unsigned long long)raw);
+        uint32_t words[DSHOT_RX_WORDS];
+        if (dshot_read_telemetry_raw(MOTOR_WEAPON, words)) {
+            uint16_t value = 0;
+            dshot_rx_result_t res = dshot_rx_decode_samples(words, &value);
+            printf("EDT raw=%08lx %08lx %08lx %08lx result=%d value=0x%03x\n",
+                   (unsigned long)words[0], (unsigned long)words[1],
+                   (unsigned long)words[2], (unsigned long)words[3], (int)res, value);
             seen++;
         } else {
             sleep_ms(1);
@@ -355,9 +359,9 @@ static bool button_mask_from_name(const char* name, uint16_t* mask) {
     } else if (streq_case(name, "R1")) {
         *mask = BTN_R1;
     } else if (streq_case(name, "BACK")) {
-        *mask = BTN_BACK;
+        *mask = BTN_TRIGGER_L;
     } else if (streq_case(name, "START")) {
-        *mask = BTN_START;
+        *mask = BTN_TRIGGER_R;
     } else if (streq_case(name, "L3")) {
         *mask = BTN_L3;
     } else if (streq_case(name, "R3")) {

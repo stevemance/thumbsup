@@ -6,7 +6,7 @@
 #define DSHOT_TEST_SPEED DSHOT_SPEED_300
 
 static void send_throttle_for_ms(uint16_t throttle, uint32_t duration_ms) {
-    const uint32_t step_ms = 2;  // 500 Hz update rate
+    const uint32_t step_ms = 1;  // 1 kHz update rate
     uint32_t steps = duration_ms / step_ms;
     for (uint32_t i = 0; i < steps; i++) {
         dshot_send_throttle(MOTOR_WEAPON, throttle, false);
