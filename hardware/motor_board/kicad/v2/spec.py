@@ -105,6 +105,16 @@ EXPLICIT.update({
     "J1": (75.3, 23.0, 90, B, "header to the compute board (bottom, rear-right): beside U2's thermal-via field, under the buck; +5V close, MCU nets west"),
     "U5": (76.0, 33.0, 0, T, "3.3 V LDO: rear-right corner beside the buck output (+5V) and over J1"),
     "J4": (54.3, 31.6, 0, T, "balance lead (vertical XH): rear edge behind the MCU/U2 gap, so U2's rear-right corner stays free for the buck input loop (DESIGN 6.7); BMS parts under it on the bottom"),
+    # drive fan-out fixes (P3 pre-route, kicad/gen/v2_drive.py, 2026-09-30)
+    "R400": (19.25, 17.895, 0, T, "drive R buck resistor: at U4's front-left corner (U3's R300 had this spot), fed from U4's west pins 3/5; keeps U4's SPI/CSA front edge free"),
+    "R300": (22.355, 16.75, 0, T, "drive L buck resistor: in the power band in front of U4 (R400's old spot; U3's own front has no room between R302 and the VM/CP caps); reached on L1 along the band corridor (FBBK) and by an L4 hop (SWBK)"),
+    "R401": (27.45, 25.7, 0, T, "drive R nFAULT pull-up (to AVDD): top, between C405 and TP8, at U4 pins 22/25 (was on the bottom behind the drive-to-MCU bundle)"),
+    "R81": (28.75, 22.0, 270, T, "drive R SOB filter resistor: top, west of U1 pin 34 between C405 and the MCU ring (was at U1's rear-west corner, 12 mm from its cap C91)"),
+    "C305": (8.15, 28.88, 180, T, "drive L AVDD cap: right behind U3 pin 25 (AVDD pad under the pin), between the rear-escape keep-out and J2"),
+    # held where the anchored pass put them (R81's move would otherwise pull R82 into its old corner)
+    "R82": (29.15, 24.35, 270, T, "drive R SOC filter resistor: top, west of U1 pin 35 below R81 (under U1 it was unreachable from U4 past the bottom decoupling)"),
+    "C92": (38.3, 24.25, 270, B, "drive R SOC filter cap under U1 (pinned: pre-routed)"),
+    "R60": (39.5, 24.75, 90, B, "+3V3A filter (pinned where the anchored pass placed it)"),
 })
 
 # ------------------------------------------------------------------ regions for the anchored parts (per block, side)

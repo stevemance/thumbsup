@@ -485,7 +485,8 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    to their cell's 10 µF cap.  Under the cells the L3 VBAT band ends at **y = 16.0** (the cap VBAT
    vias are at y ≤ 14.6); L4 behind it (over L3 GND) carries the Kelvin hops.  Low-side gates stay on
    L1 through the shunt pad gap with no via (TI SLVSDJ3D §11: the sensitive loop).  The lanes and the
-   boundary are named rule areas in the custom DRC (kicad/v2/README_bridge.md).
+   boundary are named rule areas in the custom DRC (kicad/v2/README_bridge.md).  The same y = 16.0 edge applies for
+   x 14-27 (under R302/R402) so the drive ICs' SPI/CSA escapes get an inner-layer corridor; C1's feed pads stay in the band.
 3. **Kelvin sense:** SPx/SNx as a pair from the inner edges of each shunt pad (net-ties NT1–NT3);
    VDRAIN Kelvin to the high-side drains.  U7 IN+/IN− from RS4's pad inner edges.
 4. **DRV8323 straps:** R44–R46 within ~2 mm of pins 29–31, returned to AGND pin 35 / the DVDD

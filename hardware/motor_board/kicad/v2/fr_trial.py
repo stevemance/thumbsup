@@ -62,7 +62,10 @@ def prep():
         k.SetZoneName(name)
         b.Add(k)
 
-    keepout([pcbnew.In2_Cu, pcbnew.B_Cu], (0.0, 0.0, 85.0, 18.5), "front power band", vias=False)   # no tracks; GND stitching and a few signal vias may pass
+    # front power band: no tracks (GND stitching and a few signal vias may pass).  The L3 VBAT pour ends at y 16.0 in
+    # front of U4 (x 14-27, README_bridge.md section 1), so L3/L4 are usable from y 16.3 there.
+    for i, box in enumerate(((0.0, 0.0, 14.0, 18.5), (27.0, 0.0, 85.0, 18.5), (14.0, 0.0, 27.0, 16.3))):
+        keepout([pcbnew.In2_Cu, pcbnew.B_Cu], box, f"front power band {i}", vias=False)
     keepout([pcbnew.In1_Cu], (0.0, 0.0, 85.0, 35.0), "L2 GND: no tracks", vias=False)
     fps = {f.GetReference(): f for f in b.GetFootprints()}
     for ref in ("U2", "U3", "U4"):
@@ -72,7 +75,9 @@ def prep():
         box = [box[0] - OX, box[1] - OY, box[2] - OX, box[3] - OY]
         keepout([pcbnew.B_Cu], (box[0] - 0.5, box[1] - 0.5, box[2] + 0.5, box[3] + 0.5), f"{ref} thermal field")
         if ref != "U2":
-            keepout([pcbnew.In2_Cu], (box[0] - 1.5, box[1] - 1.5, box[2] + 1.5, box[3] + 1.5), f"{ref} L3 island")
+            # no L3 lanes under the island; vias may pass (the drive fan-out has a few at its edge, v2_drive.py)
+            keepout([pcbnew.In2_Cu], (box[0] - 1.5, box[1] - 1.5, box[2] + 1.5, box[3] + 1.5), f"{ref} L3 island",
+                    vias=False)
     pcbnew.SaveBoard(str(FR / "board.kicad_pcb"), b)
     b = pcbnew.LoadBoard(str(FR / "board.kicad_pcb"))
     if not pcbnew.ExportSpecctraDSN(b, str(FR / "board_full.dsn")):

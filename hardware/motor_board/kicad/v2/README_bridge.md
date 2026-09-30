@@ -11,6 +11,12 @@ The pour/DRC step must reproduce the rule areas below.
 - **Rule area "L3 VBAT band (cells)":** the L3 (In2.Cu) VBAT pour ends at **y = 16.0 for x ≥ 44.5**.
   - This clears the cap VBAT vias (pads end at y 14.6).
   - Behind y 16.0 the L3 pour is GND. This puts the shunt and cap GND pads over L3 GND.
+- **Rule area "L3 VBAT band (drives)"** (added for the drive-IC fan-out, kicad/gen/v2_drive.py; decided
+  2026-09-30): the L3 VBAT pour also ends at **y = 16.0 for x 14-27**, in front of U4.
+  - The band there only has to feed R302.1 / R402.1 (VBAT pads end at y 15.6).
+  - Behind y 16.0 the L3 pour is GND, and L3/L4 tracks and vias may use y ≥ 16.3.
+  - This carries U4's SPI/CSA/VREF/buck fan-out (L4: R_SOA along y 16.75 and U3's L_SWBK hop; L3: the SPI link to
+    U3 at y 17.35 / 17.85 / 18.35 and R_FBBK at y 16.45).
 - **Elsewhere** the band stays at y < 18.5, as in memo 3.1.
 - **L4 (B.Cu) under the L3 VBAT band is solid GND**, with no tracks (margin 0.3 mm, so y < 16.3 in the cells).
   - This does not apply to the two lane exceptions (§2).
