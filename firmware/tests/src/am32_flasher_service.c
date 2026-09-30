@@ -202,6 +202,9 @@ static void handle_read_at(const char* addr_s, const char* len_s) {
     printf("\n");
 }
 
+#define AM32_FLASH_WRITE_MIN 0x1000u   // first byte after the bootloader
+#define AM32_FLASH_END       0x8000u   // 32 KB part
+
 static void handle_flash(const char* addr_s, const char* hex) {
     if (!addr_s || !hex) {
         printf("ERR FLASH usage_FLASH_addr_hex_data_hex\n");
@@ -221,12 +224,37 @@ static void handle_flash(const char* addr_s, const char* hex) {
         printf("ERR FLASH bad_data\n");
         return;
     }
+    // The bootloader region (below 0x1000) must never be written, and the
+    // flash ends at 0x8000 (flash code 0x1F = 32 KB).  The ESC bootloader also
+    // refuses writes below 0x1000, but this service must not rely on it.
+    // Flash is programmed in 32-bit words, so the bootloader silently drops a
+    // trailing partial word: require word alignment.
+    if (addr < AM32_FLASH_WRITE_MIN || (uint32_t)addr + len > AM32_FLASH_END) {
+        printf("ERR FLASH guard_range addr=0x%04X len=%u\n", addr, len);
+        return;
+    }
+    if ((addr % 4) != 0 || (len % 4) != 0) {
+        printf("ERR FLASH guard_align addr=0x%04X len=%u\n", addr, len);
+        return;
+    }
     am32_bootloader_error_t err = am32_bootloader_program_flash(addr, payload, len);
     if (err != AM32_OK) {
         printf("ERR FLASH %s\n", am32_bootloader_error_str(err));
         return;
     }
-    printf("OK FLASH addr=0x%04X len=%u\n", addr, len);
+    // The bootloader ACKs PROG_FLASH without checking the write; only a read
+    // back proves the data landed.
+    uint8_t readback[256];
+    err = am32_bootloader_read_at(addr, readback, len);
+    if (err != AM32_OK) {
+        printf("ERR FLASH verify_read %s\n", am32_bootloader_error_str(err));
+        return;
+    }
+    if (memcmp(readback, payload, len) != 0) {
+        printf("ERR FLASH verify_mismatch addr=0x%04X len=%u\n", addr, len);
+        return;
+    }
+    printf("OK FLASH addr=0x%04X len=%u verified\n", addr, len);
 }
 
 static void handle_run(void) {

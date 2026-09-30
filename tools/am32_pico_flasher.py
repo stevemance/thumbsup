@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import dataclasses
 import sys
 import time
@@ -130,7 +131,14 @@ class PicoAm32Service:
         parts = reply.line.split(" ")
         if len(parts) < 5:
             raise ServiceError(f"Malformed READAT response: {reply.line}")
-        return bytes.fromhex(parts[4])
+        # The bootloader protocol remaps some addresses (0x20/0x21 on proto 1);
+        # make sure the service read what was asked for.
+        if parts[2] != f"addr=0x{addr:04X}" or parts[3] != f"len={length}":
+            raise ServiceError(f"READAT reply does not match request {addr:04X}/{length}: {reply.line}")
+        data = bytes.fromhex(parts[4])
+        if len(data) != length:
+            raise ServiceError(f"READAT returned {len(data)} bytes, expected {length}")
+        return data
 
     def read_span(self, addr: int, length: int) -> bytes:
         out = bytearray()
@@ -184,9 +192,11 @@ def parse_intel_hex(path: Path) -> list[tuple[int, bytes]]:
             if reclen != 2:
                 raise ValueError(f"{path}:{lineno}: invalid extended-linear record")
             upper = (data[0] << 8) | data[1]
-        else:
-            # Ignore unsupported record types.
+        elif rectype in (0x03, 0x05):
+            # Start-address records: no data to program.
             continue
+        else:
+            raise ValueError(f"{path}:{lineno}: unsupported record type 0x{rectype:02X}")
 
     if not memory:
         return []
@@ -398,8 +408,11 @@ def cmd_flash_hex(args: argparse.Namespace) -> int:
     segments = parse_intel_hex(Path(args.hex))
     memory = build_memory_map(segments, args.min_addr)
     if not memory:
-        print("No flashable data after filtering")
-        return 0
+        print("ERROR: no flashable data after filtering (check --min-addr and the hex base)")
+        return 3
+    dropped = sum(len(d) for _, d in segments) - len(memory)
+    if dropped:
+        print(f"Filtered out {dropped} bytes below 0x{args.min_addr:08X}")
 
     first = min(memory.keys())
     last = max(memory.keys())
@@ -463,6 +476,42 @@ def cmd_flash_hex(args: argparse.Namespace) -> int:
         svc.close()
 
 
+def cmd_read_flash(args: argparse.Namespace) -> int:
+    """Back up ESC flash: reads the range twice (256-byte chunks, retried) and
+    only writes the file if both passes are identical."""
+    start, length = args.start, args.length
+    if start < 0 or length <= 0 or start + length > 0x8000:
+        raise ValueError("range must lie within 0x0000..0x8000")
+    svc = PicoAm32Service(args.port, args.baud, args.verbose)
+    try:
+        svc.sync()
+        svc.enter()
+        _, info_line = svc.info()
+        print(info_line)
+        passes = []
+        for n in range(2):
+            buf = bytearray()
+            for addr in range(start, start + length, 256):
+                size = min(256, start + length - addr)
+                for attempt in range(3):
+                    try:
+                        buf.extend(svc.read_at(addr, size))
+                        break
+                    except (ServiceError, TimeoutError):
+                        if attempt == 2:
+                            raise
+            passes.append(bytes(buf))
+            print(f"pass {n + 1}: sha256 {hashlib.sha256(passes[-1]).hexdigest()}")
+    finally:
+        svc.close()
+    if passes[0] != passes[1]:
+        print("ERROR: the two read passes differ; backup not written")
+        return 4
+    Path(args.out).write_bytes(passes[0])
+    print(f"Wrote {len(passes[0])} bytes (0x{start:04X}..0x{start + length:04X}) to {args.out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="AM32 flasher/config orchestration through Pico service firmware"
@@ -484,6 +533,12 @@ def build_parser() -> argparse.ArgumentParser:
     sw.add_argument("--input", required=True, help="Input .bin path (192 bytes)")
     sw.set_defaults(func=cmd_write_config)
 
+    sb = sub.add_parser("read-flash", help="Back up ESC flash (read twice, compared)")
+    sb.add_argument("--start", type=lambda v: int(v, 0), default=0x0000, help="Offset from 0x08000000 (default 0)")
+    sb.add_argument("--length", type=lambda v: int(v, 0), default=0x8000, help="Bytes to read (default 0x8000 = 32 KB)")
+    sb.add_argument("--out", required=True, help="Output .bin path")
+    sb.set_defaults(func=cmd_read_flash)
+
     sf = sub.add_parser("flash-hex", help="Flash Intel HEX firmware using page-safe writes")
     sf.add_argument("--hex", required=True, help="Intel HEX file")
     sf.add_argument("--chunk-size", type=int, default=256, help="Program chunk size (1..256, default: 256)")
@@ -491,7 +546,8 @@ def build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--min-addr", type=lambda s: int(s, 0), default=0x08001000, help="Minimum absolute address to flash (default: 0x08001000)")
     sf.add_argument("--page-size", type=lambda s: int(s, 0), default=None, help="Override flash page size in bytes")
     sf.add_argument("--write-align", type=lambda s: int(s, 0), default=None, help="Override write alignment in bytes")
-    sf.add_argument("--verify", action="store_true", help="Read back each programmed chunk")
+    sf.add_argument("--no-verify", dest="verify", action="store_false",
+                    help="Skip the host read-back of each chunk (the service still verifies every write)")
     sf.add_argument("--dry-run", action="store_true", help="Parse and plan only")
     sf.add_argument("--no-run", action="store_true", help="Do not issue RUN after flashing")
     sf.set_defaults(func=cmd_flash_hex)

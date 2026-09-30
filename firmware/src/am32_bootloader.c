@@ -482,6 +482,18 @@ static am32_bootloader_error_t am32_set_buffer_size(uint16_t len) {
     return AM32_OK;
 }
 
+// After a rejected or unanswered payload the bootloader can still be waiting
+// for payload bytes, and would swallow (and ACK) the next command frame as
+// data.  A KEEP_ALIVE frame resynchronises it: 0x30 means it was taken as
+// the pending payload, 0xC1 means the bootloader was already in command mode.
+static void am32_resync_after_payload_error(void) {
+    uint8_t keep_alive[] = {CMD_KEEP_ALIVE};
+    send_with_crc(keep_alive, sizeof(keep_alive));
+    int ack = rx_valid_byte(TIMEOUT_WRITE_US);
+    printf("AM32 resync after payload error: reply=%d (%s)\n", ack,
+           ack == ACK_OK ? "swallowed as payload" : ack == NACK_CMD ? "command mode" : "no reply");
+}
+
 static am32_bootloader_error_t am32_send_payload_buffer(const uint8_t* data, uint16_t len) {
     if (!data || len == 0 || len > 256) {
         return AM32_ERR_ACK;
@@ -490,6 +502,7 @@ static am32_bootloader_error_t am32_send_payload_buffer(const uint8_t* data, uin
     send_with_crc(data, len);
     int ack = rx_valid_byte(TIMEOUT_WRITE_US);
     if (ack != ACK_OK) {
+        am32_resync_after_payload_error();
         return AM32_ERR_WRITE_FAILED;
     }
     return AM32_OK;
