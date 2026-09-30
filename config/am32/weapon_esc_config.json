@@ -30,7 +30,7 @@
     },
     "protection": {
       "temperature_limit": 70,
-      "current_limit": 40,
+      "current_limit": "disabled (no current sensor on this ESC)",
       "low_voltage_cutoff": "disabled",
       "stall_protection_time": 1000,
       "demag_compensation": "high"

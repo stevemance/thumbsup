@@ -290,6 +290,7 @@ def program_pages(
     flash_base: int,
     chunk_size: int,
     verify: bool,
+    base_image: bytes | None = None,
 ) -> None:
     if chunk_size < 1 or chunk_size > 256:
         raise ValueError("chunk_size must be 1..256")
@@ -313,7 +314,15 @@ def program_pages(
                 f"Page 0x{page_base_abs:08X} exceeds 16-bit bootloader address range"
             )
 
-        page_data = bytearray(svc.read_span(rel_base, geometry.page_size))
+        # Bytes the image does not cover come from a known-good base image
+        # (e.g. a read-flash backup) when given: a device read after a failed
+        # attempt may return a half-erased page.
+        if base_image is not None:
+            page_data = bytearray(base_image[rel_base:rel_base + geometry.page_size])
+            if len(page_data) != geometry.page_size:
+                raise ValueError(f"base image does not cover page 0x{page_base_abs:08X}")
+        else:
+            page_data = bytearray(svc.read_span(rel_base, geometry.page_size))
         updates = page_updates[page_num]
         for off, val in updates:
             page_data[off] = val
@@ -360,46 +369,81 @@ def cmd_read_config(args: argparse.Namespace) -> int:
         svc.close()
 
 
+EEPROM_PAGE_ABS = 0x08007C00   # F421 32 KB layout
+EEPROM_PAGE_SIZE = 1024
+
+
+def _write_page_image(svc: "PicoAm32Service", page_image: bytes, geometry: FlashGeometry) -> None:
+    updates = {EEPROM_PAGE_ABS + i: page_image[i] for i in range(EEPROM_PAGE_SIZE)}
+    program_pages(svc, page_updates=make_page_updates(updates, geometry.page_size), geometry=geometry,
+                  flash_base=0x08000000, chunk_size=256, verify=True)
+    if svc.read_span(EEPROM_PAGE_ABS - 0x08000000, EEPROM_PAGE_SIZE) != page_image:
+        raise ServiceError("EEPROM page read-back does not match the written image")
+
+
 def cmd_write_config(args: argparse.Namespace) -> int:
+    """Writes the 192-byte config as a full EEPROM page rewrite.
+
+    AM32 bootloaders do not implement the dedicated EEPROM command, so the
+    page is always rewritten.  Writing its first chunk erases the whole 1 KB
+    page, so the complete page image is built in memory first and every retry
+    rewrites that same image; the page as read before the write is saved and
+    restored if the write cannot be completed."""
+    import am32_config_codec as codec
+
     cfg = Path(args.input).read_bytes()
     if len(cfg) != 192:
         raise ValueError(f"{args.input}: expected 192 bytes, got {len(cfg)}")
+    errors, warnings = codec.validate_image(cfg)
+    for w in warnings:
+        print(f"WARNING: {w}")
+    if errors:
+        raise ValueError("refusing to write config: " + "; ".join(errors))
 
     svc = PicoAm32Service(args.port, args.baud, args.verbose)
     try:
         svc.sync()
         svc.enter()
         info_fields, _ = svc.info()
+        name = info_fields.get("name", "")
+        if "F421" not in name.upper() or info_fields.get("flash") != "0x1F":
+            raise ServiceError(f"EEPROM page address is only known for 32 KB F421 targets (got {name})")
+        geometry = infer_flash_geometry(name, page_size_override=None, align_override=None)
 
-        try:
-            svc.cmd(f"WRITECFG {cfg.hex().upper()}", timeout_s=15.0)
-            print("Config write OK")
-            return 0
-        except ServiceError:
-            # Bootloader variant fallback: preserve full page contents and rewrite page.
-            name = info_fields.get("name", "")
-            geometry = infer_flash_geometry(name, page_size_override=None, align_override=None)
-            if "F421" not in name.upper():
-                raise ServiceError(
-                    "WRITECFG failed and fallback eeprom base is only implemented for F421 targets"
-                )
+        rel = EEPROM_PAGE_ABS - 0x08000000
+        before = svc.read_span(rel, EEPROM_PAGE_SIZE)
+        if svc.read_span(rel, EEPROM_PAGE_SIZE) != before:
+            raise ServiceError("EEPROM page reads are inconsistent; not writing")
+        backup = Path(args.backup) if args.backup else Path(args.input).with_suffix(".page_before.bin")
+        backup.write_bytes(before)
+        print(f"Saved current EEPROM page to {backup}")
 
-            eeprom_base_abs = 0x08007C00
-            updates = {eeprom_base_abs + i: cfg[i] for i in range(len(cfg))}
-            page_updates = make_page_updates(updates, geometry.page_size)
-            program_pages(
-                svc,
-                page_updates=page_updates,
-                geometry=geometry,
-                flash_base=0x08000000,
-                chunk_size=256,
-                verify=True,
-            )
-            verify_cfg = svc.read_cfg()
-            if verify_cfg != cfg:
-                raise ServiceError("WRITECFG fallback verify mismatch")
-            print("Config write OK (flash fallback)")
+        if before[0] == 0x01:
+            problems = codec.check_compatible(before[:192], cfg)
+            if problems and not args.force_version:
+                raise ServiceError("config was made for a different firmware/layout: " + "; ".join(problems)
+                                   + " (regenerate it for this ESC, or pass --force-version)")
+        image = bytearray(before)
+        image[:192] = cfg
+        if before[0] == 0x01:
+            image[codec.BOOTLOADER_VERSION_BYTE] = before[codec.BOOTLOADER_VERSION_BYTE]
+        image = bytes(image)
+        if image == before:
+            print("Config already matches; nothing written")
             return 0
+
+        last_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                _write_page_image(svc, image, geometry)
+                print(f"Config write OK (full EEPROM page, attempt {attempt})")
+                return 0
+            except (ServiceError, TimeoutError) as exc:
+                last_error = exc
+                print(f"Config write attempt {attempt} failed: {exc}")
+        print("Restoring the EEPROM page saved before the write")
+        _write_page_image(svc, before, geometry)
+        raise ServiceError(f"config write failed ({last_error}); original EEPROM page restored")
     finally:
         svc.close()
 
@@ -464,6 +508,7 @@ def cmd_flash_hex(args: argparse.Namespace) -> int:
             flash_base=args.flash_base,
             chunk_size=args.chunk_size,
             verify=args.verify,
+            base_image=Path(args.base_image).read_bytes() if args.base_image else None,
         )
 
         if not args.no_run:
@@ -531,6 +576,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sw = sub.add_parser("write-config", help="Write 192-byte EEPROM config")
     sw.add_argument("--input", required=True, help="Input .bin path (192 bytes)")
+    sw.add_argument("--backup", help="Where to save the EEPROM page read before writing (default: <input>.page_before.bin)")
+    sw.add_argument("--force-version", action="store_true",
+                    help="Write even if the config's firmware/EEPROM version differs from the ESC's")
     sw.set_defaults(func=cmd_write_config)
 
     sb = sub.add_parser("read-flash", help="Back up ESC flash (read twice, compared)")
@@ -549,6 +597,8 @@ def build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--no-verify", dest="verify", action="store_false",
                     help="Skip the host read-back of each chunk (the service still verifies every write)")
     sf.add_argument("--dry-run", action="store_true", help="Parse and plan only")
+    sf.add_argument("--base-image", help="read-flash backup supplying page bytes the hex does not cover "
+                    "(recommended: never merge onto a fresh device read)")
     sf.add_argument("--no-run", action="store_true", help="Do not issue RUN after flashing")
     sf.set_defaults(func=cmd_flash_hex)
 

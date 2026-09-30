@@ -607,6 +607,14 @@ static bool handle_line(char* line) {
             printf("ERR: DSHOT_CMD expects 0-31\n");
             return true;
         }
+        // SAVE_SETTINGS writes the ESC's current RAM settings (including any
+        // direction/3D state changed by earlier commands) to its EEPROM,
+        // diverging from config/am32/weapon_esc_expected.*.  Use the AM32
+        // provisioning tools to change ESC settings instead.
+        if (raw_cmd == DSHOT_CMD_SAVE_SETTINGS) {
+            printf("ERR: DSHOT_CMD 12 (save settings) is blocked; use tools/am32_pico_flasher.py write-config\n");
+            return true;
+        }
         printf("DSHOT_CMD %s\n",
                dshot_send_command(MOTOR_WEAPON, (dshot_command_t)raw_cmd) ? "ok" : "fail");
         return true;

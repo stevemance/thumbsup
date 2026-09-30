@@ -115,15 +115,18 @@ The weapon uses an AM32 40A 32-bit ESC with the following key settings:
    - Import `weapon_esc_config.json`
    - Or manually set each parameter
 
-3. **Key Parameters to Verify**:
+3. **Key Parameters to Verify** (the authoritative values are in
+   `weapon_esc_expected.yaml`, which the HITL tools apply automatically):
    ```
+   Input: DShot (bidirectional telemetry on)
    Motor Direction: Forward
-   Bidirectional: OFF
-   Brake on Stop: OFF
-   Temperature Limit: 70°C
-   Current Limit: 40A
-   PWM Input: 1000-2000μs
-   Motor Timing: 16°
+   Bidirectional (3D mode): ON   - reverse spin on ZL
+   Brake on Stop: OFF            - the drum coasts
+   Complementary PWM: OFF        - sine start is then unused (set OFF)
+   Timing: auto advance ON
+   Temperature Limit: 70°C       - MCU internal sensor
+   Current Limit: OFF            - this ESC has no working current sensor
+   Stuck Rotor / Stall Protection: OFF
    ```
 
 4. **Save and Write**:

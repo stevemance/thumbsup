@@ -6,7 +6,19 @@ Converts AM32 192-byte EEPROM images between:
 - binary (.bin)
 - hex text (.hexcfg)
 
-The field mapping matches the AM32 offsets used by this repository.
+The field mapping is the AM32 2.20 EEPROM layout (eeprom_version 3); other
+layouts are refused.  A YAML must specify every field: partial files used to
+be silently completed from built-in defaults, which could write a config the
+ESC misreads.
+
+Encoding notes (AM32 2.20 source):
+- byte 0 is the bootloader's "application valid" marker and must be 0x01, or
+  the ESC stays in its bootloader;
+- byte 2 is written by the bootloader itself (its version) and is ignored when
+  comparing configs;
+- protection.current_limit is in 2 A steps (5 = 10 A); 0xFF disables it;
+- protection.temperature_limit is in C, 70..140, anything else disables it;
+- boolean fields must be 0/1: AM32 treats any non-zero value (e.g. 0xFF) as on.
 """
 
 from __future__ import annotations
@@ -149,8 +161,8 @@ DEFAULT_YAML_TEMPLATE: dict[str, Any] = {
     },
     "tune_array": [0] * 128,
     "raw": {
-        "reserved_0": 0xFF,
-        "reserved_1": 0xFF,
+        "reserved_0": 0x01,
+        "reserved_1": 0x01,
         "reserved_3": [0xFF, 0xFF, 0xFF, 0xFF],
         "reserved_tail": [0xFF] * 8,
     },
@@ -346,8 +358,74 @@ def _encode_yaml_to_image(payload: dict[str, Any]) -> bytes:
     return bytes(b)
 
 
+SUPPORTED_EEPROM_VERSION = 3
+BOOTLOADER_VERSION_BYTE = 2   # written by the bootloader, not part of the config
+
+BOOL_FIELDS = (
+    "dir_reversed", "bidirectional", "use_sine_start", "comp_pwm", "variable_pwm",
+    "stuck_rotor_prot", "brake_on_stop", "stall_protection", "rc_car_reverse",
+    "use_hall_sensors", "auto_advance", "disable_stick_cal",
+)
+
+
+def _missing_keys(template: dict[str, Any], payload: dict[str, Any], prefix: str = "") -> list[str]:
+    missing = []
+    for k, v in template.items():
+        name = f"{prefix}{k}"
+        if k not in payload:
+            missing.append(name)
+        elif isinstance(v, dict) and isinstance(payload[k], dict):
+            missing.extend(_missing_keys(v, payload[k], name + "."))
+    return missing
+
+
 def encode_yaml_to_image(payload: dict[str, Any]) -> bytes:
+    missing = _missing_keys(DEFAULT_YAML_TEMPLATE, payload)
+    if missing:
+        raise ValueError("config YAML is incomplete; missing: " + ", ".join(missing)
+                         + " (decompile the ESC's current config to start from a complete file)")
     return _encode_yaml_to_image(payload)
+
+
+def validate_image(img: bytes) -> tuple[list[str], list[str]]:
+    """Returns (errors, warnings) for an image about to be written to an ESC."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    if len(img) != EEPROM_SIZE:
+        return [f"image is {len(img)} bytes, expected {EEPROM_SIZE}"], warnings
+    if img[OFF["reserved_0"]] != 0x01:
+        errors.append(f"byte 0 is 0x{img[0]:02X}; must be 0x01 or the ESC will not leave its bootloader")
+    if img[OFF["eeprom_version"]] != SUPPORTED_EEPROM_VERSION:
+        errors.append(f"eeprom_version {img[1]} is not the supported layout {SUPPORTED_EEPROM_VERSION}")
+    poles = img[OFF["motor_poles"]]
+    if poles < 2 or poles > 36 or poles % 2:
+        errors.append(f"motor poles {poles} is not an even number in 2..36")
+    if img[OFF["input_type"]] >= 10:
+        errors.append(f"input type {img[OFF['input_type']]} is out of range")
+    for name in BOOL_FIELDS:
+        if img[OFF[name]] not in (0, 1):
+            warnings.append(f"{name} = {img[OFF[name]]}: AM32 treats any non-zero value as on")
+    if img[OFF["use_sine_start"]] and not img[OFF["comp_pwm"]]:
+        warnings.append("use_sine_start has no effect with comp_pwm off (AM32 forces it off)")
+    cl = img[OFF["current_limit"]]
+    if 1 <= cl <= 99:
+        warnings.append(f"current_limit {cl} = {cl * 2} A (2 A steps); needs a working current sensor")
+    return errors, warnings
+
+
+def check_compatible(device: bytes, expected: bytes) -> list[str]:
+    """Refuses to write a config made for another firmware/layout version."""
+    problems = []
+    for name in ("eeprom_version", "fw_version_major", "fw_version_minor"):
+        off = OFF[name]
+        if device[off] != expected[off]:
+            problems.append(f"{name}: ESC has {device[off]}, config has {expected[off]}")
+    return problems
+
+
+def config_diff(a: bytes, b: bytes) -> list[int]:
+    """Differing byte offsets, ignoring the bootloader-version byte."""
+    return [i for i in range(min(len(a), len(b))) if i != BOOTLOADER_VERSION_BYTE and a[i] != b[i]]
 
 
 def _decode_image_to_yaml(data: bytes) -> dict[str, Any]:
@@ -447,6 +525,11 @@ def cmd_compile(args: argparse.Namespace) -> int:
 
     payload = load_yaml_mapping(in_yaml)
     image = encode_yaml_to_image(payload)
+    errors, warnings = validate_image(image)
+    for w in warnings:
+        print(f"WARNING: {w}")
+    if errors:
+        raise ValueError("; ".join(errors))
 
     fmt = args.format
     if fmt is None:
@@ -501,7 +584,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
 
 
 if __name__ == "__main__":

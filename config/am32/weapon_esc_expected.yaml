@@ -1,3 +1,13 @@
+# Expected AM32 2.20 (eeprom_version 3) config for the FREELYRC_F421 weapon ESC.
+# Compile with: python3 tools/am32_config_codec.py compile --input <this> --output weapon_esc_expected.hexcfg
+# Every field is required.  Notes (see the codec docstring for encodings):
+# - motor.bidirectional is AM32 "3D mode": needed for reverse spin on ZL.
+# - brake_on_stop false: a spinning drum coasts rather than being braked hard.
+# - comp_pwm false: drum freewheels when throttle drops; sine start is then
+#   ignored by AM32, so it is off here.
+# - protection.current_limit 255 (off): this ESC has no working current sensor
+#   (it reports a constant 62 A), so no current limit can be enforced.
+# - protection.temperature_limit 70: MCU internal sensor, in C.
 eeprom_version: 3
 firmware_version:
   major: 2
@@ -11,12 +21,12 @@ motor:
   stall_protection: false
 startup:
   power: 100
-  use_sine_start: true
+  use_sine_start: false
   sine_mode_power: 5
   sine_changeover_throttle: 5
 timing:
   advance_level: 16
-  auto_advance: 255
+  auto_advance: true
   pwm_frequency: 24
   comp_pwm: false
   variable_pwm: true

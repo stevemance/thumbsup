@@ -41,6 +41,16 @@ back only after the whole image has been verified.
   - `flash-hex --hex X.hex --no-run`: program whole 1 KB pages. The host also
     reads back every chunk unless `--no-verify` is given. It never writes below
     `--min-addr` (default 0x08001000).
+    `--base-image backup.bin` supplies the bytes of partly covered pages from a
+    backup rather than from the device.
+  - `write-config --input cfg.bin`: validate a 192-byte config (codec rules),
+    refuse a firmware/EEPROM-version mismatch, save the current EEPROM page,
+    rewrite the whole page from memory (retrying the same image), and restore
+    the saved page if it cannot complete. AM32 bootloaders do not implement a
+    separate EEPROM command, so this is always a page rewrite.
+- `tools/am32_config_codec.py`: YAML <-> 192-byte config. YAML files must be
+  complete (decompile the ESC's config to start one); compile refuses byte 0
+  != 0x01 and unknown layouts, and warns on suspicious values.
 
 A write that starts on a 1 KB boundary erases the whole page, so always
 program complete pages from a known image. Do not retry a failed page from a

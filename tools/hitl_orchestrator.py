@@ -271,33 +271,19 @@ def now_iso() -> str:
 
 
 def _load_expected_am32_config(config_path: Path) -> bytes:
-    """Load expected AM32 config from .bin, hex text, or YAML."""
+    """Load expected AM32 config from .bin, hex text, or YAML, and validate it."""
     if not config_path.exists():
         raise RuntimeError(f"expected AM32 config not found: {config_path}")
+    import am32_config_codec as codec
 
-    suffix = config_path.suffix.lower()
-    if suffix in {".yaml", ".yml"}:
-        try:
-            import am32_config_codec as codec
-        except Exception as exc:
-            raise RuntimeError(f"failed to import AM32 YAML codec: {exc}") from exc
-        payload = codec.load_yaml_mapping(config_path)
-        image = codec.encode_yaml_to_image(payload)
-        if len(image) != 192:
-            raise RuntimeError(f"{config_path}: compiled YAML image length was {len(image)} (expected 192)")
-        return image
-
-    raw = config_path.read_bytes()
-    if len(raw) == 192:
-        return raw
-
-    text = config_path.read_text(encoding="utf-8")
-    hex_text = re.sub(r"\s+", "", text)
-    if len(hex_text) != 384 or re.search(r"[^0-9a-fA-F]", hex_text):
-        raise RuntimeError(
-            f"{config_path}: expected 192-byte binary or 384 hex chars (ignoring whitespace)"
-        )
-    return bytes.fromhex(hex_text)
+    if config_path.suffix.lower() in {".yaml", ".yml"}:
+        image = codec.encode_yaml_to_image(codec.load_yaml_mapping(config_path))
+    else:
+        image = codec.parse_image(config_path)
+    errors, _ = codec.validate_image(image)
+    if errors:
+        raise RuntimeError(f"{config_path}: invalid AM32 config: " + "; ".join(errors))
+    return image
 
 
 def _am32_diff_summary(expected: bytes, observed: bytes) -> dict[str, object]:
@@ -496,7 +482,14 @@ def _do_am32_provision(
             (out_dir / "config_before.hexcfg").write_text(hexlify(before).decode("ascii") + "\n", encoding="utf-8")
             (out_dir / "config_diff_before.json").write_text(json.dumps(before_summary, indent=2), encoding="utf-8")
 
-        if before == expected:
+        import am32_config_codec as codec
+        compat = codec.check_compatible(before, expected)
+        if compat:
+            raise RuntimeError("ESC firmware/EEPROM version does not match the expected config ("
+                               + "; ".join(compat) + "); regenerate the expected config for this firmware")
+
+        # Byte 2 is the bootloader's version, written by the bootloader itself.
+        if not codec.config_diff(before, expected):
             if out_dir is not None:
                 (out_dir / "am32_provision_result.json").write_text(
                     json.dumps(
@@ -548,7 +541,7 @@ def _do_am32_provision(
         after = after_path.read_bytes()
         if len(after) != 192:
             raise RuntimeError(f"unexpected AM32 config size after write: {len(after)}")
-        if after != expected:
+        if codec.config_diff(after, expected):
             after_summary = _am32_diff_summary(expected, after)
             if out_dir is not None:
                 (out_dir / "config_diff_after.json").write_text(json.dumps(after_summary, indent=2), encoding="utf-8")
