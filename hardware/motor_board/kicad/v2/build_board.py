@@ -66,7 +66,7 @@ CLASSES = {
     "Power": (0.50, 0.15, 0.60, 0.30),
     "Gate": (0.25, 0.15, 0.50, 0.25),
     "Sense": (0.20, 0.15, 0.45, 0.25),
-    "Rail": (0.30, 0.15, 0.45, 0.25),
+    "Rail": (0.20, 0.15, 0.45, 0.25),    # +3V3/+5V branches (<= 0.45 A) fit 0.5 mm-pitch pins; trunks drawn wider by hand
 }
 DRU = """(version 1)
 # JLCPCB 4-layer capabilities (jlcpcb.com/capabilities/pcb-capabilities, 2026-09-29), with margin.

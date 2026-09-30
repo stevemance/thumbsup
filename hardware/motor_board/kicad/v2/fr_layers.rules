@@ -1,0 +1,22 @@
+(rules PCB board
+  (autoroute_settings
+    (layer_rule L1.TOP
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.0)
+    )
+    (layer_rule L3.PWR_GND
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.3)
+      (against_preferred_direction_trace_costs 2.5)
+    )
+    (layer_rule L4.BOT
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.0)
+    )
+  )
+)

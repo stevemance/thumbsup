@@ -37,6 +37,8 @@ def prep():
     shutil.copy(SRC, FR / "board.kicad_pcb")
     for ext in (".kicad_pro", ".kicad_dru"):
         shutil.copy(SRC.with_suffix(ext), FR / ("board" + ext))
+    if "--nogv" not in sys.argv:     # GND stitch vias at the SMD GND pads first (P3), so the router only sees signals
+        subprocess.run(["/usr/bin/python3", str(HERE / "gndvias.py"), str(FR / "board.kicad_pcb")], check=True)
     b = pcbnew.LoadBoard(str(FR / "board.kicad_pcb"))
     gnd = b.FindNet("GND")
     z = pcbnew.ZONE(b)
@@ -57,7 +59,7 @@ def prep():
         k.SetZoneName(name)
         b.Add(k)
 
-    keepout([pcbnew.In2_Cu, pcbnew.B_Cu], (0.0, 0.0, 85.0, 18.5), "front power band")
+    keepout([pcbnew.In2_Cu, pcbnew.B_Cu], (0.0, 0.0, 85.0, 18.5), "front power band", vias=False)   # no tracks; GND stitching and a few signal vias may pass
     keepout([pcbnew.In1_Cu], (0.0, 0.0, 85.0, 35.0), "L2 GND: no tracks", vias=False)
     fps = {f.GetReference(): f for f in b.GetFootprints()}
     for ref in ("U2", "U3", "U4"):
@@ -80,6 +82,13 @@ def prep():
             pat = re.compile(r'\n\s*\(net "?' + re.escape(full) + r'"?\s*\n\s*\(pins[^)]*\)\s*\)')
             t, k = pat.subn("", t)
             cut += k
+    # L2 = GND plane: a "power" layer (vias pass, no tracks).  A wire_keepout over the whole layer made Freerouting
+    # refuse every via (2026-09-29: 0 vias in 20 passes); declaring the layer a plane is the Specctra way.
+    t = re.sub(r'\n\s*\(wire_keepout "" \(polygon L2\.GND[^)]*\)\)', "", t)
+    t = t.replace("(layer L2.GND\n      (type signal)", "(layer L2.GND\n      (type power)")
+    # Freerouting 2.4.1 never routes on a layer whose name says PWR/GND (0 L3 tracks in 20 passes with it named
+    # L3.PWR_GND; an autoroute_settings scope in the DSN breaks its parser): rename it for the router, back on import
+    t = t.replace("L3.PWR_GND", "L3.SIG")
     (FR / "board.dsn").write_text(t)
     print("DSN written, pour nets cut:", cut)
 
@@ -89,15 +98,17 @@ def route(passes):
            "--gui.enabled=false", "--router.fanout.enabled=false", f"--router.max_passes={passes}",
            "--router.optimizer.enabled=false"]
     print(" ".join(cmd), flush=True)
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
-    (FR / "fr.log").write_text(p.stdout + p.stderr)
-    print("\n".join((p.stdout + p.stderr).splitlines()[-15:]))
+    with open(FR / "fr.log", "w") as f:
+        subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, text=True, timeout=7200)
+    print("\n".join((FR / "fr.log").read_text().splitlines()[-15:]))
 
 
 def imp():
     import pcbnew
     b = pcbnew.LoadBoard(str(FR / "board.kicad_pcb"))
-    if not pcbnew.ImportSpecctraSES(b, str(FR / "board.ses")):
+    ses = FR / "board.ses"
+    ses.write_text(ses.read_text().replace("L3.SIG", "L3.PWR_GND"))
+    if not pcbnew.ImportSpecctraSES(b, str(ses)):
         raise SystemExit("SES import failed")
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     pcbnew.SaveBoard(str(FR / "routed.kicad_pcb"), b)
