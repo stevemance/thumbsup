@@ -143,6 +143,9 @@ Output: `firmware/build/thumbsup.uf2`
 
 The weapon ESC needs specific configuration for optimal performance:
 
+- Canonical expected AM32 EEPROM config for HITL is tracked at `config/am32/weapon_esc_expected.hexcfg`.
+- HITL orchestrator checks/applies this config automatically (write-on-drift) unless `--no-am32-provision` is used.
+
 ### Using AM32 Configurator
 
 1. Download AM32 Configurator from [GitHub](https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware)

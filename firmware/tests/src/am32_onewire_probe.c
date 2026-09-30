@@ -15,6 +15,27 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
     return true;
 }
 
+static bool is_all_zero(const uint8_t* data, uint16_t len) {
+    for (uint16_t i = 0; i < len; i++) {
+        if (data[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool is_printable_ascii(const char* s) {
+    if (!s || s[0] == '\0') {
+        return false;
+    }
+    for (const char* p = s; *p; p++) {
+        if ((unsigned char)*p < 0x20 || (unsigned char)*p > 0x7E) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int main() {
     stdio_init_all();
     sleep_ms(2000);
@@ -54,7 +75,7 @@ int main() {
         uint16_t info_len = sizeof(info_buf);
         if (am32_send_command(AM32_CMD_GET_INFO, NULL, 0) &&
             am32_receive_response(info_buf, &info_len, 300)) {
-            if (info_len >= 3) {
+            if (info_len >= 4) {
                 info.firmware_version[0] = info_buf[0];
                 info.firmware_version[1] = info_buf[1];
                 info.firmware_version[2] = info_buf[2];
@@ -62,12 +83,20 @@ int main() {
                 memcpy(info.firmware_name, &info_buf[3], name_len);
                 info.firmware_name[name_len] = '\0';
             }
-            printf("ESC Info:\n");
-            printf("  Firmware: v%d.%d.%d\n",
-                   info.firmware_version[0],
-                   info.firmware_version[1],
-                   info.firmware_version[2]);
-            printf("  Name: %s\n", info.firmware_name);
+            if (info_len < 4 ||
+                (info.firmware_version[0] == 0 &&
+                 info.firmware_version[1] == 0 &&
+                 info.firmware_version[2] == 0) ||
+                !is_printable_ascii(info.firmware_name)) {
+                printf("FAIL: get_info returned implausible payload (len=%u)\n", info_len);
+            } else {
+                printf("ESC Info:\n");
+                printf("  Firmware: v%d.%d.%d\n",
+                       info.firmware_version[0],
+                       info.firmware_version[1],
+                       info.firmware_version[2]);
+                printf("  Name: %s\n", info.firmware_name);
+            }
         } else {
             printf("FAIL: get_info (len=%u)\n", info_len);
         }
@@ -76,19 +105,23 @@ int main() {
         uint16_t settings_len = sizeof(settings);
         if (am32_send_command(AM32_CMD_GET_SETTINGS, NULL, 0) &&
             am32_receive_response(settings, &settings_len, 400)) {
-            printf("\nESC Settings (len=%u):\n", settings_len);
-            printf("  Motor poles: %u\n", settings[AM32_ADDR_MOTOR_POLES]);
-            printf("  Direction: %u (0=normal,1=reversed)\n", settings[AM32_ADDR_MOTOR_DIRECTION]);
-            printf("  Bidirectional: %u\n", settings[AM32_ADDR_BIDIRECTIONAL]);
-            printf("  Brake on stop: %u\n", settings[AM32_ADDR_BRAKE_ON_STOP]);
-            printf("  PWM freq: %u kHz\n", settings[AM32_ADDR_PWM_FREQUENCY]);
-            uint16_t throttle_min = settings[AM32_ADDR_THROTTLE_MIN] |
-                                    (settings[AM32_ADDR_THROTTLE_MIN + 1] << 8);
-            uint16_t throttle_max = settings[AM32_ADDR_THROTTLE_MAX] |
-                                    (settings[AM32_ADDR_THROTTLE_MAX + 1] << 8);
-            printf("  Throttle min/max: %u / %u\n", throttle_min, throttle_max);
-            printf("  Startup power: %u\n", settings[AM32_ADDR_STARTUP_POWER]);
-            printf("  Telemetry: %u\n", settings[AM32_ADDR_TELEMETRY]);
+            if (settings_len < 32 || is_all_zero(settings, settings_len)) {
+                printf("FAIL: get_settings returned implausible payload (len=%u)\n", settings_len);
+            } else {
+                printf("\nESC Settings (len=%u):\n", settings_len);
+                printf("  Motor poles: %u\n", settings[AM32_ADDR_MOTOR_POLES]);
+                printf("  Direction: %u (0=normal,1=reversed)\n", settings[AM32_ADDR_MOTOR_DIRECTION]);
+                printf("  Bidirectional: %u\n", settings[AM32_ADDR_BIDIRECTIONAL]);
+                printf("  Brake on stop: %u\n", settings[AM32_ADDR_BRAKE_ON_STOP]);
+                printf("  PWM freq: %u kHz\n", settings[AM32_ADDR_PWM_FREQUENCY]);
+                uint16_t throttle_min = settings[AM32_ADDR_THROTTLE_MIN] |
+                                        (settings[AM32_ADDR_THROTTLE_MIN + 1] << 8);
+                uint16_t throttle_max = settings[AM32_ADDR_THROTTLE_MAX] |
+                                        (settings[AM32_ADDR_THROTTLE_MAX + 1] << 8);
+                printf("  Throttle min/max: %u / %u\n", throttle_min, throttle_max);
+                printf("  Startup power: %u\n", settings[AM32_ADDR_STARTUP_POWER]);
+                printf("  Telemetry: %u\n", settings[AM32_ADDR_TELEMETRY]);
+            }
         } else {
             printf("FAIL: get_settings (len=%u)\n", settings_len);
         }

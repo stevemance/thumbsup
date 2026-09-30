@@ -2,6 +2,67 @@
 
 This directory contains configuration files for the AM32 weapon ESC.
 
+## Files Used By HITL
+
+- `weapon_esc_expected.hexcfg`: canonical 192-byte expected EEPROM image (hex text).
+- `weapon_esc_config.json`: human-readable notes/settings reference.
+- `tools/am32_config_codec.py`: bidirectional converter (`yaml <-> hexcfg/bin`).
+
+`tools/hitl_orchestrator.py` uses `weapon_esc_expected.hexcfg` during the `AM32 Provision` step:
+
+1. Flashes `am32_flasher_service` onto the HITL robot Pico.
+2. Reads current ESC config.
+3. Compares against expected config in git.
+4. Writes only when different.
+5. Verifies via readback.
+6. Flashes competition firmware back to the robot Pico.
+
+You can also point orchestrator directly at YAML:
+
+```bash
+python3 tools/hitl_orchestrator.py --suite smoke --am32-config config/am32/weapon_esc_expected.yaml
+```
+
+## YAML / Binary Conversion
+
+Compile YAML to hex-text image:
+
+```bash
+python3 tools/am32_config_codec.py compile \
+  --input config/am32/weapon_esc_expected.yaml \
+  --output config/am32/weapon_esc_expected.hexcfg
+```
+
+Compile YAML to binary image:
+
+```bash
+python3 tools/am32_config_codec.py compile \
+  --input config/am32/weapon_esc_expected.yaml \
+  --output /tmp/weapon_esc.bin --format bin
+```
+
+Decompile existing image to YAML:
+
+```bash
+python3 tools/am32_config_codec.py decompile \
+  --input config/am32/weapon_esc_expected.hexcfg \
+  --output config/am32/weapon_esc_expected.yaml
+```
+
+## Refreshing Expected Config In Git
+
+Use this flow when you have a known-good ESC setup and want to make it the new baseline:
+
+```bash
+# 1) Read current ESC config (service firmware must be running on HITL robot Pico)
+python3 tools/am32_pico_flasher.py --port /dev/ttyHITL_ROBOT read-config --out /tmp/am32_current.bin
+
+# 2) Convert to tracked hex-text artifact
+xxd -p -c48 /tmp/am32_current.bin > config/am32/weapon_esc_expected.hexcfg
+```
+
+Then review and commit `config/am32/weapon_esc_expected.hexcfg`.
+
 ## Weapon ESC Setup
 
 The weapon uses an AM32 40A 32-bit ESC with the following key settings:
@@ -59,7 +120,7 @@ The weapon uses an AM32 40A 32-bit ESC with the following key settings:
    Motor Direction: Forward
    Bidirectional: OFF
    Brake on Stop: OFF
-   Temperature Limit: 80°C
+   Temperature Limit: 70°C
    Current Limit: 40A
    PWM Input: 1000-2000μs
    Motor Timing: 16°

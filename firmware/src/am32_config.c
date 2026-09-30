@@ -215,18 +215,27 @@ static bool am32_serial_read_byte(uint8_t* out, uint32_t timeout_us) {
 
     am32_onewire_release();
 
-    if (timeout_us == 0) {
-        if (gpio_get(AM32_ONEWIRE_PIN)) {
-            return false;
-        }
-    } else {
+    if (timeout_us > 0) {
         uint32_t start = time_us_32();
+
+        // Require a real idle-high period first. This avoids decoding
+        // fabricated 0x00 bytes when the line is stuck low.
+        while (!gpio_get(AM32_ONEWIRE_PIN)) {
+            if ((time_us_32() - start) > timeout_us) {
+                return false;
+            }
+            tight_loop_contents();
+        }
+
+        // Wait for start bit (high -> low transition).
         while (gpio_get(AM32_ONEWIRE_PIN)) {
             if ((time_us_32() - start) > timeout_us) {
                 return false;
             }
             tight_loop_contents();
         }
+    } else if (gpio_get(AM32_ONEWIRE_PIN)) {
+        return false;
     }
 
     uint32_t irq_state = save_and_disable_interrupts();
@@ -302,6 +311,32 @@ static bool am32_serial_read_byte(uint8_t* out, uint32_t timeout_us) {
 }
 #endif
 
+static bool am32_probe_config_link(void) {
+    // Keepalive can be zero-length; use GET_INFO as the definitive link check.
+    uint8_t keepalive_resp[8] = {0};
+    uint16_t keepalive_len = sizeof(keepalive_resp);
+    if (am32_send_command(AM32_CMD_KEEPALIVE, NULL, 0)) {
+        (void)am32_receive_response(keepalive_resp, &keepalive_len, AM32_REPLY_TIMEOUT);
+    }
+
+    uint8_t info_buf[64] = {0};
+    uint16_t info_len = sizeof(info_buf);
+    if (!am32_send_command(AM32_CMD_GET_INFO, NULL, 0)) {
+        return false;
+    }
+    if (!am32_receive_response(info_buf, &info_len, AM32_REPLY_TIMEOUT)) {
+        return false;
+    }
+    if (info_len < 4) {
+        return false;
+    }
+    // Reject obvious garbage payloads.
+    if (info_buf[0] == 0 && info_buf[1] == 0 && info_buf[2] == 0) {
+        return false;
+    }
+    return true;
+}
+
 static bool am32_serial_try_read_byte(uint8_t* out) {
     return am32_serial_read_byte(out, 0);
 }
@@ -330,9 +365,9 @@ static bool send_config_entry_signal(void) {
 
     // Send config entry pulse sequence
     for (int i = 0; i < AM32_CONFIG_ENTRY_PULSES; i++) {
-        gpio_put(PIN_WEAPON_PWM, 1);
-        sleep_us(AM32_CONFIG_ENTRY_PULSE_US);
         gpio_put(PIN_WEAPON_PWM, 0);
+        sleep_us(AM32_CONFIG_ENTRY_PULSE_US);
+        gpio_put(PIN_WEAPON_PWM, 1);
         sleep_us(AM32_CONFIG_ENTRY_GAP_US);
     }
 
@@ -373,8 +408,6 @@ bool am32_enter_config_mode(void) {
     sleep_ms(AM32_MODE_SWITCH_DELAY_MS);
 
     bool link_ok = false;
-    uint8_t response[8];
-    uint16_t resp_len = sizeof(response);
 
     // Attempt direct UART probe first (some ESCs don't require entry pulses).
     if (!switch_to_uart_mode()) {
@@ -382,17 +415,7 @@ bool am32_enter_config_mode(void) {
         return false;
     }
     am32_in_config_mode = true;
-    if (am32_send_command(AM32_CMD_KEEPALIVE, NULL, 0) &&
-        am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
-        link_ok = true;
-    } else {
-        uint8_t info_buf[32];
-        uint16_t info_len = sizeof(info_buf);
-        if (am32_send_command(AM32_CMD_GET_INFO, NULL, 0) &&
-            am32_receive_response(info_buf, &info_len, AM32_REPLY_TIMEOUT)) {
-            link_ok = true;
-        }
-    }
+    link_ok = am32_probe_config_link();
 
     if (!link_ok) {
         // Retry with config entry pulses.
@@ -404,18 +427,7 @@ bool am32_enter_config_mode(void) {
             return false;
         }
         am32_in_config_mode = true;
-        resp_len = sizeof(response);
-        if (am32_send_command(AM32_CMD_KEEPALIVE, NULL, 0) &&
-            am32_receive_response(response, &resp_len, AM32_REPLY_TIMEOUT)) {
-            link_ok = true;
-        } else {
-            uint8_t info_buf[32];
-            uint16_t info_len = sizeof(info_buf);
-            if (am32_send_command(AM32_CMD_GET_INFO, NULL, 0) &&
-                am32_receive_response(info_buf, &info_len, AM32_REPLY_TIMEOUT)) {
-                link_ok = true;
-            }
-        }
+        link_ok = am32_probe_config_link();
     }
 
     if (!link_ok) {
@@ -525,6 +537,11 @@ bool am32_receive_response(uint8_t* buffer, uint16_t* len, uint32_t timeout_ms) 
                 expected_len = byte;
             } else if (received == 1) {
                 expected_len |= (byte << 8);
+                if (expected_len == 0) {
+                    // Zero-length header is a valid ACK-style response.
+                    *len = 0;
+                    return true;
+                }
                 // Check buffer size first to prevent overflow
                 if (expected_len > max_buffer_size) {
                     DEBUG_PRINT("ERROR: Response too large for buffer (%u > %u)\n",

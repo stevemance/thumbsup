@@ -1,0 +1,206 @@
+eeprom_version: 3
+firmware_version:
+  major: 2
+  minor: 20
+motor:
+  kv: 27
+  poles: 14
+  direction_reversed: false
+  bidirectional: true
+  brake_on_stop: false
+  stall_protection: false
+startup:
+  power: 100
+  use_sine_start: true
+  sine_mode_power: 5
+  sine_changeover_throttle: 5
+timing:
+  advance_level: 16
+  auto_advance: 255
+  pwm_frequency: 24
+  comp_pwm: false
+  variable_pwm: true
+input:
+  type: 1
+  servo_low: 255
+  servo_high: 255
+  servo_neutral: 255
+  servo_deadband: 255
+  disable_stick_calibration: false
+braking:
+  active_brake_power: 0
+  drag_brake_strength: 10
+  driving_brake_strength: 10
+  rc_car_reverse: false
+protection:
+  temperature_limit: 70
+  current_limit: 255
+  low_voltage_cutoff: 255
+  low_cell_volt_cutoff: 255
+  abs_voltage_cutoff: 10
+  stuck_rotor_protection: false
+current_control:
+  p_gain: 100
+  i_gain: 0
+  d_gain: 100
+  max_ramp: 160
+  min_duty_cycle: 1
+misc:
+  beep_volume: 11
+  telemetry_interval: 1
+  use_hall_sensors: false
+can:
+  node: 255
+  esc_index: 255
+  require_arming: 255
+  telem_rate: 255
+  require_zero_throttle: 255
+  filter_hz: 255
+  debug_rate: 255
+  term_enable: 255
+tune_array:
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+- 255
+raw:
+  reserved_0: 1
+  reserved_1: 1
+  reserved_3:
+  - 255
+  - 255
+  - 255
+  - 255
+  reserved_tail:
+  - 255
+  - 255
+  - 255
+  - 255
+  - 255
+  - 255
+  - 255
+  - 255

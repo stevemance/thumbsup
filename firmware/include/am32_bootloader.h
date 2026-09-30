@@ -6,7 +6,7 @@
  *
  * This library communicates with AM32 ESCs in bootloader mode to read/write
  * the full 192-byte EEPROM configuration. Uses bit-banged half-duplex UART
- * on the signal pin (GP4) at 19200 baud with CRC-16 (polynomial 0xA001).
+ * on the signal pin (GP4) with CRC-16 (polynomial 0xA001).
  *
  * IMPORTANT: ESC must be in bootloader mode (signal HIGH during power cycle)
  *
@@ -15,9 +15,12 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // EEPROM size for AM32 ESC
 #define AM32_EEPROM_SIZE 192
+#define AM32_DEVICE_INFO_SIZE 9
+#define AM32_FILE_NAME_SIZE 32
 
 // Error codes
 typedef enum {
@@ -117,6 +120,20 @@ am32_bootloader_error_t am32_bootloader_enter(void);
 am32_bootloader_error_t am32_bootloader_read(uint8_t* buffer);
 
 /**
+ * Read bytes from a specific bootloader address.
+ *
+ * Address uses bootloader CMD_SET_ADDRESS semantics:
+ * - magic values (0x20 eeprom, 0x21 filename, 0x22 continue) are supported
+ * - raw word addresses are also supported
+ *
+ * @param address_word Address/magic value for CMD_SET_ADDRESS
+ * @param out Output buffer
+ * @param len Number of bytes to read (1..256)
+ * @return AM32_OK on success
+ */
+am32_bootloader_error_t am32_bootloader_read_at(uint16_t address_word, uint8_t* out, uint16_t len);
+
+/**
  * Write 192 bytes to ESC EEPROM
  * ESC must be in bootloader mode
  *
@@ -124,6 +141,19 @@ am32_bootloader_error_t am32_bootloader_read(uint8_t* buffer);
  * @return AM32_OK on success, error code on failure
  */
 am32_bootloader_error_t am32_bootloader_write(const uint8_t* buffer);
+
+/**
+ * Program a flash chunk at a specific address.
+ *
+ * Address uses bootloader CMD_SET_ADDRESS semantics (relative flash words).
+ * Typical values are 0x1000+ for application firmware regions.
+ *
+ * @param address_word Address value for CMD_SET_ADDRESS
+ * @param data Chunk payload to write
+ * @param len Chunk size (1..256 bytes)
+ * @return AM32_OK on success
+ */
+am32_bootloader_error_t am32_bootloader_program_flash(uint16_t address_word, const uint8_t* data, uint16_t len);
 
 /**
  * Compare two configs and generate a diff mask
@@ -163,8 +193,34 @@ am32_bootloader_error_t am32_bootloader_validate_and_update(const uint8_t* desir
 void am32_bootloader_run(void);
 
 /**
+ * Get cached bootloader device info from the BLHeli init handshake.
+ *
+ * Bytes are: {'4','7','1', pin_code, flash_size_code, 0x06, 0x06, proto_ver, 0x30}
+ *
+ * @param out Output 9-byte buffer
+ * @return true if device info has been captured
+ */
+bool am32_bootloader_get_device_info(uint8_t out[AM32_DEVICE_INFO_SIZE]);
+
+/**
+ * Read firmware FILE_NAME region from bootloader address magic 0x21.
+ *
+ * @param out Output string buffer
+ * @param out_len Output buffer length
+ * @return AM32_OK on success
+ */
+am32_bootloader_error_t am32_bootloader_read_filename(char* out, size_t out_len);
+
+/**
  * Get human-readable error string
  */
 const char* am32_bootloader_error_str(am32_bootloader_error_t err);
+
+/**
+ * Get the baud rate that last produced a valid bootloader handshake.
+ *
+ * @return 0 if no successful handshake has occurred yet
+ */
+uint32_t am32_bootloader_get_last_baud(void);
 
 #endif // AM32_BOOTLOADER_H
