@@ -30,7 +30,17 @@ T, B = "T", "B"
 THT_CLEAR = {"JBAT": 2.0, "JW": 2.0, "JL": 1.5, "JR": 1.5, "J4": 1.5}
 EP_KEEPOUT = [("U2", "B", 1.0, "DRV8323 thermal pad"), ("U3", "B", 1.0, "DRV8316 thermal pad"),
               ("U4", "B", 1.0, "DRV8316 thermal pad")]
-KEEPOUT = [((0.0, 0.0, 85.0, 18.5), "B", "front power band: L4 is solid GND under the L3 VBAT band (memo 3.1)")]
+KEEPOUT = [((0.0, 0.0, 85.0, 18.5), "B", "front power band: L4 is solid GND under the L3 VBAT band (memo 3.1)"),
+           # fan-out escapes (first Freerouting trial: anchored parts sealed these pin rows)
+           ((67.7, 19.8, 69.4, 22.7), "T", "U2 phase-A gate/sense pins 8-12: escape east then north to cell A"),
+           ((13.5, 22.0, 14.6, 26.6), "T", "U3 SPI/CSA/nCS pins 33-40: escape east"),
+           ((6.4, 27.3, 12.6, 28.1), "T", "U3 control pins 21-32 (INH, nFAULT, DRVOFF): escape rear"),
+           ((20.3, 18.8, 24.7, 19.5), "T", "U4 SPI/CSA/nCS pins 33-40: escape front"),
+           ((25.5, 20.9, 26.4, 26.6), "T", "U4 control pins 21-32: escape east to the MCU"),
+           ((58.2, 19.8, 59.32, 24.6), "T", "U2 CSA/nFAULT/ENABLE pins 24-33: escape west to the MCU"),
+           ((4.0, 18.5, 33.0, 27.5), "B", "drive-to-MCU escape corridor on L4 (U3/U4 SPI, CSA, control): no bottom parts"),
+           ((29.7, 18.0, 31.3, 34.6), "T", "MCU fan-out ring (west)"), ((44.7, 18.0, 46.3, 34.6), "T", "MCU fan-out ring (east)"),
+           ((31.3, 18.0, 44.7, 19.55), "T", "MCU fan-out ring (front)"), ((31.3, 33.0, 44.7, 34.6), "T", "MCU fan-out ring (rear)")]
 
 # ------------------------------------------------------------------ weapon bridge (attempt 1 cells, +10 mm grow)
 CELL = {"C": 45.5, "B": 58.0, "A": 70.5}
@@ -75,12 +85,12 @@ EXPLICIT.update({
     "JR3": (26.4, 31.3, 0, T, "drive R phase C wire: rear edge"),
     "J3": (80.5, 23.5, 90, T, "drive R sensor connector (vertical SH): rear-right edge, off the drive cells (their fan-out is the congested part); nearer the right motor"),
     # MCU and weapon driver
-    "U1": (43.5, 26.25, 180, T, "STM32G474: rear centre, rotated 180 (pins 33-48 face the drives, pins 1-16 face U2/J1; kicad/v2/pinsolve.py)"),
+    "U1": (38.0, 26.25, 180, T, "STM32G474: rear centre, rotated 180 (pins 33-48 face the drives, pins 1-16 face U2/J1; kicad/v2/pinsolve.py)"),
     "U2": (63.5, 23.0, 180, T, "DRV8323RH: behind the middle bridge cell, rotated 180: B/C gate pins face the bridge, A pins face cell A, CSA/straps face the MCU, buck pins at its rear-right corner; hot, top"),
     # header and balance lead
     "J1": (75.3, 23.0, 90, B, "header to the compute board (bottom, rear-right): beside U2's thermal-via field, under the buck; +5V close, MCU nets west"),
     "U5": (76.0, 33.0, 0, T, "3.3 V LDO: rear-right corner beside the buck output (+5V) and over J1"),
-    "J4": (58.5, 31.6, 0, T, "balance lead (vertical XH): rear edge behind the MCU/U2 gap, so U2's rear-right corner stays free for the buck input loop (DESIGN 6.7); BMS parts under it on the bottom"),
+    "J4": (54.3, 31.6, 0, T, "balance lead (vertical XH): rear edge behind the MCU/U2 gap, so U2's rear-right corner stays free for the buck input loop (DESIGN 6.7); BMS parts under it on the bottom"),
 })
 
 # ------------------------------------------------------------------ regions for the anchored parts (per block, side)
@@ -93,14 +103,14 @@ REGION = {
     (T, "MCU"): (31.0, 18.0, 52.0, 35.0), (T, "LDO"): (31.0, 18.0, 58.0, 35.0), (T, "CSAF"): (31.0, 18.0, 52.0, 35.0),
     (T, "WANA"): (31.0, 18.0, 58.0, 35.0), (T, "LED"): (31.0, 18.0, 85.0, 35.0),
     (T, "U2"): (49.0, 18.5, 70.0, 30.0), (T, "WNF"): (48.0, 18.5, 70.0, 35.0), (T, "AND"): (48.0, 18.5, 70.0, 35.0),
-    (T, "BUCK"): (58.0, 18.5, 80.0, 35.0), (T, "BMS"): (44.0, 24.0, 68.0, 35.0), (T, "ARM"): (48.0, 18.5, 85.0, 35.0),
-    (T, "J1"): (48.0, 18.5, 85.0, 35.0), (T, "TP"): (0.0, 18.5, 85.0, 35.0),
+    (T, "BUCK"): (60.0, 18.5, 79.0, 35.0), (T, "BMS"): (44.0, 24.0, 62.0, 35.0), (T, "ARM"): (48.0, 18.5, 85.0, 35.0),
+    (T, "J1"): (48.0, 18.5, 85.0, 35.0), (T, "TP"): (0.0, 0.0, 85.0, 35.0),
     (B, "SENL"): (0.0, 18.5, 15.5, 35.0), (B, "U3"): (0.0, 18.5, 15.5, 35.0),
-    (B, "SENR"): (56.0, 18.5, 85.0, 35.0), (B, "U4"): (14.5, 18.5, 31.0, 35.0), (B, "DRVOFF"): (14.5, 18.5, 33.0, 35.0),
+    (B, "SENR"): (60.0, 26.5, 85.0, 35.0), (B, "U4"): (14.5, 18.5, 31.0, 35.0), (B, "DRVOFF"): (14.5, 18.5, 33.0, 35.0),
     (B, "MCU"): (31.0, 18.5, 50.0, 35.0), (B, "CSAF"): (31.0, 18.5, 50.0, 35.0), (B, "WANA"): (31.0, 18.5, 52.0, 35.0),
     (B, "LDO"): (31.0, 18.5, 52.0, 35.0), (B, "LED"): (31.0, 18.5, 85.0, 35.0), (B, "INA"): (31.0, 18.5, 50.0, 35.0),
     (B, "AND"): (48.0, 18.5, 70.0, 30.0), (B, "WNF"): (48.0, 18.5, 70.0, 35.0), (B, "PDIV"): (44.0, 18.5, 70.0, 30.0),
-    (B, "J1"): (58.0, 18.5, 85.0, 35.0), (B, "ARM"): (56.0, 18.5, 85.0, 35.0), (B, "BMS"): (44.0, 24.0, 68.0, 35.0),
+    (B, "J1"): (58.0, 18.5, 85.0, 35.0), (B, "ARM"): (56.0, 18.5, 85.0, 35.0), (B, "BMS"): (43.0, 26.0, 62.0, 35.0),
     (B, "TP"): (0.0, 18.5, 85.0, 35.0), (B, "ARM"): (0.0, 18.5, 85.0, 35.0), (B, "BRIDGE"): (44.0, 18.5, 85.0, 35.0),
 }
 # per-part overrides: (side, anchor) - where the automatic rule would pick badly
@@ -114,9 +124,20 @@ OVERRIDE = {
     "R15": (T, ("C1", "1")), "TP10": (T, ("C1", "1")),
     "D3": (B, ("J1", "1")), "R62": (B, ("J1", "1")),
     # test pads: a strip on the bottom between the drive cells (reachable, off every fan-out; memo 3.2)
-    **{f"TP{i}": (B, (10.0, 19.6)) for i in (1, 2, 3, 4, 5)}, **{f"TP{i}": (B, (23.0, 19.6)) for i in (6, 7, 8, 9, 11, 12)},
+    # test pads on the TOP (flat pads; the top stays reachable with the stack assembled), near their nets; the first
+    # trial had them on the bottom right in the drive-to-MCU escape corridor
+    **{f"TP{i}": (T, None) for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12)},
 }
-FIRST = {"C302", "C308", "C402", "C408", "C27"}   # loop-critical: placed before the other anchored parts
+# every DRV8316 / DRV8323 decoupling part on the pin it serves (auto-anchoring put some on the wrong side)
+for _u, _n in (("U3", 300), ("U4", 400)):
+    OVERRIDE.update({f"C{_n}": (T, (_u, "9")), f"C{_n + 1}": (T, (_u, "11")), f"C{_n + 3}": (T, (_u, "8")),
+                     f"C{_n + 4}": (T, (_u, "7")), f"C{_n + 5}": (T, (_u, "25")), f"C{_n + 6}": (T, (_u, "37")),
+                     f"R{_n}": (T, (_u, "5")), f"C{_n + 7}": (T, (_u, "3")), f"R{_n + 1}": (B, (_u, "22"))})
+OVERRIDE.update({"C20": (T, ("U2", "4")), "C21": (T, ("U2", "5")), "C22": (T, ("U2", "36")), "C23": (T, ("U2", "26")),
+                 "C24": (T, ("U2", "6")), "R44": (T, ("U2", "29")), "R45": (T, ("U2", "30")), "R46": (T, ("U2", "31")),
+                 "C28": (T, ("U2", "44")), "C10": (T, ("U2", "48")), "R20": (T, ("U2", "1")), "R21": (T, ("U2", "1"))})
+FIRST = {"C302", "C308", "C402", "C408", "C27", "C300", "C301", "C303", "C304", "C400", "C401", "C403", "C404",
+         "C20", "C21", "C24", "C22", "C23", "C28", "L1", "D2", "C29", "C30"}   # loop-critical: placed before the other anchored parts
 
 # ------------------------------------------------------------------ anchored parts, generated
 spec = importlib.util.spec_from_file_location("mbd", MB / "design" / "motor_board.py")
@@ -177,6 +198,8 @@ for _ in range(6):
     left = []
     for ref in todo:
         side, anchor = OVERRIDE.get(ref, (None, None))
+        if ref.startswith("TP") and ref in OVERRIDE and anchor is None:
+            anchor = net_anchor(ref, placed) or ("U1", "1")
         side = side or FP.side_of(ref)
         anchor = anchor or desc_anchor(ref) or ref_anchor(ref, placed) or net_anchor(ref, placed)
         if anchor is None:
