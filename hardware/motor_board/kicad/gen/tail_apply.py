@@ -30,6 +30,8 @@ def inbox(p, box):
 def anchor(v):
     """A lone new via overlapping a pour's fill is re-netted to the pour's net on SaveBoard (pcbnew connectivity);
     a 0.02 mm stub of its own net on L5 inside the barrel keeps its net until the router joins it."""
+    if not b.IsLayerEnabled(pcbnew.In4_Cu):      # 4-layer v2 board: no L5 (and no pours yet to re-net the via)
+        return
     x = pcbnew.PCB_TRACK(b)
     x.SetStart(v.GetPosition()); x.SetEnd(v.GetPosition() + pcbnew.VECTOR2I_MM(0.02, 0))
     x.SetWidth(F(0.15)); x.SetLayer(pcbnew.In4_Cu); x.SetNet(v.GetNet())

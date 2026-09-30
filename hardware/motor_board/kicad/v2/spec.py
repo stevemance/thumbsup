@@ -32,18 +32,18 @@ EP_KEEPOUT = [("U2", "B", 1.0, "DRV8323 thermal pad"), ("U3", "B", 1.0, "DRV8316
               ("U4", "B", 1.0, "DRV8316 thermal pad")]
 KEEPOUT = [((0.0, 0.0, 85.0, 18.5), "B", "front power band: L4 is solid GND under the L3 VBAT band (memo 3.1)"),
            # fan-out escapes (first Freerouting trial: anchored parts sealed these pin rows)
-           ((67.7, 19.8, 69.4, 22.7), "T", "U2 phase-A gate/sense pins 8-12: escape east then north to cell A"),
+           ((67.7, 20.8, 69.4, 23.7), "T", "U2 phase-A gate/sense pins 8-12: escape east then north to cell A"),
            ((13.5, 22.0, 14.6, 26.6), "T", "U3 SPI/CSA/nCS pins 33-40: escape east"),
            ((6.4, 27.3, 12.6, 28.1), "T", "U3 control pins 21-32 (INH, nFAULT, DRVOFF): escape rear"),
            ((20.3, 18.8, 24.7, 19.5), "T", "U4 SPI/CSA/nCS pins 33-40: escape front"),
            ((25.5, 20.9, 26.4, 26.6), "T", "U4 control pins 21-32: escape east to the MCU"),
-           ((58.2, 19.8, 59.32, 24.6), "T", "U2 CSA/nFAULT/ENABLE pins 24-33: escape west to the MCU"),
+           ((58.2, 20.8, 59.32, 25.6), "T", "U2 CSA/nFAULT/ENABLE pins 24-33: escape west to the MCU"),
            ((4.0, 18.5, 33.0, 27.5), "B", "drive-to-MCU escape corridor on L4 (U3/U4 SPI, CSA, control): no bottom parts"),
            ((29.7, 18.0, 31.3, 34.6), "T", "MCU fan-out ring (west)"), ((44.7, 18.0, 46.3, 34.6), "T", "MCU fan-out ring (east)"),
            ((31.3, 18.0, 44.7, 19.55), "T", "MCU fan-out ring (front)"), ((31.3, 33.0, 44.7, 34.6), "T", "MCU fan-out ring (rear)")]
 
 # ------------------------------------------------------------------ weapon bridge (attempt 1 cells, +10 mm grow)
-CELL = {"C": 45.5, "B": 58.0, "A": 70.5}
+CELL = {"C": 45.5, "B": 58.6, "A": 71.1}   # B, A +0.6 mm: opens the C|B door for phase B's gate pair (README_bridge.md)
 FETS = {"C": ("Q5", "Q6", "RS3", "C31", "JW3", "NT3"), "B": ("Q3", "Q4", "RS2", "C26", "JW2", "NT2"),
         "A": ("Q1", "Q2", "RS1", "C25", "JW1", "NT1")}
 EXPLICIT = {}
@@ -53,9 +53,23 @@ for ph, x0 in CELL.items():
     EXPLICIT[hs] = (x0 + 9.2, 9.25, 270, T, f"phase {ph} high side: source pins to the phase strip, drain tab (VBAT) to its 10 uF {cap} behind")
     EXPLICIT[jw] = (x0 + 6.1, 2.75, 0, T, f"phase {ph} motor wire: front edge (drum side), in front of the phase strip")
     EXPLICIT[rs] = (x0 + 3.2, 15.35, 0, T, f"phase {ph} shunt: behind {ls}'s source pins, GND pad toward {cap}")
-    EXPLICIT[nt] = (x0 + 3.6, 13.85 if ph != "C" else 16.85, 0, T, f"Kelvin tie SN{ph}: at {rs}'s GND pad inner edge (DESIGN 6.3)")
+    EXPLICIT[nt] = (x0 + 3.9, 16.85, 0, T, f"Kelvin tie SN{ph}: at the rear of {rs}'s GND pad inner edge; its SN pad (right side of the pad gap) carries the SN via to L4, GL passes on the gap's left side (README_bridge.md)")
     # 1210 (v2): 0.3 mm further from the shunt than attempt 1's 1206 (review/v2_parts/adversarial/bridge_caps_1210.md)
     EXPLICIT[cap] = (x0 + 8.9, 15.5, 270, T, f"phase {ph} bridge 10 uF 1210: VBAT pad on {hs}'s drain tab, GND pad beside {rs}'s GND pad (commutation loop, DESIGN 6.1)")
+
+EXPLICIT["JW1"] = (76.6, 2.75, 0, T, "phase A motor wire: stays at x 76.6 when cell A moves +0.6 (clear of MH2's washer zone); still bridges Q2's tab and Q1's source pins")
+# weapon gate/Kelvin corridors (README_bridge.md): anchored parts stay out of the L1 gate/Kelvin paths and of the L4
+# Kelvin / phase-C gate-pair run to U2's in-pad vias
+KEEPOUT += [((46.9, 17.85, 59.3, 19.3), "T", "bridge: GLC and the phase-B gate pair, west of U2"),
+            ((59.3, 17.85, 67.7, 19.83), "T", "bridge: U2 front fan-out strip (GLC, GHB, SHB, GLB)"),
+            ((67.7, 20.9, 70.6, 23.55), "T", "bridge: phase-A bundle into U2 pins 8-12"),
+            ((69.9, 19.4, 73.2, 22.2), "T", "bridge: phase-A bundle (diagonal)"),
+            ((72.2, 17.85, 75.8, 20.2), "T", "bridge: phase-A bundle leaving RS1"),
+            ((74.4, 17.85, 77.8, 19.0), "T", "bridge: phase-A gate pair from its lane vias"),
+            ((77.8, 17.85, 79.3, 18.5), "T", "bridge: phase-A gate pair lane vias"),
+            ((57.65, 5.5, 58.66, 13.0), "T", "bridge: phase-B gate pair in the C|B channel (FET row)"),
+            ((56.04, 13.0, 57.76, 17.85), "T", "bridge: phase-B gate pair in the C|B channel (shunt row)"),
+            ((45.8, 18.5, 67.0, 20.3), "B", "bridge: L4 Kelvin C/B and phase-C gate pair to U2's in-pad vias (over L3 GND)")]
 
 EXPLICIT.update({
     "MH1": (3.0, 3.0, 0, T, "M2 hole, front-left corner"),
@@ -86,7 +100,7 @@ EXPLICIT.update({
     "J3": (80.5, 23.5, 90, T, "drive R sensor connector (vertical SH): rear-right edge, off the drive cells (their fan-out is the congested part); nearer the right motor"),
     # MCU and weapon driver
     "U1": (38.0, 26.25, 180, T, "STM32G474: rear centre, rotated 180 (pins 33-48 face the drives, pins 1-16 face U2/J1; kicad/v2/pinsolve.py)"),
-    "U2": (63.5, 23.0, 180, T, "DRV8323RH: behind the middle bridge cell, rotated 180: B/C gate pins face the bridge, A pins face cell A, CSA/straps face the MCU, buck pins at its rear-right corner; hot, top"),
+    "U2": (63.5, 24.0, 180, T, "DRV8323RH: behind the middle bridge cell, rotated 180: B/C gate pins face the bridge, A pins face cell A, CSA/straps face the MCU, buck pins at its rear-right corner; hot, top"),
     # header and balance lead
     "J1": (75.3, 23.0, 90, B, "header to the compute board (bottom, rear-right): beside U2's thermal-via field, under the buck; +5V close, MCU nets west"),
     "U5": (76.0, 33.0, 0, T, "3.3 V LDO: rear-right corner beside the buck output (+5V) and over J1"),
@@ -96,7 +110,7 @@ EXPLICIT.update({
 # ------------------------------------------------------------------ regions for the anchored parts (per block, side)
 REGION = {
     (T, "PSW"): (0.0, 0.0, 31.0, 13.6), (T, "BUS"): (24.0, 0.0, 44.6, 18.5), (T, "INA"): (22.0, 0.0, 44.6, 18.5),
-    (T, "BRIDGE"): (44.5, 0.0, 85.0, 18.7), (T, "PDIV"): (44.5, 0.0, 85.0, 20.0),
+    (T, "BRIDGE"): (44.5, 0.0, 85.0, 18.7), (T, "PDIV"): (44.5, 0.0, 85.0, 22.5),   # to y 22.5: the strip behind the cells is the gate corridor now
     (T, "U3"): (0.0, 13.5, 15.0, 35.0), (T, "VML"): (0.0, 13.5, 15.0, 35.0), (T, "SENL"): (0.0, 13.5, 15.5, 35.0),
     (T, "U4"): (13.5, 13.5, 31.0, 35.0), (T, "VMR"): (13.5, 13.5, 31.0, 35.0), (T, "SENR"): (64.0, 18.5, 85.0, 35.0),
     (T, "DRVOFF"): (13.5, 13.5, 33.0, 35.0),
@@ -115,6 +129,7 @@ REGION = {
 }
 # per-part overrides: (side, anchor) - where the automatic rule would pick badly
 OVERRIDE = {
+    "JP2": (T, (71.5, 33.3)),         # keep the right-sensor jumper at the rear-right (the bridge keep-outs pushed it to the front band)
     "TH1": (T, ("Q3", "5")),        # FET NTC on phase B's high-side drain copper (moved off C26's side, 1210 fit)
     "C9": (T, ("J4", "5")), "D5": (T, ("J4", "1")),
     # buck loop (DESIGN 6.7): VIN cap at pin 47, output caps at L1's +5V pad
