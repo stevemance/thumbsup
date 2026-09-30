@@ -16,7 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 FR = HERE / "out" / "fr"
 FR.mkdir(parents=True, exist_ok=True)
-SRC = HERE.parent / "motor_board" / "motor_board.kicad_pcb"
+SRC = Path(__import__("os").environ.get("FR_SRC") or HERE.parent / "motor_board" / "motor_board.kicad_pcb")
+PROJ_FILES = HERE.parent / "motor_board" / "motor_board.kicad_pcb"
 BIN = Path("/home/smance/projects/thumbsup/hardware/tools/freerouting/freerouting-2.4.1-linux-x64/bin/freerouting")
 OX, OY = 100.0, 70.0
 POUR = ["VBAT", "BAT_IN", "PSW_S", "VBAT_SW", "W_A", "W_B", "W_C", "W_SLA", "W_SLB", "W_SLC", "L_A", "L_B", "L_C",
@@ -36,11 +37,13 @@ def prep():
     import pcbnew
     shutil.copy(SRC, FR / "board.kicad_pcb")
     for ext in (".kicad_pro", ".kicad_dru"):
-        shutil.copy(SRC.with_suffix(ext), FR / ("board" + ext))
+        shutil.copy(PROJ_FILES.with_suffix(ext), FR / ("board" + ext))
     if "--nogv" not in sys.argv:     # GND stitch vias at the SMD GND pads first (P3), so the router only sees signals
         subprocess.run(["/usr/bin/python3", str(HERE / "gndvias.py"), str(FR / "board.kicad_pcb")], check=True)
     b = pcbnew.LoadBoard(str(FR / "board.kicad_pcb"))
     gnd = b.FindNet("GND")
+    for tr in b.GetTracks():             # pre-routes (bridge gate/Kelvin, GND stitching) stay put: exported as fixed
+        tr.SetLocked(True)
     z = pcbnew.ZONE(b)
     z.SetLayer(pcbnew.In1_Cu); z.SetNet(gnd); z.Outline().AddOutline(rect(0.3, 0.3, 84.7, 34.7))
     z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)

@@ -476,6 +476,16 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    the CSA traces or the header ground pins (20–45 mV of offset = 0.5 A of weapon-current error).
    One solid, unsplit GND plane on L2 (no separate analog/power grounds); keep the high-current
    return confined to its region by placement, with the MCU, CSA filters and header outside it.
+   **Weapon gate lanes (v2, bounded exception, review/v2_layout/gate_corridor.md):** each high-side
+   gate pin sits inside its cell's L1 power ring, so each GHx pair with its SHx return drops through
+   one adjacent via pair into a short L4 lane (1.2 mm wide: C and A ~12.5 mm along y under the cell,
+   B ~6.7 mm along x under Q4) and surfaces behind the shunt/cap row (C: pair stays on L4 to U2's
+   in-pad vias).  Each lane adds ~0.17 nH to the pack-return path (C1 → cell A feed ~0.8 nH, inside
+   the simulated budget); the C and A lanes cross the L3 VBAT/GND boundary as a balanced pair next
+   to their cell's 10 µF cap.  Under the cells the L3 VBAT band ends at **y = 16.0** (the cap VBAT
+   vias are at y ≤ 14.6); L4 behind it (over L3 GND) carries the Kelvin hops.  Low-side gates stay on
+   L1 through the shunt pad gap with no via (TI SLVSDJ3D §11: the sensitive loop).  The lanes and the
+   boundary are named rule areas in the custom DRC (kicad/v2/README_bridge.md).
 3. **Kelvin sense:** SPx/SNx as a pair from the inner edges of each shunt pad (net-ties NT1–NT3);
    VDRAIN Kelvin to the high-side drains.  U7 IN+/IN− from RS4's pad inner edges.
 4. **DRV8323 straps:** R44–R46 within ~2 mm of pins 29–31, returned to AGND pin 35 / the DVDD

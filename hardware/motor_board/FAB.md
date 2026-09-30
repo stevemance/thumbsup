@@ -22,7 +22,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 | **Inner copper** | **1 oz** (select it explicitly; JLC's 4-layer default is 0.5 oz) | the pack current rides the L3 VBAT band (DESIGN 6.2); the extra copper is two inner layers of 85 x 35 mm, ~3 g |
 | Board size | **85 x 35 mm**, 1 design (fixed for v2) | PLACEMENT 1 |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
-| **Via-in-pad** | **avoid; decide at layout close-out** (a paid option on JLC 4-layer boards, free only on 6+) | v2 routes without vias in signal pads. If U2/U3/U4's exposed-pad thermal vias need filling, order epoxy-filled and capped and list the pads here |
+| **Via-in-pad** | **yes: epoxy-filled and capped (POFV), 0.40 mm pad / 0.20 mm drill** (JLC's POFV minimum drill is 0.2 mm; paid on 4-layer boards) | 12 vias: U2 pins 13, 14, 18, 19, 21, 22, 23, 24 (staggered 0.5 mm along the pads; 0.175 mm to the neighbouring pad), RS2 pad 1 (SL_B), NT1/NT2/NT3 SN pads (0.45/0.20); the weapon gate/Kelvin fan-out has no room otherwise (DESIGN 6.2, review/v2_layout/gate_corridor.md).  Add U2/U3/U4 exposed-pad thermal vias if they are filled.  Confirm on the order form |
 | Min track / space | 0.15 / 0.127 mm on logic nets (Default class; 0.10 board minimum for pad escapes); 0.15 clearance on power, drive, gate, sense, rail classes (JLC 4-layer: 0.09 / 0.09) | motor_board.kicad_pro, motor_board.kicad_dru |
 | Hole to copper | via hole 0.20 mm; PTH hole 0.30 mm (JLC 4-layer: via 0.2, PTH 0.28, 0.35 recommended); pad hole-to-hole 0.45 | motor_board.kicad_dru |
 | Min via | 0.4 mm pad / 0.2 mm drill (Default); 0.45 / 0.25 sense and rails; 0.5 / 0.25 gate; 0.6 / 0.3 power (JLC 4-layer min 0.25 / 0.15) | motor_board.kicad_pro |

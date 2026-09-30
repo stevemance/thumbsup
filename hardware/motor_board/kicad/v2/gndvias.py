@@ -25,6 +25,16 @@ for f in b.GetFootprints():
         obst.append((t(bb.GetLeft()), t(bb.GetTop()), t(bb.GetRight()), t(bb.GetBottom()), p.GetNetname(),
                      p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH, f.IsFlipped()))
 vias = [(t(tr.GetPosition().x), t(tr.GetPosition().y)) for tr in b.GetTracks() if tr.GetClass() == "PCB_VIA"]
+# existing tracks (pre-routes): (x0, y0, x1, y1, half-width, net, layer)
+segs = [(t(tr.GetStart().x), t(tr.GetStart().y), t(tr.GetEnd().x), t(tr.GetEnd().y), t(tr.GetWidth()) / 2,
+         tr.GetNetname(), tr.GetLayer()) for tr in b.GetTracks() if tr.GetClass() == "PCB_TRACK"]
+
+
+def seg_dist(px, py, x0, y0, x1, y1):
+    dx, dy = x1 - x0, y1 - y0
+    L2 = dx * dx + dy * dy
+    u = 0.0 if L2 == 0 else max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / L2))
+    return math.hypot(px - x0 - u * dx, py - y0 - u * dy)
 eps = []
 for ref in ("U2", "U3", "U4"):
     f = b.FindFootprintByReference(ref)
@@ -44,6 +54,9 @@ def free(x, y):
         if net == "GND" and not tht:
             c = -1.0            # a GND pad may touch the via (via-at-pad)... but not a THT hole
         if x0 - r - c < x < x1 + r + c and y0 - r - c < y < y1 + r + c:
+            return False
+    for (x0, y0, x1, y1, hw, net, lay) in segs:      # a through via hits tracks on every layer
+        if net != "GND" and seg_dist(x, y, x0, y0, x1, y1) < r + hw + 0.2:
             return False
     for (vx, vy) in vias:
         if math.hypot(vx - x, vy - y) < VIA_D + HOLE_HOLE - 0.1:
@@ -67,6 +80,10 @@ def seg_free(p0, p1, own, flip):
             if net == "GND" or (fl != flip and not tht):
                 continue
             if x0 - m < x < x1 + m and y0 - m < y < y1 + m:
+                return False
+        lay = pcbnew.B_Cu if flip else pcbnew.F_Cu
+        for (sx0, sy0, sx1, sy1, hw, net, sl) in segs:
+            if net != "GND" and sl == lay and seg_dist(x, y, sx0, sy0, sx1, sy1) < 0.125 + hw + 0.127:
                 return False
     return True
 
