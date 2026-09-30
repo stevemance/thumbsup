@@ -21,6 +21,11 @@ bool bluetooth_platform_get_autoscan(void);
 // Prints controller report inter-arrival statistics ("HITL RXSTATS ...").
 void bluetooth_platform_print_rx_stats(bool reset);
 
+// Feedback to the connected controller.  Return false if no controller is
+// ready or it does not support the feature.
+bool bluetooth_platform_controller_rumble(uint16_t duration_ms, uint8_t weak, uint8_t strong);
+bool bluetooth_platform_controller_player_leds(uint8_t mask);
+
 // Platform initialization
 struct uni_platform* get_my_platform(void);
 

@@ -17,7 +17,6 @@
 // Delay before issuing DShot setup commands during arming.  The ESC needs a
 // short stream of throttle-0 packets before it will accept config commands.
 // 500ms is enough for ESC initialisation while keeping total arm time short.
-#define WEAPON_DSHOT_SETUP_DELAY_MS 500
 
 extern uint32_t read_battery_voltage(void);
 
@@ -113,7 +112,11 @@ static void weapon_mark_dshot_setup_pending(void) {
 // Returns the setup command to send in place of the throttle this frame, or
 // -1 when no setup frame is due.
 static int weapon_dshot_setup_frame_locked(uint32_t now_ms) {
-    if (!dshot_setup_pending || (now_ms - arm_start_time) < WEAPON_DSHOT_SETUP_DELAY_MS) {
+    // AM32 only accepts these commands once it has armed, which it does a
+    // while after it first answers (it then plays its arming tone).  The
+    // disarmed robot sends no frames, so the ESC starts arming only when we do.
+    if (!dshot_setup_pending || !esc_replied ||
+        (int32_t)(now_ms - esc_first_reply_ms) < WEAPON_DSHOT_SETUP_AFTER_REPLY_MS) {
         return -1;
     }
     if (dshot_setup_step >= DSHOT_SETUP_CMD_COUNT) {
@@ -272,7 +275,7 @@ static void weapon_send_dshot_locked(uint32_t now_ms, uint16_t throttle, bool fo
         esc_recovery_start_ms = now_ms;
         esc_link_start_ms = now_ms;
         esc_replied = false;
-        arm_start_time = now_ms;             // setup commands follow after WEAPON_DSHOT_SETUP_DELAY_MS
+        arm_start_time = now_ms;
         weapon_mark_dshot_setup_pending();
     }
 

@@ -229,6 +229,9 @@
 // starts replying; silence is only treated as a lost ESC once it has been
 // answering for this long.
 #define WEAPON_ESC_SETTLE_MS           1500
+// Setup commands (EDT on, 3D/direction) wait this long after the ESC's first
+// reply, so the ESC has armed and accepts them.
+#define WEAPON_DSHOT_SETUP_AFTER_REPLY_MS 1000
 #define WEAPON_ESC_RECOVER_LOW_MS      50
 #define WEAPON_ESC_REARM_MS            1000
 // Range bounds for V/I/T at weapon layer
@@ -267,6 +270,18 @@
 #define BATTERY_LOW_VOLTAGE 9600  // Low battery threshold (mV) for 3S
 #define BATTERY_CRITICAL    9000  // Critical battery voltage (mV)
 #define BATTERY_MAX_VOLTAGE 12600 // Fully charged 3S (mV)
+
+// Low-battery alerts (battery_monitor.c) from the weapon ESC's voltage
+// telemetry: controller rumble, controller player-LED gauge and the system
+// LED.  Alert only; nothing is limited.  The ESC reads ~0.1-0.25 V below the
+// true pack voltage, so these trip slightly early.
+#define BATTERY_ALERT_LOW_MV         10200  // 3.4 V/cell
+#define BATTERY_ALERT_CRITICAL_MV     9600  // 3.2 V/cell
+#define BATTERY_ALERT_HYSTERESIS_MV    300  // must recover this far above a level to leave it
+#define BATTERY_ALERT_FILTER_MS       5000  // smoothing time constant (spin-up sag)
+#define BATTERY_CRITICAL_REPEAT_MS   30000  // repeat the critical rumble while critical
+#define BATTERY_GAUGE_FULL_MV        11400  // controller LEDs: 4 lit at/above
+#define BATTERY_GAUGE_MID_MV         10800  //                  3 lit at/above, else 2
 #define BATTERY_ADC_SCALE   3.3f  // ADC reference voltage
 #define BATTERY_DIVIDER     4.0f  // Voltage divider ratio (adjust for your circuit)
 

@@ -275,7 +275,9 @@ When triggered:
 4. Weapon LED returns to **off** (disarmed).
 5. If A is released early, the clear is cancelled.
 
-After clearing, the weapon must be re-armed with the B button.
+After clearing, the drive stays stopped until both drive sticks have returned to
+center, and the weapon must be re-armed with the B button (then release and
+press a trigger to spin).
 
 ---
 

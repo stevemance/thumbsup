@@ -30,6 +30,7 @@
 #include "calibration_mode.h"
 #include "motor_linearization.h"
 #include "hitl_overrides.h"
+#include "battery_monitor.h"
 #include "hitl_console.h"
 
 #if SERIAL_GAMEPAD
@@ -49,6 +50,7 @@
 #if !SERIAL_GAMEPAD
 // Active BT connection handle (for potential future per-link tuning)
 static hci_con_handle_t active_con_handle = HCI_CON_HANDLE_INVALID;
+static uni_hid_device_t* active_device = NULL;   // set while a controller is ready
 #endif
 
 // Robot state tracking
@@ -141,6 +143,7 @@ static void hitl_timer_handler(btstack_timer_source_t* ts) {
     static uint32_t last_slow_ms = 0;
     if (last_slow_ms == 0 || (now_ms - last_slow_ms) >= 20) {
         hitl_console_on_gamepad(hitl_last_gp_valid ? &hitl_last_gp : NULL);
+        battery_monitor_update(now_ms);
         status_update();
         safety_update();
         last_slow_ms = now_ms;
@@ -292,6 +295,7 @@ static void my_platform_init(int argc, const char **argv) {
     status_init();
 
     hitl_console_init();
+    battery_monitor_init();
 
     link_event_registration.callback = &link_event_handler;
     hci_add_event_handler(&link_event_registration);
@@ -374,6 +378,7 @@ static void my_platform_on_device_connected(uni_hid_device_t *d) {
 }
 
 static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
+    active_device = NULL;
     logi("thumbsup_platform: device disconnected: %p\n", d);
 
     active_con_handle = HCI_CON_HANDLE_INVALID;
@@ -447,6 +452,8 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
     uni_bt_stop_scanning_unsafe();
 
     active_con_handle = d->conn.handle;
+    active_device = d;
+    battery_monitor_controller_ready();
 
     printf("BT LINK ready role=%s\n",
            gap_get_role(active_con_handle) == HCI_ROLE_MASTER ? "central" : "peripheral");
@@ -502,6 +509,7 @@ static void read_drive_sticks(const uni_gamepad_t* gp, int32_t* forward, int32_t
 // seen released before a trigger can spin the weapon again, so a trigger held
 // through arming never spins it up on its own.
 static int8_t weapon_trigger_dir = 0;
+static bool drive_requires_neutral = false;   // set by an e-stop clear
 static bool weapon_trigger_release_required = true;
 
 static void require_weapon_trigger_release(void) {
@@ -652,6 +660,9 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
                 emergency_stop = false;
                 emergency_clear_in_progress = false;
                 require_weapon_trigger_release();
+                // A stick held through the e-stop must not move the robot the
+                // moment it clears: the drive waits for the sticks to centre.
+                drive_requires_neutral = true;
                 logi("Emergency stop cleared after %ums hold\n", hold_time);
                 status_set_system(SYSTEM_STATUS_CONNECTED, LED_EFFECT_SOLID);
                 status_set_weapon(WEAPON_STATUS_DISARMED, LED_EFFECT_SOLID);
@@ -748,6 +759,14 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     if (!emergency_stop) {
         int32_t forward = 0, turn = 0;
         read_drive_sticks(gp, &forward, &turn);
+        if (drive_requires_neutral) {
+            if (forward == 0 && turn == 0) {
+                drive_requires_neutral = false;
+            } else {
+                forward = 0;
+                turn = 0;
+            }
+        }
 
         drive_control_t drive_cmd = {
             .forward = forward,
@@ -906,6 +925,24 @@ static void my_platform_on_oob_event(uni_platform_oob_event_t event,
 //
 // Helpers
 //
+bool bluetooth_platform_controller_rumble(uint16_t duration_ms, uint8_t weak, uint8_t strong) {
+    uni_hid_device_t* d = active_device;
+    if (d == NULL || d->report_parser.play_dual_rumble == NULL) {
+        return false;
+    }
+    d->report_parser.play_dual_rumble(d, 0, duration_ms, weak, strong);
+    return true;
+}
+
+bool bluetooth_platform_controller_player_leds(uint8_t mask) {
+    uni_hid_device_t* d = active_device;
+    if (d == NULL || d->report_parser.set_player_leds == NULL) {
+        return false;
+    }
+    d->report_parser.set_player_leds(d, mask);
+    return true;
+}
+
 static void trigger_event_on_gamepad(uni_hid_device_t *d) {
     if (d->report_parser.play_dual_rumble != NULL) {
         d->report_parser.play_dual_rumble(

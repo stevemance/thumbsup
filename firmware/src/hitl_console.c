@@ -18,6 +18,7 @@
 #include "motor_control.h"
 #include "dshot.h"
 #include "weapon.h"
+#include "battery_monitor.h"
 #include "hardware/gpio.h"
 
 #define HITL_LINE_MAX 160
@@ -266,7 +267,7 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
         w_cmd = fwd == rev ? 0 : (fwd ? WEAPON_TRIGGER_SPEED : -WEAPON_TRIGGER_SPEED);
     }
 
-    printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu weapon=%s speed=%d target=%d thr=%u mode=%s "
+    printf("HITL STATUS t_ms=%lu conn=%u ready=%u armed=%u failsafe=%u batt_mv=%lu esc_batt_mv=%lu batt_level=%s weapon=%s speed=%d target=%d thr=%u mode=%s "
            "x=%d y=%d rx=%d ry=%d p_brk=%ld p_thr=%ld w_stick=%ld w_thr=%ld w_brk=%ld w_cmd=%ld buttons=0x%04x dpad=0x%02x dl_us=%u dr_us=%u telem=%u age_ms=",
            (unsigned long)now_ms,
            controller_connected ? 1u : 0u,
@@ -274,6 +275,8 @@ static void hitl_print_status(const uni_gamepad_t* gp) {
            system_is_armed() ? 1u : 0u,
             system_failsafe_active() ? 1u : 0u,
             (unsigned long)batt_mv,
+            (unsigned long)battery_monitor_mv(),
+            battery_monitor_level_name(battery_monitor_level()),
             weapon_state_label(weapon_get_state()),
             weapon_get_speed(),
             weapon_get_target_speed(),
