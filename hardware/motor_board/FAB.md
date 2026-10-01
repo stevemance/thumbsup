@@ -5,11 +5,13 @@ design decision changes one of these, change it here too. Tick through it on ord
 
 ## Before ordering
 - [ ] `python3 design/motor_board.py` prints `checks: OK` (BOM.md "Before ordering").
-- [ ] Fab source: the final stage board `kicad/gen/out/exp/<last stage>/proj/` (.kicad_pcb/.kicad_pro/.kicad_dru; today
-      `hS`, gitignored) copied into `kicad/motor_board/`, which today holds a board with no copper.
-- [ ] `/usr/bin/python3 kicad/gen/layout_check.py`: DRC 0 errors, schematic parity 0, **0 unconnected items**,
-      every via field OK, no pour with extra islands, section 5 (GND pads) empty.  **The script still targets the v1
-      6-layer board (gate vias on all FETs, v1 pour names, 6-layer renders): update it for v2 before it can gate an order.**
+- [ ] Fab source: `kicad/motor_board/motor_board.kicad_pcb` (+ .kicad_pro / .kicad_dru), the output of the last stage
+      (`kicad/gen/out/exp/hS/proj/`, chain ... hD -> hP -> hX -> hS) copied in; regenerate it if any stage changes.
+- [ ] From `kicad/motor_board/`: `kicad-cli pcb drc --schematic-parity --severity-error motor_board.kicad_pcb` ->
+      **0 violations, 0 unconnected items, 0 schematic parity issues** (2026-10-01: all three 0).  With
+      `--severity-all` only the expected lib_footprint_mismatch warnings remain (silk moved to Fab by the silk stage).
+      (`kicad/gen/layout_check.py` is the v1 6-layer checker and no longer applies.)
+- [ ] `/usr/bin/python3 kicad/v2/r2/pourtest.py hS`: every power net PASS (each pour net's pads connect).
 - [ ] Re-check stock and part class on jlcpcb.com for every BOM line; **reserve U1, U2 and U7** (U1 122 in stock on
       2026-10-01; U7 is now INA239AQDGSRQ1 C4367136, only 7 in stock: the INA239AIDGSR / INA229AIDGSR were at 0).
 - [ ] Compute board designed to match this one: J1 is on this board's bottom, origin (52.5, 30.95) rot 90, pin 1 at
@@ -34,7 +36,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 | **Inner copper** | **1 oz** (select it explicitly; JLC's 4-layer default is 0.5 oz) | the pack current rides the L3 VBAT band (DESIGN 6.2); the extra copper is two inner layers of 85 x 35 mm, ~3 g |
 | Board size | **85 x 35 mm**, 1 design (fixed for v2) | PLACEMENT 1 |
 | Surface finish | ENIG | flat pads for the QFN / LQFP / PDFN parts |
-| **Via-in-pad** | **yes: epoxy-filled and capped (POFV), 0.40 mm pad / 0.20 mm drill** (JLC's POFV minimum drill is 0.2 mm; paid on 4-layer boards) | 44 vias on the hS board (centre inside a pad; all 0.40/0.20 except NT1-NT3 0.45/0.20): U2 pins 1, 13, 14, 18, 19, 21, 22, 23, 24, 37, 39, 41, 48; U6 pins 3, 4, 5, 6, 8, 10; U1 pins 5, 42, 45, 49, 50; U4 pins 5, 37; U9 pins 1, 4, 8 (pin 8's via is shared with C47.1); J1 pins 3, 5, 6, 17; NT1/NT2/NT3 pad 1; RS2 pad 1; C111.1, C112.1, D8.2, R52.2, R110.1, R113.2, TP3.1.  The weapon gate/Kelvin and U2/U6 fan-outs have no room otherwise (DESIGN 6.2, review/v2_layout/gate_corridor.md, stage files kicad/gen/h*.py).  Re-list after every layout change; add U2/U3/U4 exposed-pad thermal vias if they are filled.  Confirm on the order form |
+| **Via-in-pad** | **yes: epoxy-filled and capped (POFV)** (JLC's POFV minimum drill is 0.2 mm; paid on 4-layer boards).  Sizes on the board: 0.40/0.20 (83), 0.45/0.25 (69: the U2 / U3 / U4 exposed-pad thermal arrays), 0.45/0.20 (3) | **155 vias in 45 parts** on the final board (centre inside a pad, `kicad/v2/r2/fabfacts.py`): U2 33, U4 26, U3 24 (EP thermal arrays + fan-out), U6 7, J1 6, U1 5, U9 3, C1 3, C302 3, R302 3, R402 3, C301 2, C400 2, C402 2, J3 2, R63 2, and one each in C4, C18, C24, C60, C70, C82, C92, C111, C112, C303, C401, D8, NT1-NT3, Q7, R22, R24, R26, R45, R49, R52, R110, R113, R300, RS2, TP3, TP9, U13.  Confirm on the order form |
 | Min track / space | 0.15 / 0.127 mm on logic nets (Default class; 0.10 board minimum for pad escapes); 0.15 clearance on power, drive, gate, sense, rail classes (JLC 4-layer: 0.09 / 0.09) | motor_board.kicad_pro, motor_board.kicad_dru |
 | Hole to copper | via hole 0.20 mm; PTH hole 0.30 mm (JLC 4-layer: via 0.2, PTH 0.28, 0.35 recommended); pad hole-to-hole 0.45 | motor_board.kicad_dru |
 | Min via | 0.4 mm pad / 0.2 mm drill (Default); 0.45 / 0.25 sense and rails; 0.5 / 0.25 gate; 0.6 / 0.3 power (JLC 4-layer min 0.25 / 0.15).  The board has 201 vias of 0.40/0.20, in JLC's surcharged small-via class (cost only); vias outside pads may grow to 0.45/0.20 where clearance allows | motor_board.kicad_pro |
@@ -46,7 +48,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 | Option | Value | Why / source |
 |---|---|---|
 | Type | **Standard PCBA, both sides** | parts on top and bottom (PLACEMENT 5.1) |
-| Panel / rails | board under 70 x 70 mm: **rails, mouse-bite tabs only, no V-cut on any edge**.  Tabs only where nothing lies within 1.5 mm of the edge: front (y = 0) x 44.7-48.9, 54.3-62.0, 67.4-73.9; left (x = 0) y 11.2-18.8; right (x = 85) y 5.5-13.7.  **No tabs on the rear edge.**  Re-check the spans after the power pours and state them in the order remark | rear-edge copper and pads sit 0.30-0.38 mm from the outline (SPI_MOSI, R_S1, SWDIO, +3V3 tracks; C9, D8, C30, R6, R113 pads); the right edge has copper at 0.33-0.35 mm (review 2026-10-01, jlc-fab-2 / jlc-assembly-4) |
+| Panel / rails | board under 70 x 70 mm: **rails, mouse-bite tabs only, no V-cut on any edge** (V-cut needs copper >= 0.4 mm from the cut; the rear edge has tracks / pads at 0.30-0.35 mm).  After the pours (final board, `kicad/v2/r2/fabfacts.py <board> 0.5`) the only edge spans with no non-GND copper, pad or courtyard within 0.5 mm (JLC's mouse-bite copper guidance; GND fill / stitching allowed) are: **left (x = 0) the whole edge**, **right (x = 85) y 29.0-35.0**, **rear (y = 35) x 57.2-61.1**, front (y = 0) x 0-3.9.  Ask in the order remark for tabs at left y 8-11 and y 24-27, right y 30-33, rear x 58-60, nothing else | kicad/v2/r2/fabfacts.py; review jlc-fab-2 / jlc-assembly-4 |
 | Fiducials | added by JLC | JLC help (PLACEMENT 6) |
 | Reflow order | bottom side first | nothing on the bottom is heavy |
 | Through-hole | J4 (JST B5B-XH-A vertical): JLC THT assembly **or** hand-solder.  **Bottom SMD pads sit 0.25-0.3 mm from J4's pads** (U6.7/U6.8 by pin 1, D8.1 GND by pin 5 = BAL4, the pack top), inside PLACEMENT's 1.5 mm solder zone: ask for hand soldering with a fine tip (no wave / selective nozzle) and inspect pins 1 and 5 for bridges | BOM.md, review jlc-assembly-3 |
