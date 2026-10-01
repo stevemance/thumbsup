@@ -17,8 +17,11 @@ tr("W_INLB_M", F1, [(32.33, 29.0), (35.6, 29.0)])
 via("W_INLB_M", (35.6, 29.0))
 via("W_INLA_M", (38.5, 29.9))
 route("W_INLA_M", P("U1", 37), ("via", 38.5, 29.9), [F1], margin=3.5, via_cost=99)
-via("W_INHC", (39.9, 28.6))
-tr("W_INHC", F1, [(43.67, 26.5), (42.6, 26.5), (39.9, 28.6)])
+via("W_INHC", (39.9, 27.2))
+tr("W_INHC", F1, [(43.67, 26.5), (42.6, 26.5), (39.9, 27.2)])
+# W_INLB_M's pull-down R48 on top beside pin 46 (west stub), out of U6's crowded input channel
+EDITS.append(dict(op="move", ref="R48", x=30.4, y=29.6, rot=270, side="F"))
+tr("W_INLB_M", F1, [(32.33, 29.0), (30.72, 29.0)])
 via("W_INHB", (45.8, 26.2))
 tr("W_INHB", F1, [(43.67, 26.0), (45.4, 26.0), (45.6, 26.2), (45.8, 26.2)])
 
