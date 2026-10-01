@@ -59,6 +59,7 @@ RESERVE_R3B = [[L4, 70.25, 31.0, 71.05, 32.1], [L4, 71.25, 21.9, 72.6, 29.5], [L
 
 EDITS = []
 EXTRA_AVOID = []
+VIA_PITCH = 0.0                         # r2: min centre distance of a new non-GND via to every non-GND via (router)
 STACK_PEN = 0.0                         # router cost factor for L3/L4 runs stacked over another net (module may raise it)                        # per-module reserved boxes, added to every router request
 NEW_VIAS = []                           # (net, c, kind) for the log
 
@@ -89,6 +90,8 @@ def route(net, a, b, layers=None, stub=False, **kw):
     kw.setdefault("margin", 3.0)
     kw["analog_nets"] = ANALOG
     kw.setdefault("stack_pen", STACK_PEN)
+    if VIA_PITCH:
+        kw.setdefault("via_pitch", VIA_PITCH)
     EDITS.append(dict(op="route", net=n_(net), a=a, b=b, layers=layers, **kw))
 
 

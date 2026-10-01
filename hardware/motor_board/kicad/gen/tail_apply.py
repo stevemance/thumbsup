@@ -326,7 +326,7 @@ for e in tail_edits.EDITS:
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),
                          via=e.get("via", 0.45), drill=e.get("drill", 0.25), margin=e.get("margin", 2.0),
-                         via_through_pours=True))
+                         via_through_pours=True, **({"avoid": e["avoid"]} if "avoid" in e else {})))
     else:
         raise SystemExit(f"unknown op {op}")
 reqs += rr_reqs

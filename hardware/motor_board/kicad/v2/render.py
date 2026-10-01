@@ -68,18 +68,23 @@ def mst(pts):
     return edges
 
 
-fig, axs = plt.subplots(2, 1, figsize=(26, 22), dpi=70)
+import os
+CROP = [float(v) for v in os.environ["CROP"].split(",")] if os.environ.get("CROP") else [-1, -1, 86, 36]
+_w, _h = CROP[2] - CROP[0], CROP[3] - CROP[1]
+fig, axs = plt.subplots(2, 1, figsize=(26, 26 * 2 * _h / _w * 0.92 + 1), dpi=70)
 for ax, side, title in ((axs[0], "T", "TOP (L1)"), (axs[1], "B", "BOTTOM (L4), seen from the top")):
-    ax.set_xlim(-1, 86); ax.set_ylim(36, -1); ax.set_aspect("equal"); ax.set_title(title, fontsize=16)
+    ax.set_xlim(CROP[0], CROP[2]); ax.set_ylim(CROP[3], CROP[1]); ax.set_aspect("equal"); ax.set_title(title, fontsize=16)
     ax.add_patch(Rectangle((0, 0), 85, 35, fill=False, lw=2))
-    ax.set_xticks(range(0, 86, 5)); ax.set_yticks(range(0, 36, 5)); ax.grid(lw=0.3, alpha=0.4)
+    _st = 1 if _w < 50 else 5
+    ax.set_xticks(range(0, 86, _st)); ax.set_yticks(range(0, 36, _st)); ax.grid(lw=0.3, alpha=0.4)
     for p in g["parts"]:
         if p["side"] != side:
             continue
         x0, y0, x1, y1 = p["box"]
         ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, color=col[p["block"]], alpha=0.35))
         ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, lw=0.6))
-        ax.text((x0 + x1) / 2, (y0 + y1) / 2, p["ref"], ha="center", va="center", fontsize=6 if (x1 - x0) < 3 else 8)
+        _fs = (6 if (x1 - x0) < 3 else 8) * (1.0 if _w > 60 else 1.6)
+        ax.text((x0 + x1) / 2, (y0 + y1) / 2, p["ref"], ha="center", va="center", fontsize=_fs, clip_on=True)
     for p in g["pads"]:
         if side in p["side"]:
             x0, y0, x1, y1 = p["box"]
@@ -87,6 +92,8 @@ for ax, side, title in ((axs[0], "T", "TOP (L1)"), (axs[1], "B", "BOTTOM (L4), s
     for n, ps in nets.items():
         for a, b in mst([tuple(p["c"]) for p in ps]):
             ax.plot([a[0], b[0]], [a[1], b[1]], lw=0.35, color="#0044cc", alpha=0.5)
+for ax in axs:
+    ax.set_xlim(CROP[0], CROP[2]); ax.set_ylim(CROP[3], CROP[1])
 fig.tight_layout()
 fig.savefig(out)
 print("wrote", out)

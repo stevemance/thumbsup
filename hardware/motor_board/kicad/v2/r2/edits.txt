@@ -1,0 +1,1 @@
+TP7|55.3|20.7|0|T|W_EN test pad: north of U2 straps (off the gate-input bus behind the MCU)

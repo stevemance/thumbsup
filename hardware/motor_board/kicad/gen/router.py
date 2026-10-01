@@ -105,6 +105,9 @@ for p in G["pads"]:
             draw_rect(smd[l], p["box"], nid)
     if p["tht"] and p["drill"]:
         draw_disc(novia, p["c"], p["drill"] / 2 + 0.25, True)            # hole-to-hole
+    if p["tht"] and p["drill"] and p["net"]:                           # r2: JLC via hole to PTH pad copper >= 0.3 mm
+        b_ = p["box"]
+        draw_rect(novia, (b_[0] - 0.42, b_[1] - 0.42, b_[2] + 0.42, b_[3] + 0.42), True)
 PADS_ONLY = {l: owner[l].copy() for l in RL}      # (for probes that ignore existing tracks: pads here, vias below)
 # analog shadow (request key "analog_nets", on any request): on the L3 / L4 pair (In2.Cu / B.Cu) a track of an analog
 # net and another net's track may not overlap (the other layer stays free above / below the analog run: GND fill)
@@ -238,6 +241,18 @@ def route(req):
         sd = ndimage.distance_transform_edt(s < 0, sampling=RES)
         free_v &= (dist_v[sl] >= need_v[sl]) & (sd >= vd / 2 + 0.05)
     free_v &= ~novia[i0:i1, j0:j1] & (edge_dist[i0:i1, j0:j1] >= vd / 2 + EDGE_CLR)
+    # r2 rule: a new non-GND via keeps >= via_pitch (centre to centre) from every other non-GND via, so the L2 antipads
+    # (drill / 2 + 0.2) never merge (GND vias are part of the plane: no antipad)
+    VP = float(req.get("via_pitch", os.environ.get("VIA_PITCH", "0")))
+    if VP > 0 and net != "GND":
+        gid = NID.get("GND")
+        ys_, xs_ = YS[i0:i1, None], XS[None, j0:j1]
+        for nid_, lst_ in VIAS_OF.items():
+            if nid_ == gid:
+                continue
+            for vx_, vy_ in lst_:
+                if x0 - VP <= vx_ <= x1 + VP and y0 - VP <= vy_ <= y1 + VP:
+                    free_v &= ~((xs_ - vx_) ** 2 + (ys_ - vy_) ** 2 < VP * VP)
     # reserved corridors: [layer or "*", x0, y0, x1, y1] boxes this request may not use (a via anywhere in a box on
     # any of its layers is refused too, since the barrel crosses every layer)
     for av in req.get("avoid", []):                      # a 6th item "tracks": the box refuses tracks only
