@@ -120,7 +120,7 @@ with 220 nF 25 V across each cell and from VC0 to VSS (C4–C8): a 22 µs filter
 on VC7–VC6, VC5–VC4, VC3–VC2 and VC1–VC0, with VC6=VC5, VC4=VC3 and VC2=VC1 shorted on the
 board.  U8 is powered from the top balance tap through R11 100 Ω 0603 into C9 4.7 µF 50 V X7R
 (≥ 1 µF effective at 16.8 V) on BAT and REGSRC (layout v2: C9 sits on top by the rear edge near J1, ~19 mm of
-trace from U8.16/17; a local cap at U8.16/17 is an owner decision pending); REGOUT (enabled at 3.3 V by OTP default) has
+trace from U8.16/17, so C117 100 nF sits at U8.16/17 as the local bypass); REGOUT (enabled at 3.3 V by OTP default) has
 C11 4.7 µF and no load.  Unused functions per TI Table 8-3: SRP/SRN and TS to VSS, CHG/DSG open.
 **D5 (B5819W, anode GND, cathode CELL0)** keeps VC0 near VSS when the balance lead is plugged
 without the main lead (U8's return current then flows through VC0) and carries the C9 charge at
@@ -472,9 +472,11 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    shunt → cap in the tightest possible loop, solid GND plane on layer 2 directly under it.
    4-layer board (JLC041611-1080, L1-L2 0.069 mm; FAB.md), **1 oz inner copper** (JLC's default is 0.5 oz).
 2. **Stack-up and pack current path:** L1 (top) power + parts (all hot parts), L2 solid GND
-   (no traces; DRC-enforced), L3 a VBAT band under the bridges + GND elsewhere, L4 (bottom) J1 +
-   small parts + signals + GND fill, solid GND on L4 under the L3 VBAT band and no L4 trace
-   crossing an L3 VBAT/GND boundary (L3 couples to L4 in this stack-up).  Via rows at ≥ 1.3 mm
+   (no traces; DRC-enforced), L3 a VBAT band under the bridges (y < 16) and, behind it, the main
+   signal layer (as built 2026-10-01, accepted by the owner) with GND fill stitched to L2 in every free
+   area, L4 (bottom) J1 + small parts + signals + GND fill, solid GND on L4 under the L3 VBAT band and
+   no L4 trace crossing an L3 VBAT/GND boundary (L3 couples to L4 in this stack-up: L4 lanes over L3
+   lanes couple broadside, ~0.1 pF/mm, acceptable for the slow nets routed there).  Via rows at ≥ 1.3 mm
    pitch so they don't slot the planes.  (v1 was 6 layers; v2 is 4, review/v2_lessons.)  BAT
    holes → Q7/Q8 → RS4 → C1 → bridges on wide L1 pours and the L3 band with the return on a dedicated
    power-ground region; the 22–27 A return must not flow under the MCU,

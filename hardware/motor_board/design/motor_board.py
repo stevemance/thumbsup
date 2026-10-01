@@ -79,7 +79,8 @@ LCSC = {
     "PMEG4030ER": "C389355",       # Nexperia PMEG4030ER 40 V 3 A CFP3/SOD-123W (buck catch diode; alt MDD DSK34 C41029)
     "BM06B": "C160392",            # JST BM06B-SRSS-TB genuine, SH1.0 6P vertical SMD
     "B2B_M": "C59981",             # BOOMELE 1.27-2*10P, 1.27 mm 2x10 SMD male (6,280 in stock 2026-09-23)
-    "INA239": "C2876522",          # TI INA239AIDGSR VSSOP-10 (INA229AIDGSR C2846803 is a pin-compatible drop-in)
+    "INA239": "C4367136",          # TI INA239AQDGSRQ1 VSSOP-10 (AEC-Q100 grade, same DGS pinout as INA239AIDGSR
+                                   # C2876522, which was out of stock at JLC 2026-10-01, as was INA229AIDGSR C2846803)
     "SHUNT_1m": "C46961745",       # JIERR RE2512F3R001 1 mOhm 3 W 2512 (verified for the v1 board)
     "R390k_0603": "C137735", "R51k": "C25794", "R10R": "C25077", "R100R": "C25076", "R22_1206": "C17958",
     "R47k": "C25792", "R75k": "C25798", "R18k": "C25762", "R4k7": "C25900",   # review/r6_parts_lookup.md
@@ -131,7 +132,7 @@ two("RS4", "1mR 1% 2512", "motor_board:R_2512_JIERR_RE_small_electrode", "VBAT_S
 two("R2", "10R", R0402, "VBAT_SW", "INA_INP", LCSC["R10R"], "INA239 IN+ series (TI 8.1.4: dV/dt robustness on a short)")
 two("R3", "10R", R0402, "VBAT", "INA_INN", LCSC["R10R"], "INA239 IN- series")
 two("C2", "100nF 50V", C0603, "INA_INP", "INA_INN", LCSC["100n_50V_0603"], "INA239 differential input filter (80 kHz with 2 x 10 ohm)")
-part("U7", "INA239AIDGSR", "Package_SO:MSOP-10_3x3mm_P0.5mm",
+part("U7", "INA239AQDGSRQ1", "Package_SO:MSOP-10_3x3mm_P0.5mm",
      {"1": ("CS", "INA_nCS"), "2": ("MOSI", "SPI_MOSI"), "3": ("ALERT", "W_nFAULT"), "4": ("MISO", "SPI_MISO"),
       "5": ("SCLK", "SPI_SCK"), "6": ("VS", "+3V3"), "7": ("GND", "GND"), "8": ("VBUS", "VBAT"),
       "9": ("IN-", "INA_INN"), "10": ("IN+", "INA_INP")}, LCSC["INA239"],
@@ -170,6 +171,7 @@ part("U8", "BQ76907RGRR", "Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm",
 two("R11", "100R 0603", "Resistor_SMD:R_0603_1608Metric", "BAL4", "BMS_BAT", LCSC["R100R_0603"],
     "U8 BAT/REGSRC supply from the balance lead top (TI 8.2: >= 50 ohm filter); 0603 for the ~0.7 mJ plug-in pulse into C9")
 two("C9", "4.7uF 50V X7R", C1206, "BMS_BAT", "GND", LCSC["4u7_50V_1206"], "U8 BAT decoupling: >= 1 uF effective at 16.8 V (TI min 1 uF); 50 V also fits 6S")
+two("C117", "100nF 50V", C0603, "BMS_BAT", "GND", LCSC["100n_50V_0603"], "U8 BAT / REGSRC local HF bypass at pins 16/17 (C9, the 4.7 uF bulk, sits ~19 mm away on the board)")
 two("C11", "4.7uF 16V", C0603, "BMS_REG", "GND", LCSC["4u7_16V_0603"], "U8 REGOUT (enabled by OTP default, TI min 1 uF effective at 3.3 V)")
 
 # power LED (SPARC: visible power indicator independent of firmware)

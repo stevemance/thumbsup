@@ -10,9 +10,8 @@ design decision changes one of these, change it here too. Tick through it on ord
 - [ ] `/usr/bin/python3 kicad/gen/layout_check.py`: DRC 0 errors, schematic parity 0, **0 unconnected items**,
       every via field OK, no pour with extra islands, section 5 (GND pads) empty.  **The script still targets the v1
       6-layer board (gate vias on all FETs, v1 pour names, 6-layer renders): update it for v2 before it can gate an order.**
-- [ ] Re-check stock and part class on jlcpcb.com for every BOM line; **reserve U1 and U2** (U1 122 in stock on
-      2026-10-01). **U7 INA239AIDGSR (C2876522) and the INA229AIDGSR alternate (C2846803) are at 0 stock (2026-10-01):
-      owner decision pending** (BOM.md).
+- [ ] Re-check stock and part class on jlcpcb.com for every BOM line; **reserve U1, U2 and U7** (U1 122 in stock on
+      2026-10-01; U7 is now INA239AQDGSRQ1 C4367136, only 7 in stock: the INA239AIDGSR / INA229AIDGSR were at 0).
 - [ ] Compute board designed to match this one: J1 is on this board's bottom, origin (52.5, 30.95) rot 90, pin 1 at
       (58.215, 32.95), pin 2 at (58.215, 28.95), odd pins along y 32.95 and even pins along y 28.95, stepping −1.27 in x
       to pins 19/20 at x 46.785 (board-local mm, top view: x from the left edge, y from the front edge, as in the stage
@@ -27,7 +26,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 ## PCB options (order form)
 | Option | Value | Why / source |
 |---|---|---|
-| Layers | **4** | layout v2 (2026-09-29, branch layout-v2) restarts on 4 layers; the 6-layer v1 is kept on branch worktree-routing. Layer jobs as built: L1 parts + power, L2 solid GND (no traces), L3 VBAT band under the bridges (y < 16) plus the main signal lanes behind it (~1050 mm of tracks on 47 nets), GND fill planned in the free L3 areas, L4 parts + signals + GND fill.  The documented contract (review/v2_lessons/README.md 3.1: L3 'GND elsewhere', no lanes under the DRV8316s) is **not met: owner decision pending** |
+| Layers | **4** | layout v2 (2026-09-29, branch layout-v2) restarts on 4 layers; the 6-layer v1 is kept on branch worktree-routing. Layer jobs as built: L1 parts + power, L2 solid GND (no traces), L3 VBAT band under the bridges (y < 16) plus the main signal lanes behind it (~1050 mm of tracks on 47 nets), GND fill in every free L3 area stitched to L2, L4 parts + signals + GND fill.  Accepted by the owner 2026-10-01 in place of the earlier contract (review/v2_lessons/README.md 3.1: L3 'GND elsewhere'); DESIGN 6.2 |
 | Stack-up | **JLC041611-1080** (1.6 mm): L1-L2 1080 prepreg 0.069 mm, L2-L3 core 1.23 mm, L3-L4 1080 prepreg 0.069 mm | thin L1-L2 keeps the weapon commutation loop at the ~4 nH estimate (PLACEMENT 3); L3 couples to L4, not L2, so L4 traces never cross a VBAT/GND boundary on L3 (solid GND under the VBAT band).  In KiCad (kicad/v2/build_board.py STACKUP4).  Confirm the name on the order form: JLC renames stack-ups |
 | Outer copper | 1 oz | 0.5 mm-pitch QFNs; the pack current rides the L1 pours + the L3 band |
 | **Inner copper** | **1 oz** (select it explicitly; JLC's 4-layer default is 0.5 oz) | the pack current rides the L3 VBAT band (DESIGN 6.2); the extra copper is two inner layers of 85 x 35 mm, ~3 g |

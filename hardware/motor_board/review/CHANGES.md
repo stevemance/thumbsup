@@ -745,3 +745,15 @@ exception), R47 / C40 swapped.  Silk (stage hS): only parts handled after assemb
 JP, TP, MH, D3, C1); the rest moved to the Fab layers.  The adversarial review of the same day is in progress; its doc
 fixes are in FAB.md, BOM.md, DESIGN.md, PLACEMENT.md and ROUTING_PLAN.md.  No firmware impact: no pin changes in this
 pass.
+
+### Rev L4, review decisions (2026-10-01, owner)
+
+- U7 INA239AIDGSR (C2876522) -> **INA239AQDGSRQ1 (C4367136)**: the original and the INA229 alternate were at 0 stock at
+  JLC.  Same DGS VSSOP-10 package and pin table (datasheet Table 5-1), same SPI register map: no footprint or firmware
+  change.  Only 7 in stock: reserve on order day.
+- **C117 100 nF 50 V 0603** added, BMS_BAT -> GND at U8.16/17 (local bypass; C9 4.7 uF stays as the bulk, ~19 mm away).
+- L3 accepted as the main signal layer (VBAT band at y < 16 + signal lanes behind it, GND fill in the free areas):
+  DESIGN 6.2 updated.
+- Power-first rework of the drive outputs / VM feeds, power entry, U2 VBAT feed and the 5 V buck (re-placed tight at
+  U2) approved; layout only, no netlist change beyond C117.
+
