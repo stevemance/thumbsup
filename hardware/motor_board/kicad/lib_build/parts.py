@@ -114,9 +114,9 @@ STOCK = {
         desc="STM32G474RET6 Arm Cortex-M4F 170 MHz, 512 KB flash, LQFP-64",
         datasheet="https://www.st.com/resource/en/datasheet/stm32g474re.pdf",
         fp="Package_QFP:LQFP-64_10x10mm_P0.5mm"),
-    "INA239AIDGSR": dict(lcsc="C2876522", src=("Sensor_Energy", "INA229"), ref="U",
-        desc="85 V, 16-bit SPI current/voltage/power monitor (INA239; pin-compatible with INA229)",
-        datasheet=DS + "ina239.pdf", fp="Package_SO:MSOP-10_3x3mm_P0.5mm"),
+    "INA239AQDGSRQ1": dict(lcsc="C4367136", src=("Sensor_Energy", "INA229"), ref="U",
+        desc="85 V, 16-bit SPI current/voltage/power monitor (INA239-Q1, AEC-Q100; same DGS pinout as INA239 / INA229)",
+        datasheet=DS + "ina239-q1.pdf", fp="Package_SO:MSOP-10_3x3mm_P0.5mm"),
     # SN74LVC08A BQA (WQFN-14) pinout (SCAS283, one pin-number column shared with PW): 1A 1, 1B 2, 1Y 3,
     # 2A 4, 2B 5, 2Y 6, GND 7, 3Y 8, 3A 9, 3B 10, 4Y 11, 4A 12, 4B 13, VCC 14, thermal pad 15 (GND or
     # floating per TI; tied to GND here).  Footprint: KiCad's BQA0014A-tagged DHWQFN (TI land 0.25 x 0.6,
@@ -192,7 +192,7 @@ STOCK = {
 # BOM comment (design/bom.csv "Comment") → library symbol, for check_lib.py
 BOM_TO_SYMBOL = {
     "STM32G474RET6": "STM32G474RET6", "DRV8323RHRGZR": "DRV8323RHRGZR", "DRV8316CRRGFR": "DRV8316CRRGFR",
-    "INA239AIDGSR": "INA239AIDGSR", "BQ76907RGRR": "BQ76907RGRR", "LM74502DDFR": "LM74502DDFR",
+    "INA239AQDGSRQ1": "INA239AQDGSRQ1", "BQ76907RGRR": "BQ76907RGRR", "LM74502DDFR": "LM74502DDFR",
     "TPS22945DCKR": "TPS22945DCKR", "SN74LVC08ABQAR": "SN74LVC08ABQAR", "74LVC1G17SE-7": "74LVC1G17SE-7",
     "SN74LVC3G17DCUR": "SN74LVC3G17DCUR", "AP2112K-3.3TRG1": "AP2112K-3.3TRG1",
     "HYG015N04LS1C2": "HYG015N04LS1C2", "BAV99": "BAV99", "BAT54S": "BAT54S", "SMBJ20A": "SMBJ20A",

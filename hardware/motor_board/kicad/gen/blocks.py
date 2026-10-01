@@ -12,7 +12,7 @@ BLOCKS = {
                                                        "C12", "C13", "C14", "C18"],
         "Bus: shunt, TVS, bulk, bleeder": ["RS4", "C1", "D1", "R15"],
         "Pack monitor (INA239)": ["U7", "R2", "R3", "C2", "C3", "R12"],
-        "Cell monitor (BQ76907)": ["U8", "J4", "D5"] + rng("R", 6, 11) + rng("C", 4, 9) + ["C11"],
+        "Cell monitor (BQ76907)": ["U8", "J4", "D5"] + rng("R", 6, 11) + rng("C", 4, 9) + ["C11", "C117"],
         "Weapon nFAULT": ["R42", "C19", "TP9"],
     },
     "weapon": {

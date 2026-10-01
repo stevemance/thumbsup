@@ -5940,7 +5940,7 @@
 		)
 		(embedded_fonts no)
 	)
-	(symbol "INA239AIDGSR"
+	(symbol "INA239AQDGSRQ1"
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
@@ -5956,7 +5956,7 @@
 				)
 			)
 		)
-		(property "Value" "INA239AIDGSR"
+		(property "Value" "INA239AQDGSRQ1"
 			(at 4.572 11.176 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5977,7 +5977,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/ina239.pdf"
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/ina239-q1.pdf"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5988,7 +5988,7 @@
 				)
 			)
 		)
-		(property "Description" "85 V, 16-bit SPI current/voltage/power monitor (INA239; pin-compatible with INA229)"
+		(property "Description" "85 V, 16-bit SPI current/voltage/power monitor (INA239-Q1, AEC-Q100; same DGS pinout as INA239 / INA229)"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6010,7 +6010,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C2876522"
+		(property "LCSC" "C4367136"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6021,7 +6021,7 @@
 				)
 			)
 		)
-		(property "MPN" "INA239AIDGSR"
+		(property "MPN" "INA239AQDGSRQ1"
 			(at 0 0 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6032,7 +6032,7 @@
 				)
 			)
 		)
-		(symbol "INA239AIDGSR_0_1"
+		(symbol "INA239AQDGSRQ1_0_1"
 			(rectangle
 				(start -7.62 10.16)
 				(end 7.62 -10.16)
@@ -6045,7 +6045,7 @@
 				)
 			)
 		)
-		(symbol "INA239AIDGSR_1_1"
+		(symbol "INA239AQDGSRQ1_1_1"
 			(pin input line
 				(at 10.16 0 180)
 				(length 2.54)

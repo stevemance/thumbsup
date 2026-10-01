@@ -326,6 +326,9 @@ for e in tail_edits.EDITS:
     elif op == "silk":                  # silk only on parts someone handles + pin-1 dots + function labels (silk.py)
         import silk
         silk.apply(b, e)
+    elif op == "sync":                  # re-link to the regenerated schematic, add new parts (schsync.py)
+        import schsync
+        schsync.apply(b, e, OX, OY)
     elif op == "drop":
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),

@@ -7,7 +7,7 @@ inside one sheet: draw them as plain wires (or local labels).
 
 ## power
 
-**Parts:** C1, C2, C3, C4, C5, C6, C7, C8, C9, C11, C12, C13, C14, C18, C19, D1, D4, D5, D10, J4, JBAT1, JBAT2, Q7, Q8, R1, R2, R3, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R32, R42, RS4, TP9, U7, U8, U13
+**Parts:** C1, C2, C3, C4, C5, C6, C7, C8, C9, C11, C117, C12, C13, C14, C18, C19, D1, D4, D5, D10, J4, JBAT1, JBAT2, Q7, Q8, R1, R2, R3, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R32, R42, RS4, TP9, U7, U8, U13
 
 **Global labels:** BMS_ALERT, BMS_SCL, BMS_SDA, INA_nCS, SPI_MISO, SPI_MOSI, SPI_SCK, VBAT, W_nFAULT
 
