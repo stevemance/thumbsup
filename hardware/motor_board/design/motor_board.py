@@ -410,12 +410,12 @@ two("C70", "1uF 25V", C0402, "+3V3", "GND", LCSC["1u_25V_0402"], "U5 out")
 
 # ============================================================== board-to-board header (to the compute board)
 part("J1", "B2B 2x10 1.27mm male", "motor_board:BOOMELE_1.27-2x10P_SMD",
-     {"1": ("+5V", "+5V"), "2": ("+5V", "+5V"), "3": ("GND", "GND"), "4": ("GND", "GND"),
-      "5": ("MB_TX", "MB_TX"), "6": ("MB_RX", "MB_RX"), "7": ("SPARE1", "NC"), "8": ("NRST", "NRST"),
-      "9": ("SWDIO", "SWDIO"), "10": ("SWCLK", "SWCLK"), "11": ("VBAT_SNS_H", "VBAT_SNS_H"), "12": ("GND", "GND"),
-      "13": ("+5V", "+5V"), "14": ("GND", "GND"), "15": ("BMS_SDA", "BMS_SDA"), "16": ("BMS_SCL", "BMS_SCL"),
-      "17": ("BMS_ALERT", "BMS_ALERT"), "18": ("SPARE2", "NC"), "19": ("W_ARM_CLK", "W_ARM_CLK"), "20": ("GND", "GND")},
-     LCSC["B2B_M"], "to the compute board: 5 V out (<=0.45 A, 3 pins), UART, weapon ARM (toggled, pin 19 next to GND), reset + SWD for programming, pack voltage, cell monitor I2C + alert (pull-ups on the compute board); 7 and 18 spare.  Footprint: vendor land (20 x 1.5x0.74 mm pads at x = +-2.5 mm, odd pins left); the compute-board socket footprint is the mirror image")
+     {"1": ("+5V", "+5V"), "2": ("+5V", "+5V"), "3": ("BMS_SDA", "BMS_SDA"), "4": ("GND", "GND"),
+      "5": ("BMS_ALERT", "BMS_ALERT"), "6": ("BMS_SCL", "BMS_SCL"), "7": ("SPARE1", "NC"), "8": ("NRST", "NRST"),
+      "9": ("SWDIO", "SWDIO"), "10": ("SWCLK", "SWCLK"), "11": ("GND", "GND"), "12": ("VBAT_SNS_H", "VBAT_SNS_H"),
+      "13": ("+5V", "+5V"), "14": ("GND", "GND"), "15": ("GND", "GND"), "16": ("SPARE2", "NC"),
+      "17": ("MB_TX", "MB_TX"), "18": ("W_ARM_CLK", "W_ARM_CLK"), "19": ("MB_RX", "MB_RX"), "20": ("GND", "GND")},
+     LCSC["B2B_M"], "to the compute board: 5 V out (<=0.45 A, 3 pins), UART, weapon ARM (toggled, pin 18 next to GND 20), reset + SWD for programming, pack voltage, cell monitor I2C + alert (pull-ups on the compute board); 7 and 16 spare (rev L4 order: UART at the MCU end, BMS at the U8 end).  Footprint: vendor land (20 x 1.5x0.74 mm pads at x = +-2.5 mm, odd pins left); the compute-board socket footprint is the mirror image")
 two("R16", "10k 1%", R0402, "NRST", "+3V3", LCSC["R10k"], "NRST pull-up: an RP2040 pin in reset (~50k pull-down) must not hold NRST mid-level")
 two("R17", "10k 1%", R0402, "MB_RX", "+3V3", LCSC["R10k"], "MB_RX pull-up (compute board absent or in reset)")
 for i, (n, net) in enumerate((("3V3", "+3V3"), ("SWDIO", "SWDIO"), ("SWCLK", "SWCLK"), ("NRST", "NRST"), ("GND", "GND"),

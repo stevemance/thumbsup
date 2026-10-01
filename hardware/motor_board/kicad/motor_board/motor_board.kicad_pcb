@@ -26475,7 +26475,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "GND")
+			(net "BMS_SDA")
 			(uuid "fd5bbf1b-0a49-482c-9463-c4b846f124a4")
 		)
 		(pad "4" smd roundrect
@@ -26491,7 +26491,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "/mcu/MB_TX")
+			(net "BMS_ALERT")
 			(uuid "031fc0c4-d390-4e9d-a5eb-0e67485bbbe7")
 		)
 		(pad "6" smd roundrect
@@ -26499,7 +26499,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "/mcu/MB_RX")
+			(net "BMS_SCL")
 			(uuid "7d581272-b1f8-4dcf-aa93-12b05cb95f22")
 		)
 		(pad "7" smd roundrect
@@ -26539,7 +26539,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "/mcu/VBAT_SNS_H")
+			(net "GND")
 			(uuid "bdca4440-7482-41cb-9d30-18bd4eb15d16")
 		)
 		(pad "12" smd roundrect
@@ -26547,7 +26547,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "GND")
+			(net "/mcu/VBAT_SNS_H")
 			(uuid "ae6decea-2e8f-4079-8d67-8ee9040e91e2")
 		)
 		(pad "13" smd roundrect
@@ -26571,7 +26571,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "BMS_SDA")
+			(net "GND")
 			(uuid "b264938b-12f2-474a-9708-dcc0d209a1c7")
 		)
 		(pad "16" smd roundrect
@@ -26579,7 +26579,6 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "BMS_SCL")
 			(uuid "9d59b953-b816-4aff-87d8-eba3efafb4f3")
 		)
 		(pad "17" smd roundrect
@@ -26587,7 +26586,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "BMS_ALERT")
+			(net "/mcu/MB_TX")
 			(uuid "4bba1547-6290-4d95-a627-46216749924b")
 		)
 		(pad "18" smd roundrect
@@ -26595,7 +26594,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "unconnected-(J1-Pin_18-Pad18)")
+			(net "W_ARM_CLK")
 			(uuid "216288d1-fba6-48bc-9138-30295f217742")
 		)
 		(pad "19" smd roundrect
@@ -26603,7 +26602,7 @@
 			(size 2.5 0.74)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.25)
-			(net "W_ARM_CLK")
+			(net "/mcu/MB_RX")
 			(uuid "196b7c27-55db-479f-b070-e6c095a3e569")
 		)
 		(pad "20" smd roundrect

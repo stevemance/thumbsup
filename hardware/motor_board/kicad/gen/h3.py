@@ -78,8 +78,20 @@ via("SWCLK", (51.9, 30.95))
 tr("SWCLK", L4, [(51.9, 30.95), (52.5, 30.5), (53.13, 30.5), (53.13, 30.2)])
 # SWDIO: L4 under R18 and along the rear edge behind J1's bottom row into pad 9
 tr("SWDIO", L4, [(43.5, 32.85), (43.9, 33.25), (43.9, 33.9), (44.55, 34.55), (53.13, 34.55), (53.13, 34.2)])
-# W_ARM_CLK: J1.19 straight west into R18.1
-tr("W_ARM_CLK", L4, [(46.41, 32.96), (45.37, 32.96)])
+# J1 rev L4 west end: 17 MB_TX, 18 W_ARM_CLK, 19 MB_RX, 20 GND (UART beside the MCU, the arm clock under C15)
+# W_ARM_CLK: J1.18's north end straight up to C15.1; its pull-down R18 moves off the bottom west of J1
+move("R18", 45.9, 24.7, 90, "B")
+tr("W_ARM_CLK", L4, [(48.06, 27.7), (47.5, 27.2), (47.0, 26.95), (46.77, 26.7)])
+# MB_RX: its rear L1 lane drops to a via west of J1, L4 into J1.19's west side
+via("MB_RX", (45.7, 33.4))
+tr("MB_RX", F1, [(46.0, 33.72), (45.7, 33.4)])
+tr("MB_RX", L4, [(45.7, 33.4), (46.0, 32.95), (46.78, 32.95)])
+# MB_TX: its rear L1 lane runs on over J1's bottom row to a via in J1.17 (POFV); TP2 moves out of the way
+move("TP2", 44.9, 31.4, 0, "F")
+tr("MB_TX", F1, [(46.0, 34.0), (48.06, 34.0)])
+via("MB_TX", (48.06, 34.0), POFV, "POFV J1.17")
+# VBAT_SNS_H: J1.12's north end to R33.2
+tr("VBAT_SNS_H", L4, [(51.87, 27.7), (51.15, 27.0), (50.61, 26.7)])
 
 # ---------------------------------------------------------------- U2 rear gate pins
 # INL 38 / 40 / 42: L1 stubs south into vias in U6's output pads 3 / 6 / 8
