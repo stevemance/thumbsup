@@ -328,6 +328,20 @@ for net in nets:
 for p in PIN:
     m.AddAtMostOne(v for (n, pp, t), v in opts.items() if pp == p)
 
+# --move: re-solve around the committed map (design/motor_board.py MCU_PINS): every pin change costs MOVE_PEN, so
+# only changes that buy real routing get made; nets whose copper is already laid (bridge/drive pre-routes) cost more
+CUR, MOVE_PEN = None, {}
+if "--move" in sys.argv:
+    _src = (MB / "design" / "motor_board.py").read_text()
+    _src = _src[_src.index("MCU_PINS = {"):]
+    _src = _src[:_src.index("\n}") + 2]
+    CUR = {net: pin for pin, port, net in re.findall(r'"(\d+)": \("([^"]+)", "([^"]+)"', _src)}
+    MOVE_PEN = {"*": float(sys.argv[sys.argv.index("--move") + 1])}
+    for n in CUR:
+        if n[:2] in ("L_", "R_") and ("INH" in n or "SO" in n or "nFAULT" in n or "nCS" in n) or n.startswith("SPI_") \
+                or n == "DRV_OFF":
+            MOVE_PEN[n] = 200.0          # drive stage copper (r2_drive) lands on these pins
+
 # objective (+ prefer drive nFAULT on its BKIN)
 terms = []
 for (n, p, t), v in opts.items():
@@ -336,6 +350,8 @@ for (n, p, t), v in opts.items():
         c += 6.0
     if n in ("W_VA", "W_VB", "W_VC", "VBAT_SNS") and IO.get(pname(p), "TT").startswith("TT"):
         c += 15.0                    # TVS-level spikes: prefer a 5 V-tolerant analog pin (DESIGN 7.4)
+    if CUR and CUR.get(n) not in (None, p):
+        c += MOVE_PEN.get(n, MOVE_PEN["*"])
     terms.append(int(round(c * 10)) * v)
 # general-purpose timer on a drive: firmware change (no BKIN, not TIM8/TIM20), penalised
 for (d, tt), v in dt.items():

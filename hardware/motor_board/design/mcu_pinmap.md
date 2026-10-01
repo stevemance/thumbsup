@@ -27,13 +27,13 @@ Every alternate function below was checked against ST's pin database (`../ref/ST
 | 21 | PA7 | W_INLC_M | TIM1_CH1N |
 | 22 | PC4 | W_VA | ADC2_IN5 |
 | 23 | PC5 | INA_nCS | GPIO / analog |
-| 24 | PB0 | L_S3 | TIM3_CH3 |
+| 24 | PB0 | R_S3 | TIM3_CH3 |
 | 25 | PB1 | R_SOA_F | ADC3_IN1 |
 | 26 | PB2 | R_INHC | TIM20_CH1 |
 | 27 | VSSA | GND | power |
 | 28 | VREF+ | +3V3A | power |
 | 29 | VDDA | +3V3A | power |
-| 30 | PB10 | R_S3 | TIM2_CH3 |
+| 30 | PB10 | L_S3 | TIM2_CH3 |
 | 31 | VSS | GND | power |
 | 32 | VDD | +3V3 | power |
 | 33 | PB11 | R_nCS | GPIO / analog |
@@ -54,14 +54,14 @@ Every alternate function below was checked against ST's pin database (`../ref/ST
 | 48 | VDD | +3V3 | power |
 | 49 | PA13 | SWDIO | SYS_JTMS-SWDIO |
 | 50 | PA14 | SWCLK | SYS_JTCK-SWCLK |
-| 51 | PA15 | R_S1 | TIM2_CH1 |
+| 51 | PA15 | L_S1 | TIM2_CH1 |
 | 52 | PC10 | SPI_SCK | SPI3_SCK |
 | 53 | PC11 | SPI_MISO | SPI3_MISO |
 | 54 | PC12 | SPI_MOSI | SPI3_MOSI |
 | 55 | PD2 | L_nFAULT | TIM8_BKIN |
-| 56 | PB3 | R_S2 | TIM2_CH2 |
-| 57 | PB4 | L_S2 | TIM3_CH1 |
-| 58 | PB5 | L_S1 | TIM3_CH2 |
+| 56 | PB3 | L_S2 | TIM2_CH2 |
+| 57 | PB4 | R_S1 | TIM3_CH1 |
+| 58 | PB5 | R_S2 | TIM3_CH2 |
 | 59 | PB6 | MB_TX | USART1_TX |
 | 60 | PB7 | MB_RX | USART1_RX |
 | 61 | PB8-BOOT0 | L_nCS | GPIO / analog |

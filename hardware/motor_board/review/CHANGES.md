@@ -702,3 +702,26 @@ Electrical re-checks (DS12288 Tables 12, 14, 15, 17):
   ≤ 3.465 V sources, as before.  Sensor inputs unchanged (PB0/PB10 TT_a behind the 3.3 V buffers).
 * **Layout (§6.8):** W_INLA_M (PB15, 24 kHz) sits next to L_SOA (PB14, drive L CSA) and W_INLC_M (PA7) next to W_VA
   (PC4): route them apart.
+
+## Rev L4 (2026-10-01): sensor timers swapped (routing)
+
+The two encoder/Hall timers changed sides: left sensors now on TIM2, right on TIM3.  In rev L3 the left lines
+(L_S1/L_S2) sat east of the right ones (R_S1/R_S2) on the MCU's rear row, so the two sides' lines crossed behind the
+MCU, and L_S3 sat on a front pin the left-rear connector cannot reach past the drive lanes.  Now each side's pins face
+its own connector, and A/B land on CH1/CH2 on both sides (the rev L1 left-side channel inversion is gone).  Alternate
+functions re-checked by design/motor_board.py against ST's pin database; no part added or removed.
+
+| Net | Rev L3 (pin, function) | Rev L4 (pin, function) |
+|---|---|---|
+| L_S1 | 58 PB5 TIM3_CH2 | 51 PA15 TIM2_CH1 |
+| L_S2 | 57 PB4 TIM3_CH1 | 56 PB3 TIM2_CH2 |
+| L_S3 | 24 PB0 TIM3_CH3 | 30 PB10 TIM2_CH3 |
+| R_S1 | 51 PA15 TIM2_CH1 | 57 PB4 TIM3_CH1 |
+| R_S2 | 56 PB3 TIM2_CH2 | 58 PB5 TIM3_CH2 |
+| R_S3 | 30 PB10 TIM2_CH3 | 24 PB0 TIM3_CH3 |
+
+Firmware: left encoder on TIM2 (32-bit), right on TIM3 (16-bit, extended to 32 bits in software); both sides A → CH1,
+B → CH2, so the left count-sign inversion constant from rev L1 is dropped (the per-drive alignment / velocity sign
+constants stay: the motors face opposite ways).  PB4 (UCPD dead-battery pull-down until it is disabled at boot) now
+carries R_S1 instead of L_S2: same rule, a buffered encoder input.  PA15 (JTAG pull-up) carries L_S1: an input, fine.
+DESIGN.md §3 sensors, the boot-order note and the firmware table (Timer inputs) updated.
