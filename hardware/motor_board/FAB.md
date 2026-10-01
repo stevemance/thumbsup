@@ -38,7 +38,7 @@ design decision changes one of these, change it here too. Tick through it on ord
 | Hole to copper | via hole 0.20 mm; PTH hole 0.30 mm (JLC 4-layer: via 0.2, PTH 0.28, 0.35 recommended); pad hole-to-hole 0.45 | motor_board.kicad_dru |
 | Min via | 0.4 mm pad / 0.2 mm drill (Default); 0.45 / 0.25 sense and rails; 0.5 / 0.25 gate; 0.6 / 0.3 power (JLC 4-layer min 0.25 / 0.15).  The board has 201 vias of 0.40/0.20, in JLC's surcharged small-via class (cost only); vias outside pads may grow to 0.45/0.20 where clearance allows | motor_board.kicad_pro |
 | Impedance control | no | nothing on the board needs it (layout step 0) |
-| Mask / silk | any colour; silk on both sides | silk only on parts handled after assembly (connectors, wire holes, JP, TP, MH, D3, C1) plus wire/polarity labels and pin-1 / cathode marks (stage kicad/gen/hS.py) |
+| Mask / silk | any colour; silk on both sides | silk only on parts handled after assembly (connectors, wire holes, JP, TP, MH, D3, C1), 0.15 mm lines / 1.0 mm text; wire names on the bottom (WA-WC, LA-LC, RA-RC), BAT+ / BAT- both sides, J4 B- / B4+, J2 / J3 VS / T, JP1 3V3 / 5V; a pin-1 / cathode dot on every IC, diode and FET (JLC checks polarity against the silk).  Not placed (no clear spot): JP2's 3V3 / 5V labels and reference, TP7 / TP12 references (stage kicad/gen/hS.py, silk.py) |
 | Order number | **remove** (no marker on the board) | cosmetic |
 
 ## Assembly options (PCBA)

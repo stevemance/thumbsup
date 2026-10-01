@@ -323,15 +323,9 @@ for e in tail_edits.EDITS:
         x.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); x.SetNet(pd.GetNet())
         b.Add(x)
         anchor(x)
-    elif op == "silk":                  # silk only on parts someone handles: every other part's silk graphics go to its
-        keep = re.compile(e["keep"])    # Fab layer (kept in the drawings, not printed) and its reference is hidden
-        for f in b.GetFootprints():
-            if keep.fullmatch(f.GetReference()):
-                continue
-            f.Reference().SetVisible(False)
-            for g in f.GraphicalItems():
-                if g.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS):
-                    g.SetLayer(pcbnew.F_Fab if g.GetLayer() == pcbnew.F_SilkS else pcbnew.B_Fab)
+    elif op == "silk":                  # silk only on parts someone handles + pin-1 dots + function labels (silk.py)
+        import silk
+        silk.apply(b, e)
     elif op == "drop":
         reqs.append(dict(tag=f"drop {e['pad'][0]}.{e['pad'][1]}", net=e["net"], a=("pad",) + tuple(e["pad"]),
                          b=("drop",), layers=e.get("layers", ["F.Cu", "B.Cu"]), w=e.get("w", 0.3),
