@@ -787,3 +787,5 @@ Layout only: no netlist or pin change after C117, so no firmware impact.
   2 mm of their part (TP5 / TP7 / TP12, JP1, JP2, J3, D3 references hidden: no clear spot).
 - D8 / U5 within 0.3 mm of the rear edge accepted (no legal spot; tabs on the left / right edges only).
 - Rules: PTH annular ring >= 0.15 mm (JLC); fab.py exports Gerbers in absolute coordinates like the drill and CPL.
+- L2 GND plane: zone clearance 0.15 / min width 0.15 (was 0.2 / 0.25) so the 1.0 mm-pitch via rows keep plane webs between
+  their antipads (+52 mm2 of L2 copper; review pours-3 / power-2).

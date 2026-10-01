@@ -43,7 +43,8 @@ def Z(name, net, layer, prio, poly, **o):
 
 
 FULLB = [(0, 0), (W, 0), (W, H), (0, H)]
-Z("L2 GND plane", "GND", "In1.Cu", 0, FULLB, spoke=1.5)
+# L2: 0.15 clearance + 0.15 min width so 1.0 mm-pitch via rows keep plane webs between antipads (review pours-3 / power-2)
+Z("L2 GND plane", "GND", "In1.Cu", 0, FULLB, spoke=1.5, clr=0.15, min_w=0.15)
 Z("L1 GND fill", "GND", "F.Cu", 1, FULLB, spoke=1.5)
 Z("L3 GND fill", "GND", "In2.Cu", 1, FULLB, spoke=1.5)
 Z("L4 GND fill", "GND", "B.Cu", 1, FULLB, spoke=1.5)
