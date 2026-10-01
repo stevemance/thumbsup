@@ -66,6 +66,21 @@ move("R40", 55.8, 27.6, 90, "F")
 move("TP7", 57.6, 28.4, 0, "F")
 tr("W_EN", F1, [(43.67, 29.0), (56.6, 29.0), (56.6, 25.6), (56.95, 25.25), (60.06, 25.25)])
 
+# ---------------------------------------------------------------- J1's MCU nets
+# SWCLK: its L4 lane from the MCU climbs to L3 beside C63, runs east under J1 (y 31.0) to a via in J1's row gap that is
+# also TP3's pad (TP3 moved there), and into pad 10 from the gap
+tr("SWCLK", L4, [(43.5, 32.57), (44.0, 32.57), (44.2, 32.37), (44.2, 32.3)])
+via("SWCLK", (44.2, 32.3))
+tr("SWCLK", L3, [(44.2, 32.3), (44.6, 31.9), (44.6, 31.0), (51.9, 31.0)])
+move("TP3", 51.9, 30.95, 0, "F")
+move("C69", 53.8, 30.95, 0, "F")         # 0.3 mm east, clear of TP3
+via("SWCLK", (51.9, 30.95))
+tr("SWCLK", L4, [(51.9, 30.95), (52.5, 30.5), (53.13, 30.5), (53.13, 30.2)])
+# SWDIO: L4 under R18 and along the rear edge behind J1's bottom row into pad 9
+tr("SWDIO", L4, [(43.5, 32.85), (43.9, 33.25), (43.9, 33.9), (44.55, 34.55), (53.13, 34.55), (53.13, 34.2)])
+# W_ARM_CLK: J1.19 straight west into R18.1
+tr("W_ARM_CLK", L4, [(46.41, 32.96), (45.37, 32.96)])
+
 # ---------------------------------------------------------------- U2 rear gate pins
 # INL 38 / 40 / 42: L1 stubs south into vias in U6's output pads 3 / 6 / 8
 tr("W_INLA", F1, [(61.25, 27.7), (61.25, 28.9)])
