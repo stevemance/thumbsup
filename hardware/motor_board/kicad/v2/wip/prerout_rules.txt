@@ -1,0 +1,220 @@
+682 new track segments, 37 new vias
+new vias closer than 1.3 mm to another via: 18
+    GND(55.25, 24.4) - W_INLC(55.85, 24.2): 0.63
+    GND(55.25, 24.4) - W_ARM(54.0, 24.3): 1.25
+    W_ARM_S(44.7, 28.55) - W_INLB_M(45.2, 29.4): 0.99
+    W_ARM_S(58.5, 25.85) - W_INLB_M(57.5, 25.95): 1.00
+    W_ARM_S(58.5, 25.85) - W_ARM(59.25, 25.85): 0.75
+    W_ARM_S(57.0, 25.6) - W_INLB_M(57.5, 25.95): 0.61
+    W_INHC(62.75, 28.25) - W_INHB(61.75, 28.25): 1.00
+    W_INHC(62.75, 28.25) - W_INLB(62.25, 28.75): 0.71
+    W_INHC(62.75, 28.25) - W_INLC(63.45, 28.18): 0.70
+    W_INHC(46.85, 25.55) - W_INHB(46.25, 25.55): 0.60
+    W_INHB(61.75, 28.25) - W_INHA(60.75, 28.25): 1.00
+    W_INHB(61.75, 28.25) - W_INLA(61.25, 28.85): 0.78
+    W_INHB(61.75, 28.25) - W_INLB(62.25, 28.75): 0.71
+    W_SOA(50.1, 22.4) - W_INLA_M(49.6, 23.55): 1.25
+    W_INLA_M(36.75, 25.6) - R_SOC_F(37.25, 25.35): 0.56
+    W_INHA(36.7, 28.15) - W_INLB_M(36.8, 29.4): 1.25
+    W_INHA(60.75, 28.25) - W_INLA(61.25, 28.85): 0.78
+    W_INLA(61.25, 28.85) - W_INLB(62.25, 28.75): 1.00
+759 new track segments, 47 new vias
+  RULE analog on L4 W_VA [39.25, 20.6]->[39.25, 21.85]
+  RULE analog on L4 R_MTEMP [76.1, 34.3]->[76.6, 33.8]
+  RULE analog on L4 R_MTEMP [76.6, 33.8]->[76.6, 33.4]
+  RULE analog on L4 R_MTEMP [61.85, 31.05]->[61.85, 29.65]
+  RULE analog on L4 R_MTEMP [61.85, 29.65]->[62.2, 29.65]
+  RULE analog on L4 R_MTEMP [61.25, 32.4]->[61.85, 31.8]
+  RULE analog on L4 R_MTEMP [62.3, 31.5]->[61.85, 31.05]
+  RULE analog on L4 R_MTEMP [61.85, 31.8]->[62.3, 31.6]
+  RULE analog on L4 L_MTEMP [42.45, 27.5]->[41.5, 27.5]
+  RULE analog on L4 W_VC [43.71, 25.0]->[44.6, 25.0]
+  RULE analog on L4 VBAT_SNS [44.4, 23.5]->[44.65, 23.75]
+  RULE analog on L4 VBAT_SNS [41.75, 23.5]->[41.7, 23.52]
+  RULE analog on L4 VBAT_SNS [41.95, 23.5]->[41.75, 23.5]
+  RULE analog on L4 VBAT_SNS [43.65, 23.5]->[43.55, 23.4]
+  RULE analog on L4 VBAT_SNS [43.1, 23.15]->[42.3, 23.15]
+  RULE analog on L4 VBAT_SNS [43.3, 23.35]->[43.1, 23.15]
+  RULE analog on L4 VBAT_SNS [43.45, 23.4]->[43.4, 23.35]
+  RULE analog on L4 VBAT_SNS [43.4, 23.35]->[43.3, 23.35]
+  RULE analog on L4 VBAT_SNS [43.55, 23.4]->[43.45, 23.4]
+  RULE analog on L4 VBAT_SNS [43.71, 23.5]->[43.65, 23.5]
+  RULE analog on L4 VBAT_SNS [44.65, 23.75]->[44.69, 23.75]
+  RULE analog on L4 VBAT_SNS [42.3, 23.15]->[41.95, 23.5]
+  RULE analog on L4 VBAT_SNS [43.71, 23.5]->[44.4, 23.5]
+  RULE analog on L4 W_NTC [41.75, 21.85]->[41.3, 21.85]
+  RULE analog on L4 W_NTC [41.75, 19.95]->[42.6, 19.95]
+  RULE analog on L4 W_NTC [41.25, 19.95]->[41.75, 19.95]
+  RULE analog on L4 W_NTC [41.75, 19.95]->[41.75, 21.85]
+  RULE analog on L4 W_NTC [42.6, 19.95]->[43.1, 20.45]
+  RULE analog on L4 W_VB [41.2, 20.6]->[41.24, 20.6]
+  RULE analog on L4 W_VB [40.75, 19.5]->[40.75, 20.1]
+  RULE analog on L4 W_VB [40.85, 20.25]->[41.2, 20.6]
+  RULE analog on L4 W_VB [40.85, 20.2]->[40.85, 20.25]
+  RULE analog on L4 W_VB [40.75, 20.1]->[40.85, 20.2]
+  RULE analog on L4 R_TEMPJ [79.4, 32.9]->[78.7, 32.9]
+  RULE analog on L4 L_TEMPJ [29.3, 33.62]->[29.6, 33.4]
+  RULE ANALOG-shadow L3 L_nFAULT / L4 L_TEMPJ: 0.1 mm near (27.0, 33.2)
+  RULE ANALOG-shadow L3 W_INLA_M / L4 W_VC: 0.4 mm near (45.2, 24.5)
+new vias closer than 1.3 mm to another via: 29
+    W_VA(46.5, 20.75) - W_VB(46.5, 21.65): 0.90
+    R_MTEMP(71.5, 34.3) - R_H3B(71.6, 33.7): 0.61
+    R_MTEMP(40.7, 30.8) - L_S2(40.5, 29.85): 0.97
+    R_MTEMP(40.7, 30.8) - L_nCS(40.0, 30.1): 0.99
+    R_MTEMP(40.7, 30.8) - R_H1B(41.2, 29.85): 1.07
+    W_VC(46.85, 23.35) - W_SOC(46.45, 22.4): 1.03
+    W_NTC(41.25, 19.95) - W_VB(40.75, 19.5): 0.67
+    W_VB(46.5, 21.65) - W_SOC(46.45, 22.4): 0.75
+    R_S3(36.95, 23.45) - R_INHC(38.0, 22.75): 1.26
+    R_S3(36.95, 23.45) - R_SOB_F(36.5, 23.1): 0.57
+    R_S3(35.25, 29.85) - R_S1(35.25, 31.06): 1.21
+    R_S3(35.25, 29.85) - R_H2B(35.8, 29.85): 0.55
+    R_S2(36.9, 30.2) - W_INLB_M(36.8, 29.4): 0.81
+    R_S2(36.9, 30.2) - R_H2B(35.8, 29.85): 1.15
+    L_S2(40.5, 29.85) - L_nCS(40.0, 30.1): 0.56
+    L_S2(40.5, 29.85) - R_H1B(41.2, 29.85): 0.70
+    L_S1(39.9, 33.4) - L_INHC(40.5, 33.3): 0.61
+    R_VSRC(77.85, 26.5) - R_VS(77.9, 27.1): 0.60
+    L_VSRC(10.3, 30.6) - L_INHB(10.9, 30.2): 0.72
+    L_VSRC(10.3, 30.6) - L_INHC(10.9, 31.55): 1.12
+    L_VSRC(10.3, 30.6) - L_H1(10.35, 31.85): 1.25
+    L_H1(10.35, 31.85) - L_INHA(9.3, 31.7): 1.06
+    L_H1(10.35, 31.85) - L_INHC(10.9, 31.55): 0.63
+    L_H3(13.05, 26.95) - +3V3(12.25, 27.4): 0.92
+    L_H3(13.05, 26.95) - L_AVDD(14.1, 27.35): 1.12
+    L_H3B(15.15, 28.35) - +3V3(15.15, 28.95): 0.60
+    R_H1B(41.2, 29.85) - L_nCS(40.0, 30.1): 1.23
+    R_H1B(35.1, 26.95) - L_SOB_F(34.55, 26.8): 0.57
+    R_H2B(35.8, 29.85) - W_INLB_M(36.8, 29.4): 1.10
+1140 new track segments, 70 new vias
+  RULE analog on L4 CELL0 [46.75, 29.5]->[46.1, 29.5]
+  RULE analog on L4 CELL0 [46.1, 29.5]->[46.05, 29.525]
+  RULE analog on L4 CELL0 [48.25, 25.85]->[48.1, 26.0]
+  RULE analog on L4 CELL0 [49.45, 27.6]->[48.775, 27.6]
+  RULE analog on L4 CELL0 [48.775, 25.85]->[48.25, 25.85]
+  RULE analog on L4 BAL0 [46.05, 31.175]->[46.1, 31.2]
+  RULE analog on L4 BAL0 [46.1, 31.2]->[46.55, 31.2]
+  RULE analog on L4 BAL0 [46.55, 31.2]->[46.75, 31.4]
+  RULE analog on L4 BAL1 [51.8, 27.9]->[51.8, 31.075]
+  RULE analog on L4 BAL1 [51.79, 27.85]->[51.8, 27.9]
+  RULE analog on L4 BAL2 [54.3, 27.9]->[54.15, 28.05]
+  RULE analog on L4 BAL2 [54.15, 28.05]->[54.15, 28.2]
+  RULE analog on L4 BAL2 [54.15, 28.2]->[54.2, 28.25]
+  RULE analog on L4 BAL2 [54.25, 31.0]->[54.3, 31.05]
+  RULE analog on L4 BAL2 [54.2, 28.25]->[54.2, 30.2]
+  RULE analog on L4 BAL2 [54.25, 30.25]->[54.25, 31.0]
+  RULE analog on L4 BAL2 [54.2, 30.2]->[54.25, 30.25]
+  RULE analog on L4 BAL2 [54.3, 31.05]->[54.3, 31.075]
+  RULE analog on L4 BAL2 [54.29, 27.85]->[54.3, 27.9]
+  RULE analog on L4 BAL3 [56.79, 27.85]->[56.8, 27.9]
+  RULE analog on L4 BAL3 [57.3, 28.95]->[57.35, 28.95]
+  RULE analog on L4 BAL3 [56.8, 28.45]->[57.3, 28.95]
+  RULE analog on L4 BAL3 [56.8, 27.9]->[56.8, 28.45]
+  RULE analog on L4 BAL4 [68.0, 32.5]->[68.85, 32.5]
+  RULE analog on L4 BAL4 [67.85, 31.6]->[67.9, 31.65]
+  RULE analog on L4 BAL4 [67.9, 31.65]->[67.95, 31.65]
+  RULE analog on L4 BAL4 [67.95, 32.45]->[68.0, 32.5]
+  RULE analog on L4 BAL4 [65.7, 29.85]->[65.85, 29.85]
+  RULE analog on L4 BAL4 [66.3, 30.3]->[66.4, 30.3]
+  RULE analog on L4 BAL4 [67.95, 31.65]->[67.95, 32.45]
+  RULE analog on L4 BAL4 [68.85, 32.5]->[68.9, 32.45]
+  RULE analog on L4 BAL4 [67.75, 31.6]->[67.85, 31.6]
+  RULE analog on L4 BAL4 [68.9, 32.45]->[69.025, 32.45]
+  RULE analog on L4 BAL4 [65.85, 29.85]->[66.3, 30.3]
+  RULE analog on L4 BAL4 [59.3, 27.86]->[59.3, 31.075]
+  RULE analog on L4 BAL4 [66.9, 30.8]->[66.95, 30.8]
+  RULE analog on L4 BAL4 [66.95, 30.8]->[67.75, 31.6]
+  RULE analog on L4 BAL4 [66.4, 30.3]->[66.9, 30.8]
+  RULE analog on L4 VBAT_SNS_H [74.4, 26.15]->[74.6, 25.9]
+  RULE analog on L4 VBAT_SNS_H [73.95, 26.6]->[74.4, 26.15]
+  RULE analog on L4 VBAT_SNS_H [74.2, 29.1]->[73.95, 28.85]
+  RULE analog on L4 VBAT_SNS_H [74.3, 29.0]->[73.95, 28.65]
+  RULE analog on L4 VBAT_SNS_H [74.4, 29.24]->[74.4, 29.2]
+  RULE analog on L4 VBAT_SNS_H [74.05, 25.6]->[74.6, 25.05]
+  RULE analog on L4 VBAT_SNS_H [74.4, 29.2]->[74.3, 29.1]
+  RULE analog on L4 VBAT_SNS_H [73.95, 26.5]->[74.05, 26.4]
+  RULE analog on L4 VBAT_SNS_H [73.95, 28.65]->[73.95, 26.5]
+  RULE analog on L4 VBAT_SNS_H [73.95, 28.85]->[73.95, 26.6]
+  RULE analog on L4 VBAT_SNS_H [74.3, 29.1]->[74.3, 29.0]
+  RULE analog on L4 VBAT_SNS_H [74.05, 26.4]->[74.05, 25.6]
+  RULE analog on L4 VBAT_SNS_H [74.6, 25.05]->[74.665, 25.0]
+  RULE analog on L4 CELL1 [67.9, 28.95]->[67.9, 28.55]
+  RULE analog on L4 CELL1 [67.9125, 29.0]->[67.9, 28.95]
+  RULE analog on L4 CELL1 [67.9, 28.55]->[67.9125, 28.5]
+  RULE analog on L4 CELL3 [69.1, 30.6875]->[69.05, 30.7]
+  RULE analog on L4 CELL3 [68.65, 30.7]->[68.6, 30.6875]
+  RULE analog on L4 CELL3 [69.05, 30.7]->[68.65, 30.7]
+  RULE ANALOG-shadow L3 INA_nCS / L4 R_SOB: 0.4 mm near (27.4, 20.2)
+  RULE ANALOG-shadow L3 INA_nCS / L4 R_SOC: 0.4 mm near (27.4, 20.2)
+  RULE ANALOG-shadow L3 R_H1B / L4 BAL4: 0.41 mm near (68.6, 32.2)
+  RULE ANALOG-shadow L3 R_H2B / L4 BAL4: 0.4 mm near (68.5, 31.9)
+  RULE ANALOG-shadow L3 W_ARM_S / L4 BAL1: 0.4 mm near (44.9, 28.4)
+  RULE ANALOG-shadow L3 W_INHA / L4 BAL2: 0.41 mm near (54.7, 28.2)
+  RULE ANALOG-shadow L3 W_INHA / L4 BAL2: 0.46 mm near (54.7, 28.2)
+  RULE ANALOG-shadow L3 W_INHA / L4 BAL3: 0.4 mm near (60.8, 28.2)
+  RULE ANALOG-shadow L3 W_INHA / L4 BAL4: 0.4 mm near (60.8, 28.2)
+  RULE ANALOG-shadow L3 W_INHB / L4 BAL3: 0.3 mm near (61.8, 27.8)
+  RULE ANALOG-shadow L3 W_INHB / L4 BAL3: 0.4 mm near (61.8, 27.8)
+  RULE ANALOG-shadow L3 W_INHB / L4 BAL4: 0.4 mm near (61.8, 27.8)
+  RULE ANALOG-shadow L3 W_INLA / L4 BAL4: 0.4 mm near (58.5, 28.9)
+  RULE ANALOG-shadow L3 W_INLB / L4 BAL4: 0.4 mm near (55.8, 29.4)
+  RULE stacked L3 L_INHB / L4 +3V3: 1.51 mm near (11.2, 29.7)
+  RULE stacked L3 R_H1B / L4 GND: 1.26 mm near (44.5, 33.2)
+  RULE stacked L3 W_ARM_S / L4 GND: 1.03 mm near (54.8, 23.5)
+new vias closer than 1.3 mm to another via: 56
+    CELL0(45.35, 30.0) - +3V3(45.0, 30.75): 0.83
+    CELL0(45.35, 30.0) - W_INLB_M(45.2, 29.4): 0.62
+    CELL0(42.15, 29.85) - R_H1B(41.2, 29.85): 0.95
+    CELL0(48.1, 26.0) - GND(47.35, 25.85): 0.76
+    CELL0(48.1, 26.0) - +3V3(48.25, 24.8): 1.21
+    GND(41.4, 25.65) - R_INHB(42.4, 25.9): 1.03
+    GND(40.1, 18.75) - W_VB(40.75, 19.5): 0.99
+    GND(36.35, 30.0) - R_S3(35.25, 29.85): 1.11
+    GND(36.35, 30.0) - W_INLB_M(36.8, 29.4): 0.75
+    GND(36.35, 30.0) - R_S2(36.9, 30.2): 0.59
+    GND(36.35, 30.0) - R_H2B(35.8, 29.85): 0.57
+    GND(71.15, 31.6) - GND(71.9, 31.55): 0.75
+    GND(71.15, 31.6) - R_H2B(71.6, 30.8): 0.92
+    GND(32.95, 19.65) - INA_nCS(33.4, 20.3): 0.79
+    GND(47.35, 25.85) - W_INHC(46.85, 25.55): 0.58
+    GND(47.35, 25.85) - W_INHB(46.25, 25.55): 1.14
+    GND(46.25, 24.9) - W_INHC(46.85, 25.55): 0.88
+    GND(46.25, 24.9) - W_INHB(46.25, 25.55): 0.65
+    GND(6.6, 18.15) - L_CPL(7.375, 18.7): 0.95
+    GND(52.75, 24.6) - +5V(52.7, 23.95): 0.65
+    GND(52.75, 24.6) - W_ARM(54.0, 24.3): 1.29
+    GND(36.15, 26.25) - GND(36.1, 26.9): 0.65
+    GND(36.15, 26.25) - W_INLA_M(36.75, 25.6): 0.88
+    GND(36.15, 26.25) - R_H1B(35.1, 26.95): 1.26
+    GND(67.6, 27.45) - BUCK_EN(66.6, 27.65): 1.02
+    GND(76.25, 27.9) - R_VS(76.1, 26.65): 1.26
+    GND(57.9, 28.75) - BAL3(57.35, 28.95): 0.59
+    GND(57.9, 28.75) - W_INLA(58.53, 28.9): 0.65
+    GND(60.7, 31.9) - R_MTEMP(61.25, 32.4): 0.74
+    GND(13.4, 31.8) - L_S2(13.22, 30.6): 1.21
+    GND(13.4, 31.8) - L_H3(12.4, 32.5): 1.22
+    GND(36.1, 26.9) - R_H1B(35.1, 26.95): 1.00
+    GND(80.1, 28.25) - R_H3(81.05, 28.8): 1.10
+    GND(42.9, 32.25) - +3V3(43.4, 31.3): 1.07
+    GND(42.9, 32.25) - +3V3(42.35, 31.9): 0.65
+    GND(71.9, 31.55) - R_H2B(71.6, 30.8): 0.81
+    GND(54.05, 25.65) - W_ARM_S(55.2, 25.9): 1.18
+    GND(11.05, 19.35) - GND(9.775, 19.525): 1.29
+    GND(11.05, 19.35) - L_SWBK(10.6, 18.95): 0.60
+    GND(66.65, 32.75) - GND(67.5, 32.8): 0.85
+    GND(27.55, 22.0) - +3V3(26.95, 21.75): 0.65
+    GND(27.55, 22.0) - R_SOB(28.0, 21.49): 0.68
+    +5V(72.85, 23.55) - NRST(72.7, 22.55): 1.01
+    +3V3(45.6, 22.35) - W_SOC(46.45, 22.4): 0.85
+    +3V3(45.6, 22.35) - W_VB(46.5, 21.65): 1.14
+    +3V3(43.4, 31.3) - +3V3(42.35, 31.9): 1.21
+    +3V3(8.4, 31.6) - L_INHA(9.3, 31.7): 0.91
+    +3V3(8.4, 31.6) - L_H3B(7.65, 31.6): 0.75
+    +3V3(26.2, 28.95) - L_SOC(27.3, 28.6): 1.15
+    NRST(39.3, 22.6) - W_INLC_M(40.0, 22.85): 0.74
+    NRST(39.3, 22.6) - R_SOA_F(38.45, 21.75): 1.20
+    NRST(39.3, 22.6) - +3V3A(38.6, 22.65): 0.70
+    +3V3A(38.6, 22.65) - R_SOA_F(38.45, 21.75): 0.91
+    +3V3A(38.6, 22.65) - R_INHC(38.0, 22.75): 0.61
+    SWCLK(81.6, 18.55) - MB_RX(81.65, 19.45): 0.90
+    BAL3(57.35, 28.95) - W_INLA(58.53, 28.9): 1.18

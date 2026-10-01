@@ -107,7 +107,7 @@ def route(passes):
            "--router.optimizer.enabled=false"]
     print(" ".join(cmd), flush=True)
     with open(FR / "fr.log", "w") as f:
-        subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, text=True, timeout=7200)
+        subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, text=True, timeout=14000)
     print("\n".join((FR / "fr.log").read_text().splitlines()[-15:]))
 
 

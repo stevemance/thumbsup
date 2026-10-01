@@ -106,9 +106,22 @@ for p in G["pads"]:
     if p["tht"] and p["drill"]:
         draw_disc(novia, p["c"], p["drill"] / 2 + 0.25, True)            # hole-to-hole
 PADS_ONLY = {l: owner[l].copy() for l in RL}      # (for probes that ignore existing tracks: pads here, vias below)
+# analog shadow (request key "analog_nets", on any request): on the L3 / L4 pair (In2.Cu / B.Cu) a track of an analog
+# net and another net's track may not overlap (the other layer stays free above / below the analog run: GND fill)
+SHADOW = ("In2.Cu", "B.Cu")
+TRK = {l: np.full((NY, NX), -1, np.int32) for l in SHADOW}
+ANALOG = np.array(sorted({NID[n] for q in REQ for n in q.get("analog_nets", []) if n in NID}), np.int32)
+
+
+def paint_track(layer, a, b_, hw, n):
+    draw_capsule(owner[layer], a, b_, hw, n)
+    if layer in TRK:
+        draw_capsule(TRK[layer], a, b_, hw, n)
+
+
 for t_ in G["tracks"]:
     if t_["layer"] in RL:
-        draw_capsule(owner[t_["layer"]], t_["a"], t_["b"], t_["w"] / 2, NID[t_["net"]])
+        paint_track(t_["layer"], t_["a"], t_["b"], t_["w"] / 2, NID[t_["net"]])
 VIAS_OF = {}                     # net id -> [(x, y)]: existing vias are free layer changes for their own net
 
 
@@ -181,6 +194,8 @@ def route(req):
     pad = 12                                                           # EDT guard band (cells)
     gi0, gi1, gj0, gj1 = max(0, i0 - pad), min(NY, i1 + pad), max(0, j0 - pad), min(NX, j1 + pad)
     free_t, free_v = {}, np.ones((i1 - i0, j1 - j0), bool)
+    pen = {}
+    SP = float(req.get("stack_pen") or 0.0)
     for l in RL:
         o0 = (PADS_ONLY if req.get("ignore_tracks") else owner)[l][gi0:gi1, gj0:gj1]
         zo = zown[l][gi0:gi1, gj0:gj1]
@@ -203,6 +218,22 @@ def route(req):
         sl = (slice(i0 - gi0, i1 - gi0), slice(j0 - gj0, j1 - gj0))
         ok_t = (dist[sl] >= need_t[sl]) & (nt_dist[l][i0:i1, j0:j1] >= w / 2 + tol) & (edge_dist[i0:i1, j0:j1] >= w / 2 + EDGE_CLR)
         free_t[l] = ok_t if l in layers else np.zeros_like(ok_t)
+        if l in SHADOW and l in layers and len(ANALOG) and not req.get("no_shadow"):
+            tr_o = TRK[SHADOW[1 - SHADOW.index(l)]][gi0:gi1, gj0:gj1]
+            bad = (tr_o != -1) & (tr_o != n)
+            if n not in ANALOG:
+                bad &= np.isin(tr_o, ANALOG)
+            if bad.any():
+                dd = ndimage.distance_transform_edt(~bad, sampling=RES)
+                free_t[l] &= dd[sl] >= w / 2 + 0.1
+        if l in SHADOW and l in layers and req.get("stack_pen"):
+            # digital L3 / L4 runs may cross but not run stacked: cells over another net's track on the other layer of
+            # the pair cost stack_pen x more (a crossing pays ~0.4 mm of it, a parallel run its whole length)
+            tr_o = TRK[SHADOW[1 - SHADOW.index(l)]][gi0:gi1, gj0:gj1]
+            bad = (tr_o != -1) & (tr_o != n)
+            if bad.any():
+                dd = ndimage.distance_transform_edt(~bad, sampling=RES)
+                pen[l] = dd[sl] < w / 2 + 0.1
         s = smd[l][i0:i1, j0:j1]
         sd = ndimage.distance_transform_edt(s < 0, sampling=RES)
         free_v &= (dist_v[sl] >= need_v[sl]) & (sd >= vd / 2 + 0.05)
@@ -270,7 +301,7 @@ def route(req):
             if di and dj and not (free_t[l][i + di, j] and free_t[l][i, j + dj]):
                 continue
             t2 = (l, ni, nj)
-            ng = g + RES * k * c
+            ng = g + RES * k * c * (1.0 + SP if l in pen and pen[l][ni, nj] else 1.0)
             if ng < best.get(t2, 1e18):
                 best[t2] = ng
                 h = RES * minc * (max(abs(ni - hi), abs(nj - hj)) + 0.4142 * min(abs(ni - hi), abs(nj - hj)))
@@ -332,7 +363,7 @@ def route(req):
     # the new copper is an obstacle for the next requests
     for tt in out_t:
         for a, b_ in zip(tt["pts"], tt["pts"][1:]):
-            draw_capsule(owner[tt["layer"]], a, b_, w / 2, n)
+            paint_track(tt["layer"], a, b_, w / 2, n)
     for v in out_v:
         note_via(n, v["c"])
         for l in RL:
@@ -347,7 +378,7 @@ def fixed(req):
     for tt in req["fixed"].get("tracks", []):
         n = NID[tt["net"]]
         for a, b_ in zip(tt["pts"], tt["pts"][1:]):
-            draw_capsule(owner[tt["layer"]], a, b_, tt["w"] / 2, n)
+            paint_track(tt["layer"], a, b_, tt["w"] / 2, n)
         out_t.append(tt)
     for v in req["fixed"].get("vias", []):
         note_via(NID[v["net"]], v["c"])
@@ -360,6 +391,7 @@ def fixed(req):
 
 
 BASE_OWNER = {l: owner[l].copy() for l in RL}
+BASE_TRK = {l: TRK[l].copy() for l in SHADOW}
 BASE_NOVIA = novia.copy()
 BASE_VIAS = {k: list(v) for k, v in VIAS_OF.items()}
 
@@ -368,7 +400,7 @@ def paint(res):
     for tt in res["tracks"]:
         n = NID[tt["net"]]
         for a, b_ in zip(tt["pts"], tt["pts"][1:]):
-            draw_capsule(owner[tt["layer"]], a, b_, tt["w"] / 2, n)
+            paint_track(tt["layer"], a, b_, tt["w"] / 2, n)
     for v in res["vias"]:
         n = NID[v["net"]]
         note_via(n, v["c"])
@@ -380,6 +412,8 @@ def paint(res):
 def rebuild(keep):
     for l in RL:
         owner[l][:] = BASE_OWNER[l]
+    for l in SHADOW:
+        TRK[l][:] = BASE_TRK[l]
     novia[:] = BASE_NOVIA
     VIAS_OF.clear()
     VIAS_OF.update({k: list(v) for k, v in BASE_VIAS.items()})
