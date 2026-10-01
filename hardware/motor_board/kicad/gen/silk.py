@@ -175,9 +175,8 @@ def apply(b, e, log=print):
             if done:
                 break
         if not done:                                   # fallback: inside the package outline, inboard of pad 1
-            for extra in (0.2, 0.3, 0.45, 0.6):
-                d = math.hypot(abs(ux) * hx, abs(uy) * hy) + extra + 0.15
-                x, y = t(pc.x) - ux * d, t(pc.y) - uy * d
+            for frac in (0.3, 0.38, 0.45):             # on the pad-1 side of the body: never at the centre
+                x, y = t(pc.x) + (t(c.x) - t(pc.x)) * frac, t(pc.y) + (t(c.y) - t(pc.y)) * frac
                 r = (x - 0.17, y - 0.17, x + 0.17, y + 0.17)
                 if not any(_hit(r, o) for o in opening[side]) and not any(_hit(r, o) for o in placed[side]):
                     s = pcbnew.PCB_SHAPE(b)
@@ -196,9 +195,16 @@ def apply(b, e, log=print):
         prefer = lab[4] if len(lab) > 4 else None
         f = fps[ref]
         p = [q for q in f.Pads() if q.GetNumber() == str(pad)][0]
+        cy = f.GetCourtyard(pcbnew.B_CrtYd if f.IsFlipped() else pcbnew.F_CrtYd)
+        body = _rect(cy.BBox()) if cy.OutlineCount() and re.fullmatch(r"J\d+", ref) else None
         for side in sides:
             x = text_item(s, side)
-            if place(x, side, _rect(p.GetBoundingBox()), prefer):
+            if body:                                   # never under the part's own body (connector housings)
+                placed[side].append(body)
+            ok = place(x, side, _rect(p.GetBoundingBox()), prefer)
+            if body:
+                placed[side].remove(body)
+            if ok:
                 b.Add(x)
             else:
                 unplaced.append(f"label {s} @ {ref}.{pad} {side}")

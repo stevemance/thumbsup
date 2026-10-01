@@ -63,7 +63,7 @@ python3 test_check_lib.py # after changing check_lib/build_lib: every planted er
 - **LED D3 (KT-0603R):** the vendor calls the anode pin 1, KiCad's pad 1 is the cathode (the net
   mapping is right). Check the cathode mark in JLC's placement preview.
 - **JLC placement rotations:** Q1–Q8 and U3/U4 are drawn turned relative to JLC's footprints, so
-  expect rotation corrections (jlcpcb-tools handles them).
+  expect rotation corrections: kicad/gen/fab.py applies a reviewed per-part table (jlcpcb-tools' defaults get U3/U4 wrong).
 - **J1 (BOOMELE 2×10):** the part has no pin-1 feature. The compute board's socket footprint must
   be the exact mirror of this numbering: odd pins in one column, pin 1 at the top of the x < 0
   column.

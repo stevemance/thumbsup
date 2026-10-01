@@ -19,9 +19,11 @@ design decision changes one of these, change it here too. Tick through it on ord
       compute board under J1, J4's five pins (x 64.7-74.7, y 31.08) and every wire-hole joint (JBAT1 (8.75, 3.25),
       JBAT2 (3.25, 8.75), JW1-3 y 2.75, JL1-3 x 2.5, JR1-3 y 31.3); the Pico W antenna and USB outside this board's
       outline; J1 mated height chosen (sets the stack gap).
-- [ ] Export: Gerbers with Protel extensions (KiCad X2 attributes + `.gbrjob` on), Excellon drill, and the CPL
-      (`kicad-cli pcb export pos --exclude-dnp`, both sides); open them in JLC's Gerber viewer and check the layer order
-      (L1 F.Cu, L2 In1 GND, L3 In2, L4 B.Cu) before paying.
+- [ ] Export: `/usr/bin/python3 kicad/gen/fab.py <final stage>` -> kicad/gen/out/fab/: Gerbers (X2 + `.gbrjob`),
+      Excellon drill (PTH / NPTH), BOM.csv and CPL.csv (DNP parts left out, JLC rotations from the reviewed per-part
+      table in fab.py).  Do **not** use plain `kicad-cli pcb export pos` or kicad-jlcpcb-tools' default corrections for
+      the CPL (see the CPL rotation row).  Open the Gerbers in JLC's viewer and check the layer order (L1 F.Cu, L2 In1
+      GND, L3 In2, L4 B.Cu) before paying.
 
 ## PCB options (order form)
 | Option | Value | Why / source |
@@ -48,10 +50,10 @@ design decision changes one of these, change it here too. Tick through it on ord
 | Fiducials | added by JLC | JLC help (PLACEMENT 6) |
 | Reflow order | bottom side first | nothing on the bottom is heavy |
 | Through-hole | J4 (JST B5B-XH-A vertical): JLC THT assembly **or** hand-solder | BOM.md |
-| **CPL rotation check** | **J2, J3 (JST BM06B) and J4 (B5B-XH-A): JLC's footprints are ours rotated 180° (J4's origin is also at the body centre: +5 mm X offset).  Correct them in the CPL and check pin 1 in JLC's placement preview**: a reversed J4 puts B− on pin 5, a reversed J2/J3 swaps all six signals.  Also check U6 (WQFN-14 pin 1) and D2 (cathode = pad 1) | review/v2_parts/adversarial/jlc_footprints.md |
+| **CPL rotation check** | **fab.py applies an explicit, reviewed correction per part** (2026-10-01 footprint triple-check against JLC's own footprints): +270 U1, U3, U4, U5, U7, U11-U14, Q1-Q8; +180 U9, U10, D7-D9, J2, J3, J4; +90 J1; 0 U2, U6, U8, C1, D1-D5, D10 and every R / C / L / shunt.  kicad-jlcpcb-tools' default table would have reversed C1 and U8 (its CP_Elec_10x10 / QFN-20 rules), left U3, U4, U7, U13, J1 and Q1-Q8 90° off, turned U11, U12, U14 wrong and D7-D9 wrong.  CPL positions are pad-centre (so J4 needs no origin offset).  **Still check pin 1 of every IC / diode / FET / connector in JLC's placement preview against the silk pin-1 dots**: a reversed J4 puts B− on pin 5, a reversed J2/J3 swaps all six signals | kicad/gen/fab.py, review/v2_parts/adversarial/jlc_footprints.md |
 | Not assembled | wire holes JBAT1/2, JW1-3, JL1-3, JR1-3; test pads; net ties; solder jumpers JP1/JP2 (copper, bridged 1-2 by default); MH1-MH4 | out of the BOM by design |
-| DNP | C110-C112, C114-C116 (sensor line filters, fit only for Hall sensors).  They still carry an LCSC number and are not marked exclude-from-position on the board: export the CPL with `--exclude-dnp` and check they are not in it | BOM.md |
-| BOM / CPL | from the KiCad board (the LCSC field is on every part) | kicad-jlcpcb-tools |
+| DNP | C110-C112, C114-C116 (sensor line filters, fit only for Hall sensors): marked DNP on the board; fab.py leaves them out of BOM.csv and CPL.csv (check they are absent) | BOM.md |
+| BOM / CPL | kicad/gen/fab.py from the final board (the LCSC field is on every part; 195 placements, 101 on the bottom, as of 2026-10-01) | kicad/gen/fab.py |
 | **Check in JLC's 3D/placement preview** | D3 (vendor pin numbering is reversed: check the cathode mark), every diode and polarized cap (D1, D2, D4, D5, D7-D10, C1), the PQFN FETs' pin 1, U1-U14 pin 1, J1 pin 1 (58.215, 32.95, bottom), and the vertical connectors (mating faces up): J2 pin 1 at (8.0, 33.62) by the rear edge, J3 pin 1 at (83.57, 26.0) by the right edge, J4 pin 1 at (64.7, 31.08) (B−) | BOM.md, DESIGN 3.1 |
 
 ## After assembly (by hand)
