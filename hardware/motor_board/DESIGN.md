@@ -171,7 +171,7 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
   TIM1_CH3N/2N/1N (PB15/PA12/PA7) AND **W_ARM_S** (U14's output, below); R47–R49 100 k keep the MCU side low in reset; the
   fourth gate's inputs are grounded.  ENABLE = W_EN (PC14, R40 100 k pull-down): low = sleep.
   nFAULT → PA6 (TIM1_BKIN, hardware PWM kill; TT_a, fine: R42 pulls to +3V3 and every source on the net is open drain) with R42 pull-up and C19 1 nF (analog glitch filter: BKF must be 0 for the comparator trip); U7 ALERT is wire-ORed onto it.
-* **Dynamic ARM:** J1 pin 19 W_ARM_CLK (R18 100 k pull-down) → C15 470 nF → D9 BAT54S (clamp to
+* **Dynamic ARM:** J1 pin 18 W_ARM_CLK (R18 100 k pull-down) → C15 470 nF → D9 BAT54S (clamp to
   GND + rectifier) → W_ARM, held by C16 2.2 µF and bled by R41 47 k → U14 74LVC1G17 Schmitt
   buffer (VT+ ≤ ~2.15 V, VT− ~0.9–1.45 V at 3.3 V; 0.8–1.33 V is the 3.0 V spec) → W_ARM_S (R19 10 k pull-down, in case U14's
   output opens: beats 3 × 5 µA worst-case input leakage) → U6 (all three AND gates) and the MCU (PC15).  `spice/sim_arm.py`
@@ -281,7 +281,7 @@ ground at the pad).
   weak PC13–PC15 drivers (≤ 2 MHz, ≤ 30 pF, 3 mA sink, never a current source: DS12288 Table 12 note 2), enough for a
   static enable and the 8–40 µs t_RST pulse into U2 ENABLE + R40 100 k.  PA11 = DRV_OFF (a normal FT_u pin).
 * VBAT_SNS: R63 68 k / R64 10 k / C68 100 nF (0.87 ms) → PA2 (FT_a).  The header gets it only through
-  R33 100 k (net VBAT_SNS_H, J1 pin 11), so a compute-board pin in reset cannot drag the MCU reading.
+  R33 100 k (net VBAT_SNS_H, J1 pin 12), so a compute-board pin in reset cannot drag the MCU reading.
 * U5 AP2112K-3.3 from +5V: 3.3 V for the MCU, CSA reference, sensors, logic (~120 mA of 600).
 * Test pads TP1–TP12: 3V3, SWDIO, SWCLK, NRST, GND, W_ARM, W_EN, DRV_OFF, W_nFAULT, VBAT, 5V, GND.
 
@@ -328,15 +328,18 @@ group takes ~8.7 µs (with 24.5-cycle ranks), inside the allowed windows.  Enabl
 | Pin | Signal | Pin | Signal |
 |---|---|---|---|
 | 1 | +5V out | 2 | +5V out |
-| 3 | GND | 4 | GND |
-| 5 | MB_TX (motor board → compute) | 6 | MB_RX |
+| 3 | BMS_SDA (BQ76907 I²C data) | 4 | GND |
+| 5 | BMS_ALERT (open drain) | 6 | BMS_SCL |
 | 7 | spare | 8 | NRST (compute can hold the motor MCU in reset) |
 | 9 | SWDIO | 10 | SWCLK |
-| 11 | VBAT_SNS_H (the ÷7.8 pack divider through R33 100 k; 3.3 V-safe up to 25.7 V) | 12 | GND |
+| 11 | GND | 12 | VBAT_SNS_H (the ÷7.8 pack divider through R33 100 k; 3.3 V-safe up to 25.7 V) |
 | 13 | +5V out | 14 | GND |
-| 15 | BMS_SDA (BQ76907 I²C data) | 16 | BMS_SCL |
-| 17 | BMS_ALERT (open drain) | 18 | spare |
-| 19 | **W_ARM_CLK** (toggled by the compute board = armed) | 20 | GND |
+| 15 | GND | 16 | spare |
+| 17 | MB_TX (motor board → compute) | 18 | **W_ARM_CLK** (toggled by the compute board = armed) |
+| 19 | MB_RX | 20 | GND |
+
+(Rev L4 order, set by the layout: the UART at the end beside the MCU, the BMS bus at the end beside U8, the arm clock
+right under its coupling cap C15 with GND 20 beside it; the compute board's socket follows this table.)
 
 J1 is on the **bottom** side (it faces the compute board below), with the other low-profile bottom
 parts (§6.13); JLC two-sided assembly is therefore required.  Footprint: custom `thumbsup:BOOMELE_1.27-2x10P_SMD` to the vendor land (20 × 1.5 ×

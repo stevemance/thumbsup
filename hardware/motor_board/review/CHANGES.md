@@ -725,3 +725,12 @@ B → CH2, so the left count-sign inversion constant from rev L1 is dropped (the
 constants stay: the motors face opposite ways).  PB4 (UCPD dead-battery pull-down until it is disabled at boot) now
 carries R_S1 instead of L_S2: same rule, a buffered encoder input.  PA15 (JTAG pull-up) carries L_S1: an input, fine.
 DESIGN.md §3 sensors, the boot-order note and the firmware table (Timer inputs) updated.
+
+### Rev L4, J1 pinout (2026-10-01, layout)
+
+J1 (2 x 10 header to the compute board, designed separately) re-ordered for routing: the UART pins sat at the end away
+from the MCU and the BMS I²C bus at the end away from U8, so both crossed the whole header.  Now 3 BMS_SDA, 5
+BMS_ALERT, 6 BMS_SCL (U8 end); 17 MB_TX, 19 MB_RX (MCU end); 18 W_ARM_CLK (under C15, GND 20 beside it); 12
+VBAT_SNS_H (under R33); 11 / 15 GND, 7 / 16 spare; +5V 1 / 2 / 13, NRST 8, SWD 9 / 10 unchanged.  Same signal set, same
+GND / +5V counts.  DESIGN.md §3.5 table updated; the compute board's socket must follow it.
+
