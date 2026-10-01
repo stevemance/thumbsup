@@ -68,28 +68,33 @@ def apply(b, e, log=print):
             else:
                 opening["B" if f.IsFlipped() else "F"].append(r)
     placed = {"F": [], "B": []}
+    for f in b.GetFootprints():                      # M2 screw head (r ~1.9 mm) + margin: r 2.2 mm
+        if re.fullmatch(r"MH\d+", f.GetReference()):
+            c = f.GetPosition(); R = 2.2
+            for side in ("F", "B"):
+                placed[side].append((t(c.x) - R, t(c.y) - R, t(c.x) + R, t(c.y) + R))
 
     def free(r, side):
         return (inner[0] <= r[0] and inner[1] <= r[1] and r[2] <= inner[2] and r[3] <= inner[3]
                 and not any(_hit(r, o) for o in opening[side]) and not any(_hit(r, o) for o in placed[side]))
 
-    def place(item, side, around, prefer=None):
+    def place(item, side, around, prefer=None, maxgap=3.5):
         """move a text item to the first free spot around a box (x0,y0,x1,y1); returns True if placed"""
         for ang in (0, 90):
             item.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
-            if _place(item, side, around, prefer):
+            if _place(item, side, around, prefer, maxgap):
                 return True
         item.SetTextAngle(pcbnew.EDA_ANGLE(0, pcbnew.DEGREES_T))
         return False
 
-    def _place(item, side, around, prefer):
+    def _place(item, side, around, prefer, maxgap):
         cx, cy = (around[0] + around[2]) / 2, (around[1] + around[3]) / 2
         hw, hh = (around[2] - around[0]) / 2, (around[3] - around[1]) / 2
         item.SetPosition(pcbnew.VECTOR2I_MM(0, 0))
         tb = _rect(item.GetBoundingBox())
         tw, th = tb[2] - tb[0], tb[3] - tb[1]
         cands = []
-        for gap in (0.2, 0.4, 0.7, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5):
+        for gap in [g for g in (0.2, 0.4, 0.7, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5) if g <= maxgap]:
             ks = range(24)
             if prefer is not None:                   # preferred side first (degrees, 0 = +x, 90 = +y)
                 ks = sorted(ks, key=lambda k: abs((k * 15 - prefer + 180) % 360 - 180))
@@ -174,6 +179,22 @@ def apply(b, e, log=print):
                     break
             if done:
                 break
+        if not done:                                   # smaller dot (0.3 mm) outward, before the inboard fallback
+            for extra in (0.2, 0.3, 0.45):
+                for vx, vy in dirs:
+                    d = math.hypot(abs(vx) * hx, abs(vy) * hy) + extra + 0.15
+                    x, y = t(pc.x) + vx * d, t(pc.y) + vy * d
+                    r = (x - 0.2, y - 0.2, x + 0.2, y + 0.2)
+                    if free(r, side):
+                        s = pcbnew.PCB_SHAPE(b)
+                        s.SetShape(pcbnew.SHAPE_T_CIRCLE)
+                        s.SetCenter(pcbnew.VECTOR2I_MM(x, y)); s.SetEnd(pcbnew.VECTOR2I_MM(x + 0.1, y))
+                        s.SetFillMode(pcbnew.FILL_T_FILLED_SHAPE); s.SetWidth(F(0.1))
+                        s.SetLayer(pcbnew.F_SilkS if side == "F" else pcbnew.B_SilkS)
+                        b.Add(s); placed[side].append(r); done = True
+                        break
+                if done:
+                    break
         if not done:                                   # fallback: inside the package outline, inboard of pad 1
             for frac in (0.3, 0.38, 0.45):             # on the pad-1 side of the body: never at the centre
                 x, y = t(pc.x) + (t(c.x) - t(pc.x)) * frac, t(pc.y) + (t(c.y) - t(pc.y)) * frac
@@ -208,6 +229,23 @@ def apply(b, e, log=print):
                 b.Add(x)
             else:
                 unplaced.append(f"label {s} @ {ref}.{pad} {side}")
+    # 3b) free texts: (text, side, (x, y) board-local) placed at the nearest free spot round the point
+    OXl, OYl = ob[0] + 0.05, ob[1] + 0.05
+    for s, side, (px, py) in e.get("texts", []):
+        x = text_item(s, side)
+        cx, cy = OXl + px, OYl + py
+        if place(x, side, (cx - 0.1, cy - 0.1, cx + 0.1, cy + 0.1), maxgap=3.5):
+            b.Add(x)
+        else:
+            unplaced.append(f"text {s}")
+            if __import__("os").environ.get("SILK_DEBUG"):
+                x.SetTextAngle(pcbnew.EDA_ANGLE(90, pcbnew.DEGREES_T)); x.SetPosition(pcbnew.VECTOR2I_MM(cx, cy))
+                r = _rect(x.GetBoundingBox(), 0.1)
+                log(f"  dbg {s} rect {[round(v - o, 2) for v, o in zip(r, (OXl, OYl, OXl, OYl))]} inner_ok "
+                    f"{inner[0] <= r[0] and inner[1] <= r[1] and r[2] <= inner[2] and r[3] <= inner[3]}")
+                for o in opening[side] + placed[side]:
+                    if _hit(r, o):
+                        log(f"    hit {[round(v - w, 2) for v, w in zip(o, (OXl, OYl, OXl, OYl))]}")
     # 4) kept references: hide where a label names the part, else re-place them clear
     for f in b.GetFootprints():
         ref = f.GetReference()
@@ -221,7 +259,7 @@ def apply(b, e, log=print):
         side = "B" if f.IsFlipped() else "F"
         cy = f.GetCourtyard(pcbnew.B_CrtYd if side == "B" else pcbnew.F_CrtYd)
         box = _rect(cy.BBox()) if cy.OutlineCount() else _rect(f.GetBoundingBox(False))
-        if not place(r, side, box):
+        if not place(r, side, box, maxgap=2.0):
             r.SetVisible(False)
             unplaced.append(f"ref {ref} (hidden: no clear spot)")
     for u in unplaced:

@@ -3,7 +3,8 @@ holes (J, JBAT, JW, JL, JR), solder jumpers (JP), test pads (TP), mounting holes
 by hand).  Every other part's silk outline moves to its Fab layer and its reference is hidden.  Orientation-sensitive
 parts (ICs, diodes, FETs) get a pin-1 / cathode dot, since JLC checks placement polarity against the silk.  Function
 labels: wire names on the bottom (where the wires are soldered; top labels sat ambiguously between holes), battery
-polarity on both sides; they replace the JBAT/JW/JL/JR references, J4 B- / B4+, J2 / J3 VS / T ends, JP1 / JP2 3V3 (1-2, default)
+polarity BAT+ / BAT- on the bottom and BAT- on top; they replace the JBAT/JW/JL/JR references, J4 B- (pin 1; no top spot for
+B4+, the XH housing is keyed), J2 / J3 VS / T ends, JP1 / JP2 3V3 (1-2, default)
 and 5V (2-3) sides (DESIGN 3.4, 6.9)."""
 import v2_pre
 from v2_pre import EDITS
@@ -18,7 +19,8 @@ EDITS.append(dict(
     keep=r"(J|JBAT|JW|JL|JR|JP|TP|MH)\d+|D3|C1",
     mark=r"(U|D|Q)\d+",
     hide_ref=[r for _, r, _ in WIRES] + ["MH1", "MH2", "MH3", "MH4"],
-    labels=[(s, r, 1, "FB" if s.startswith("BAT") else "B", a) for s, r, a in WIRES] + [
-        ("B-", "J4", 1, "F"), ("B4+", "J4", 5, "F"),
+    labels=[(s, r, 1, "B" if s != "BAT-" else "FB", a) for s, r, a in WIRES] + [
+        ("B-", "J4", 1, "F"),
         ("VS", "J2", 1, "F"), ("T", "J2", 6, "F"), ("VS", "J3", 1, "F"), ("T", "J3", 6, "F"),
-        ("3V3", "JP1", 1, "F"), ("5V", "JP1", 3, "F"), ("3V3", "JP2", 1, "F"), ("5V", "JP2", 3, "F")]))
+        ("3V3", "JP1", 1, "F"), ("5V", "JP1", 3, "F"), ("3V3", "JP2", 1, "F"), ("5V", "JP2", 3, "F")],
+    texts=[("ThumbsUp motor board rev L4 (v2, 2026-10)", "B", (42.0, 6.0))]))

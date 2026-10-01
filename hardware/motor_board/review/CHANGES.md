@@ -776,3 +776,14 @@ Layout only: no netlist or pin change after C117, so no firmware impact.
 - Accepted: the +5V trunk from the buck to J1 stays 0.2 mm (mostly L3, single vias): at the 0.6 A worst-case budget
   ~45 mV drop and ~10-15 C rise (IPC-2152, plane adjacent); C24 (U2 VM bypass) ~6 mm from pin 6.
 
+
+### Final review fixes (2026-10-01, layout)
+
+- RS4.2: 3 VBAT vias in the pad into the L3 band (pack current no longer leaves the shunt only through a 1.7 mm L1 neck).
+- C401.2 (U4 VM pin 11 bypass) GND joined to U4.12 / the EP island on L1 (R_A pour corner trimmed).
+- DNP caps C110-C112 / C114-C116: no paste on their pads.
+- 28 small R / LED / signal-cap GND pads get thermal relief (tombstoning); bypass caps stay solid.
+- Silk: U11 pin-1 dot, J3 VS, board name / revision on the bottom, labels kept off the M2 screw heads, references within
+  2 mm of their part (TP5 / TP7 / TP12, JP1, JP2, J3, D3 references hidden: no clear spot).
+- D8 / U5 within 0.3 mm of the rear edge accepted (no legal spot; tabs on the left / right edges only).
+- Rules: PTH annular ring >= 0.15 mm (JLC); fab.py exports Gerbers in absolute coordinates like the drill and CPL.

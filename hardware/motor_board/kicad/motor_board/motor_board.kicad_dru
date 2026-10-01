@@ -23,3 +23,6 @@
 (rule "v2: L2 is a solid GND plane, no tracks or vias of other nets' tracks on it"
   (layer "In1.Cu")
   (constraint disallow track))
+(rule "JLC PTH annular ring >= 0.15 (review jlc-fab-2)"
+  (constraint annular_width (min 0.15mm))
+  (condition "A.Type == 'Pad' && A.Pad_Type == 'Through-hole'"))

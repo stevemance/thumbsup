@@ -62,7 +62,7 @@ def main():
     g = OUT / "gerbers"
     g.mkdir(exist_ok=True)
     pcb = str(BOARD)
-    subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "--use-drill-file-origin", "--subtract-soldermask",
+    subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "--subtract-soldermask",      # absolute coords, like the drill + CPL
                     "-l", "F.Cu,In1.Cu,In2.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts",
                     "-o", str(g), pcb], check=True, capture_output=True)
     subprocess.run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
