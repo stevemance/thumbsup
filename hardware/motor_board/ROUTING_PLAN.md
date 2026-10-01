@@ -1,8 +1,9 @@
 # Motor board routing plan
 
 > **Status (2026-10-01):** written for the pre-hand-pass (75 mm) board and `route_all.py`. The board to be built is
-> routed by the stage chain `kicad/gen/h*.py` (hand stages + the router flow `h4.py`; final stage `hS`); the plan
-> below is history. Open layout work (power pours, GND stitching) and order data: FAB.md.
+> routed by the stage chain `kicad/gen/h*.py` (hand stages + the router flow `h4.py`, then pours / stitching `hP`,
+> clean-up `hX`, silk `hS`; the result is committed as `kicad/motor_board/motor_board.kicad_pcb`); the plan below is
+> history.  Layout is complete (pours and stitching done); order data: FAB.md.
 
 How the rest of the board gets routed, written before routing it (layout-pro order: plan the layers and
 channels, power before signals, local hookups before long runs, review after every block).  Built by

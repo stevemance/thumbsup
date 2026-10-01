@@ -34,7 +34,7 @@ Rev B applied review round 1, rev C round 2, rev D round 3, rev E round 4, rev F
 | Compute link | 5 V / ≤ 0.45 A to the compute board, UART, reset + SWD programming, weapon ARM, cell-monitor I²C | 20-pin 1.27 mm header (2 spare) |
 | Safety | Weapon cannot be driven unless the compute board is alive and armed; everything off in reset; failsafe on command loss | **Dynamic ARM**: the compute board must keep toggling W_ARM_CLK from software (≥ 500 Hz); a charge pump + Schmitt buffer turns that into the ARM level, which gates every weapon phase enable in hardware (AND on INLx) and disarms ~30–200 ms after the toggling stops (sim: 52–164 ms with nominal parts, 25–85 °C).  Command timeout and a watchdog in firmware.  Pulled-down enables; DRVOFF pulled up |
 | Environment | Indoor arena, ambient 0–50 °C | The DRV8316 VM filters (R302/R402 0.1 Ω + 2 × 10 µF 1210, ~15 µF at 16.8 V) keep the simulated switch-closure, re-close and loaded contact-bounce steps at the DRV8316 VM pins ≤ ~1.9 V/µs with C1 down to 0 °C (~2.1 V/µs only at C1's −40 °C ESR limit; voltage-dependent MLCC model), under the 4 V/µs abs max (§5, §7.2).  Not covered: a weapon phase-to-ground short (§7.21) |
-| Build | JLCPCB assembly | All parts on LCSC; 194 assembled parts + 6 DNP footprints, 67 BOM lines; **two-sided**: power stage, tall parts, connectors and test pads on top, low-profile passives/logic and J1 on the bottom; J4 THT.  Board area and chassis fit are settled at layout (§6.13 lists the estimate and the levers) |
+| Build | JLCPCB assembly | All parts on LCSC; 195 assembled parts (incl. C117) + 6 DNP footprints, 67 BOM lines; **two-sided**: power stage, tall parts, connectors and test pads on top, low-profile passives/logic and J1 on the bottom; J4 THT.  Board area and chassis fit are settled at layout (§6.13 lists the estimate and the levers) |
 
 Not on this board (compute board): Pico/MCU for control, IMU + high-g accel, logging flash,
 Bluetooth, status LEDs, the physical ARM link.  All power functions (pack input, protection,
@@ -130,7 +130,7 @@ by the main negative lead's I × R (−0.11 V at 22 A; cell 1 then reads tens of
 drivers are unused: the INA239 measures current and this board must never disconnect the motors
 on its own.
 
-The **compute board is the I²C host** (header pins 15–17: SDA, SCL, ALERT; pull-ups on the
+The **compute board is the I²C host** (J1 header pins 3, 6, 5: SDA, SCL, ALERT, §3.5; pull-ups on the
 compute board, so the lines float on a bench without it).  U8's default cell mode is 7S: the host
 must write the 4S cell mode after every power-on reset (check the POR flag) or three of the cells
 read 0 V.  Storage = unplug the balance lead (U8 draws ~146 µA in NORMAL; allow SLEEP to cut
@@ -193,8 +193,9 @@ current rating).  With it open, nothing is powered except U8 (from the balance l
   In a sustained +5V short D2 carries ~ILIMIT: ~0.6 W, and its heat leaves through the cathode tab, which is
   the SW node and must stay small, so Rθja ≈ 220 K/W → Tj ≈ 180 °C at 50 °C ambient.  **A sustained +5V
   short is therefore not survivable for D2** (nor was it for the SS34 on a small SW node); it is a
-  board-level fault, not a design case, and the buck's thermal shutdown only limits it.  C28 100 nF CB–SW; R20 56 k /
-  R21 10 k → 5.05 V; C29/C30 22 µF 25 V.
+  board-level fault, not a design case, and the buck's thermal shutdown only limits it.  (As built the SW node is
+  ~13.5 mm of 0.6 mm trace, ~8 mm² plus L1's pad, so the cathode tab sees somewhat more copper than this estimate
+  assumed; the conclusion stands.)  C28 100 nF CB–SW; R20 56 k / R21 10 k → 5.05 V; C29/C30 22 µF 25 V.
 
 ### 3.3 Drive channels — U3 (left), U4 (right) DRV8316C
 
@@ -505,15 +506,19 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
 6. **R302/R402** (up to ~1 W in bursts) away from the DRV8316 thermal copper, on their own pour.  Keep the **W_EN** trace (PC14, a 2 MHz / 30 pF pin) short.  **Power entry:** U13, C12, C14, C18 (at U13 pin 1), R1, D10, C13, R32, D4 next to Q7/Q8; the gate trace short.  Feed U3/U4's VM from C1 on their own branch (not through the weapon bridge's copper), so weapon switching ripple at the DRV8316 VM pins stays well under 4 V/µs (check in §9 step 6).  C1 close to the
    switch output *and* the bridges; each DRV8316 gets its 2 × 100 nF + 2 × 10 µF 1210 within 2 mm, on the filtered side of R302/R402 (all DRV8316 VM current must pass through the resistor).  **As built (2026-10-01 power rework):** 100 nF at 0.73 mm (all four); 10 µF C302 / C402 at 2.6 mm, C308 at 3.8 mm and C408 at 6.6 mm (no room for a second 1210 nearer: U3's escape vias, the L4 L_SO lanes and the charge-pump parts fill it; hot-plug sim with the far cap behind 3-10 nH: worst VM ramp 2.18 -> 2.15 V/µs against the 4 V/µs limit).  U4's VM reaches its pins through a 1.0 mm L3 strip with 4 + 3 vias (no L1 path past U4's charge-pump escapes); review/v2_lessons item 8 allows L1/L3 VM with 3-4 vias per transition.
 7. **Buck:** SW node tiny; L1/D2/C29 loop tight per the LMR16006 layout guide; FB divider at
-   pin 1 away from L1; R4/R5/C10 away from SW.
+   pin 1 away from L1; R4/R5/C10 away from SW.  **As built (2026-10-01):** C27 (VIN) 2.2 mm from pin 47 at U2's corner, D2's
+   anode on C27's GND by a 0.8 mm strip with a GND via, L1's SW pad over D2's cathode, C28 beside it; but SW is 13.5 mm of
+   0.6 mm trace from pin 45 to D2 and CB 18.3 mm from pin 44: J4's courtyard starts 0.3 mm behind U2's pads and pins 1–7
+   need C20/C21/C24 on that corner, so the nearest free spot for D2/L1 is ~4 mm east.  Scope the SW node at first power
+   (§9 step 1).  U2's VM bypass C24 ended ~6 mm from pin 6 (moved for this re-place; C27's 2.2 µF on VBAT is ~3.3 mm away).
 8. **Analog:** CSA outputs and dividers routed away from phase nodes; the 330 Ω / 22 pF and 1 nF
    filters at the MCU pins.  The weapon INH traces (PC0/PC1) run beside analog pins: keep them
    away from PA0, PA1, PA3 (weapon CSA inputs), PC3 (W_VC) and PA2 (VBAT_SNS); likewise W_INLA_M (PB15) from
    L_SOA (PB14, drive L CSA) and W_INLC_M (PA7) from W_VA (PC4).  Place U2 toward the MCU's left/bottom edge.  Keep W_ARM_CLK/C15/D9
    away from MB_TX and switching nodes.
 9. **Connectors:** J4 near the pack side, silkscreen "B−" at pin 1 and "B4+" at pin 5; cell-input
-   R/C and D5 at U8; tap traces thin.  J2/J3 at the board edge near the drive ICs with U9–U12,
-   R110–R117, D7/D8 beside them; silkscreen "VS" and "T" at the pin-1 and pin-6 ends (the clone's
+   R/C and D5 at U8; tap traces thin.  J2/J3 at the board edge near the drive ICs; the right channel's U10/U12, R114–R117
+   and D8 sit beside J3, the left channel's U11/R113 beside J2 but its U9, R110 and D7 at the MCU's rear-left (layout v2); silkscreen "VS" and "T" at the pin-1 and pin-6 ends (the clone's
    drawing does not number its pins: confirm pin 1 against a mating SHR-06V-S cable before the
    footprint is final; both mounting tabs = pad "MP").  Battery and weapon wires in 2.15 mm-drill
    plated holes, drive wires in 1.15 mm holes, pads joined to the pours with wide thermal spokes
@@ -605,7 +610,7 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
    three channels with the same MCU and header; the dividers already read 25.2 V.
 10. **Drive motor:** Repeat Mini Mk4.1 is currently sold out; the design does not depend on it
     beyond the calcs (any 16 mm-class motor with a sensor or sensorless FOC works).
-11. **J4 (XH side-entry) is through-hole:** JLC Standard PCBA (THT) or hand-solder it.
+11. **J4 (XH vertical) is through-hole:** JLC Standard PCBA (THT) or hand-solder it.
 12. **STM32 source:** LCSC is not an ST-authorised distributor; check the marking and the device
     ID/UID/revision (ES0430 errata depend on it) at bring-up.
 13. **Bench use with USB:** a compute board connected to an earthed PC plus an earthed bench
@@ -860,6 +865,8 @@ calibration that §8 needs (marked **store**).
    * Current limit 1.5 A for the first closure (the soft-start draws ~0.8 A for ~8–13 ms; a lower
      limit makes U13 hiccup; keep ≥ 1.5 A whenever the compute board and its hold-up cap are
      attached), then 0.2 A.  Check 5.0 V, 3.3 V, the power LED, current < 60 mA.
+   * **Buck SW node** (the as-built SW run is long, §6.7): scope U2 pin 45 / D2's cathode with a short ground spring at
+     5 V load: undershoot no lower than −2 V and ringing settled within ~30 ns.
    * **Reverse polarity** as a *step* (switch the reversed, current-limited supply on): no
      current beyond the input-capacitor spike.
    * **UVLO sweep:** sweep the supply down.  The 5 V rail drops out near 9.2 V and returns near

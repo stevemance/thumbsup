@@ -8,7 +8,7 @@
 | DRV8316.pdf | DRV8316R/T (the rev A part), kept for reference only | ti.com SLVSF16B |
 | LMR16006.pdf | the buck core inside U2 (L1, D2, R20/R21, R4/R5 UVLO) | ti.com SNVSA24 |
 | LM74502.pdf | power-switch controller (U13), Q7/Q8 gate drive, soft-start, UVLO | ti.com SNOSDE5A |
-| INA239.pdf | pack monitor (U7) — fitted | ti.com |
+| INA239.pdf | pack monitor (U7); fitted part is INA239AQDGSRQ1 (INA239-Q1, same DGS pinout and registers; pin table checked against SBOSA48 Table 5-1, 2026-10-01) | ti.com |
 | INA229.pdf | pin/footprint-compatible alternative for U7 (different register widths) | ti.com |
 | BQ76907.pdf | cell monitor (U8) | ti.com |
 | AP2112K.pdf | 3.3 V LDO (U5) | Diodes Inc. |
@@ -21,8 +21,8 @@
 | RE2512F3R001_1mR.pdf | pack shunt RS4 | LCSC mirror of JIERR |
 | SMBJ20A_BORN.pdf | TVS D1 | LCSC mirror of BORN |
 | EEHZK_Panasonic_C278516.pdf | bulk capacitor C1 (EEHZK1V331P) | LCSC mirror of Panasonic |
-| FNR5040S_CJiang.pdf | buck inductor L1 (FNR5040S table on p.13; scanned) | LCSC mirror |
-| SS34_MDD.pdf | buck catch diode D2 | LCSC mirror of MDD |
+| FNR5040S_CJiang.pdf | history: the former L1 (FNR5040S); **fitted L1 is ZEMS404030-220M (C49009291)**, footprint L_Changjiang_FTC404030S, land per review/v2_parts | LCSC mirror |
+| SS34_MDD.pdf | history: the former D2 (SS34); **fitted D2 is Nexperia PMEG4030ER (C389355)**, footprint Nexperia_CFP3_SOD-123W | LCSC mirror of MDD |
 | MMSZ5242B.pdf | Q7/Q8 gate-source zener D4 | LCSC mirror |
 | B5819W_CJ.pdf | VC0 clamp D5 | LCSC mirror of CJ |
 | UNIROYAL_2512_thick_film.pdf | DRV8316 VM feed resistors R302/R402 (25121WF100LT4E) | LCSC mirror of UNI-ROYAL |
@@ -31,9 +31,9 @@
 | BAT54S_Nexperia.pdf | dynamic-ARM charge pump D9 (1 A1, 2 K2, 3 K1/A2) | LCSC mirror of Nexperia |
 | NCP18XH103F03RB.pdf | FET NTC TH1 | LCSC mirror of Murata |
 | LED_KT-0603R.pdf | power LED D3 | LCSC mirror of KENTO |
-| XUNPU_WAFER-SH1.0-6PWB.pdf | sensor connectors J2, J3 (fitted; the custom footprint is drawn from this) | LCSC mirror |
-| LXWCONN_SH1.0mm-6P-WT.pdf | alternate for J2, J3 | LCSC mirror |
-| SM06B_JST_SH.pdf | JST original (mating SHR-06V-S housing, pin numbering reference) | jst-mfg.com |
+| XUNPU_WAFER-SH1.0-6PWB.pdf | history: the former J2/J3 (horizontal clone); **fitted J2/J3 are JST BM06B-SRSS-TB (C160392) vertical on the stock JST_SH footprint** | LCSC mirror |
+| LXWCONN_SH1.0mm-6P-WT.pdf | history: former alternate for J2, J3 | LCSC mirror |
+| SM06B_JST_SH.pdf | JST SH (covers the fitted BM06B-SRSS-TB; mating SHR-06V-S housing, pin numbering reference) | jst-mfg.com |
 | JST_XH.pdf | balance connector J4 | jst-mfg.com |
 | BOOMELE_1.27-2x10P.pdf | header to the compute board J1 | LCSC mirror of BOOMELE |
 | MT6701CT-STD.pdf | magnetic encoder for the drive-motor sensor boards (off-board) | LCSC mirror of MagnTek |

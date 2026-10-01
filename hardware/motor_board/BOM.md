@@ -1,7 +1,7 @@
 # Motor board BOM notes (rev L, 2026-09-24)
 
 The machine-readable BOM is [`design/bom.csv`](design/bom.csv) (JLCPCB columns: Comment,
-Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`: **194 assembled
+Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`: **195 assembled
 parts, 67 lines**, plus 6 DNP footprints (C110–C112, C114–C116, left out of the CSV; mark them
 DNP / exclude-from-position in KiCad).  Wire holes (plated through-holes), test pads, net-ties, solder jumpers and
 mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 2026-09-23/24
@@ -40,7 +40,7 @@ mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 
 | RS4 | JIERR RE2512F3R001 1 mΩ 3 W | C46961745 | Pack shunt, small-electrode version (no "L" suffix).  Custom land per JIERR p.5 (2.1 × 4.0 pads, 4.1 gap): `R_2512_JIERR_RE_small_electrode` |
 | J1 | BOOMELE 1.27-2*10P SMD male | C59981 | Custom footprint to the vendor land; **bottom side** (JLC second side or hand-solder).  Compute board: mirrored female socket |
 | J2, J3 | JST BM06B-SRSS-TB (genuine) SH 1.0 6-pin **vertical** SMD | C160392 | Extended, ~40k.  KiCad `JST_SH_BM06B-SRSS-TB_1x06-1MP_P1.00mm_Vertical` (= JST layout, pin 1 at x = −2.5).  **JLC's footprint is ours rotated 180°: fix the rotation in the CPL** (FAB.md).  Strain-relieve the cable: the joints take the pull.  v2 swap (was XUNPU R/A clone C3029345) |
-| J4 | JST B5B-XH-A(LF)(SN) **vertical** THT (plain -A, no peg) | C157991 | Extended, ~72k.  Through-hole: JLC Standard PCBA or hand-solder.  9.8 mm tall mated (check the lid).  **JLC's footprint is rotated 180° with its origin at the body centre: fix rotation and offset in the CPL** (FAB.md); a reversed J4 puts B− on pin 5.  v2 swap (was side-entry S5B-XH-A C263757) |
+| J4 | JST B5B-XH-A(LF)(SN) **vertical** THT (plain -A, no peg) | C157991 | Extended, ~72k.  Through-hole: JLC Standard PCBA or hand-solder.  9.8 mm tall mated (check the lid).  **JLC's footprint is rotated 180° with its origin at the body centre: kicad/gen/fab.py writes the 180° correction (pad-centre positions, so no offset)** (FAB.md); a reversed J4 puts B− on pin 5.  v2 swap (was side-entry S5B-XH-A C263757) |
 | D3 | KENTO KT-0603R | C2286 | Vendor pin numbering is the reverse of KiCad's: check the cathode mark in the JLC preview |
 | R45 | 75 k 0402 1 % | C25798 | Preferred; 0 at LCSC but ~57k at JLC (fine for JLC assembly) |
 
@@ -63,7 +63,6 @@ Preferred (no fee): R20 56 k, R22/R24/R26/R63 68 k, R45 75 k, R46 18 k.  Everyth
 ## Before ordering
 
 1. Re-check stock and class on jlcpcb.com for every line the day you order; reserve U1, U2 and U7 (all under ~210 in stock).
-2. Draw the custom footprints listed in DESIGN §6.12.
-3. Run `python3 design/motor_board.py` after any change: it must print `checks: OK` (it also
+2. Run `python3 design/motor_board.py` after any change: it must print `checks: OK` (it also
    fails on any placed part without an LCSC number, and on one LCSC number used with two
    footprints).

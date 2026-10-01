@@ -754,6 +754,25 @@ pass.
 - **C117 100 nF 50 V 0603** added, BMS_BAT -> GND at U8.16/17 (local bypass; C9 4.7 uF stays as the bulk, ~19 mm away).
 - L3 accepted as the main signal layer (VBAT band at y < 16 + signal lanes behind it, GND fill in the free areas):
   DESIGN 6.2 updated.
-- Power-first rework of the drive outputs / VM feeds, power entry, U2 VBAT feed and the 5 V buck (re-placed tight at
-  U2) approved; layout only, no netlist change beyond C117.
+- Power-first rework of the drive outputs / VM feeds, power entry, U2 VBAT feed and the 5 V buck (re-placed closer to
+  U2; as built the SW run is still 13.5 mm, DESIGN 6.7) approved; layout only, no netlist change beyond C117.
+
+### Rev L4, final layout (2026-10-01, layout v2 stages hR .. hX, then silk hS)
+
+Layout only: no netlist or pin change after C117, so no firmware impact.
+- Power rework (stages hDA, hPE, hWE): drive outputs to JL / JR and the VM feeds (R300 under U3; U4's VM through an L3
+  strip; C308 / C408 3.8 / 6.6 mm from the VM pins, DESIGN 6.6), power-entry sense traces and INA239 Kelvin taps from
+  RS4's inner edges, U13 / C12 / C14 / D4 / R2 / R3 / C2 / R15 re-placed, U2's VBAT feed, the buck parts moved toward U2
+  (C20 / C21 / C24 / C27 / D2 / L1 / C28), C117 at U8.16 (C11 / C7 nudged).
+- JP1 turned 180 deg in place (stage hJ): its +5V pad now faces the rear and is fed down the west edge and along the rear
+  on L3; the old +5V feed through the front power area is gone.
+- Divider tops R22 / R24 / R26 / R63 (68 k) in one row in front of the MCU (stage hT), tapped by 0.15 mm L3 lanes from the
+  SHx sense lanes / the VBAT feed.  As built the W_B / W_C taps run under the phase-C Kelvin pair on L4 (SPC over W_B
+  ~12.6 mm, ~0.8 pF) and W_A under the SPB lane ~4.6 mm; the CSA is sampled mid-PWM, so this is accepted.  R_S3's L3
+  lane moved to y 16.39; R42 / C19 moved to U2's end of W_nFAULT.
+- D3 and R62 on the top face (stage hD).
+- Pours and stitching (stage hP): L2 solid GND, L1 power pours with INA239 tap keep-outs, L3 VBAT band + GND fill, L4 GND
+  fill, EP thermal via arrays (POFV) under U2 / U3 / U4, GND stitching; hX: J1.16 on its NC net.
+- Accepted: the +5V trunk from the buck to J1 stays 0.2 mm (mostly L3, single vias): at the 0.6 A worst-case budget
+  ~45 mV drop and ~10-15 C rise (IPC-2152, plane adjacent); C24 (U2 VM bypass) ~6 mm from pin 6.
 

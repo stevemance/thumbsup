@@ -240,7 +240,7 @@ for ph, hi, lo, shunt, nt in (("A", "Q1", "Q2", "RS1", "NT1"), ("B", "Q3", "Q4",
 
 # weapon interlock: each phase enable INLx = TIM1_CHxN AND W_ARM_S (dynamic ARM from the compute board, below).  In 3x PWM mode
 # INLx = 0 puts the phase Hi-Z whatever INHx does, so without ARM the weapon coasts and cannot be driven, and the
-# DRV8323 stays awake (ENABLE = W_EN from the MCU) so nFAULT/CSA keep working.  W_ARM_S also goes to the MCU (PD2, FT).
+# DRV8323 stays awake (ENABLE = W_EN from the MCU) so nFAULT/CSA keep working.  W_ARM_S also goes to the MCU (PC15).
 part("U6", "SN74LVC08ABQAR", "Package_DFN_QFN:DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm",
      {"1": ("1A", "W_INLA_M"), "2": ("1B", "W_ARM_S"), "3": ("1Y", "W_INLA"),
       "4": ("2A", "W_INLB_M"), "5": ("2B", "W_ARM_S"), "6": ("2Y", "W_INLB"), "7": ("GND", "GND"),
@@ -252,7 +252,7 @@ two("R40", "100k", R0402, "W_EN", "GND", LCSC["R100k"], "U2 ENABLE low (sleep) w
 # dynamic ARM: the compute board must keep toggling W_ARM_CLK from its control loop (>= 500 Hz, 3.3 V square wave).
 # C15/D9 rectify it into W_ARM (2.5-2.9 V at >= 500 Hz); stuck high, stuck low, a hung compute board or an unplugged header
 # let R41 discharge C16 below the U14 Schmitt threshold in 30-200 ms, which floats the weapon (INLx = 0).  W_ARM_S
-# (U14 output) feeds U6 and PD2.
+# (U14 output) feeds U6 and PC15.
 two("R18", "100k", R0402, "W_ARM_CLK", "GND", LCSC["R100k"], "W_ARM_CLK defined low with the header unplugged")
 two("C15", "470nF 25V", C0603, "W_ARM_CLK", "ARM_AC", LCSC["470n_25V_0603"], "ARM charge pump: coupling cap (a DC level passes nothing; < C16 so a clock stuck high cannot hold W_ARM up)")
 part("D9", "BAT54S", "Package_TO_SOT_SMD:SOT-23",
@@ -263,13 +263,13 @@ two("R41", "47k 1%", R0402, "W_ARM", "GND", LCSC["R47k"],
     "ARM bleed: W_ARM below U14's VT- 30-200 ms after the toggling stops (stuck high or low, 25-85 C incl. D9 leakage, VT- 0.8-1.33 V); swamps input leakage")
 part("U14", "74LVC1G17SE-7", "Package_TO_SOT_SMD:SOT-353_SC-70-5",
      {"1": ("NC", "NC"), "2": ("A", "W_ARM"), "3": ("GND", "GND"), "4": ("Y", "W_ARM_S"), "5": ("VCC", "+3V3")}, LCSC["LVC1G17"],
-     "Schmitt buffer on the slow RC ARM level (Diodes DS35124: SOT-353 1 NC, 2 A, 3 GND, 4 Y, 5 VCC; VT+ <= 2.0 V, VT- >= 0.8 V at 3 V): clean edges into U6 and PD2")
+     "Schmitt buffer on the slow RC ARM level (Diodes DS35124: SOT-353 1 NC, 2 A, 3 GND, 4 Y, 5 VCC; VT+ <= 2.0 V, VT- >= 0.8 V at 3 V): clean edges into U6 and PC15")
 two("C17", "100nF 16V", C0402, "+3V3", "GND", LCSC["100n_16V_0402"], "U14 decoupling")
-two("R19", "10k 1%", R0402, "W_ARM_S", "GND", LCSC["R10k"], "W_ARM_S held low if U14's output opens or U14 is unpowered (U6 inputs and PD2 must not float; 10 k beats 3 x 5 uA worst-case input leakage)")
+two("R19", "10k 1%", R0402, "W_ARM_S", "GND", LCSC["R10k"], "W_ARM_S held low if U14's output opens or U14 is unpowered (U6 inputs and PC15 must not float; 10 k beats 3 x 5 uA worst-case input leakage)")
 for k, ph in enumerate("ABC"):
-    two(f"R{47 + k}", "100k", R0402, f"W_INL{ph}_M", "GND", LCSC["R100k"], f"TIM1_CH{k+1}N low while the MCU is in reset (U6 input must not float)")
+    two(f"R{47 + k}", "100k", R0402, f"W_INL{ph}_M", "GND", LCSC["R100k"], f"TIM1_CH{3 - k}N ({ph}: {['PB15', 'PA12', 'PA7'][k]}) low while the MCU is in reset (U6 input must not float)")
 two("R42", "10k 1%", R0402, "W_nFAULT", "+3V3", LCSC["R10k"], "nFAULT pull-up")
-two("C19", "1nF 50V", C0402, "W_nFAULT", "GND", LCSC["1n_50V_0402"], "W_nFAULT glitch filter at PC13 (TIM1 BKF = 0 is required for the comparator trip, so the pin needs analog filtering; assertion is a strong open-drain pull-down, only the release slows to ~10 us)")
+two("C19", "1nF 50V", C0402, "W_nFAULT", "GND", LCSC["1n_50V_0402"], "W_nFAULT glitch filter on PA6 (TIM1_BKIN; on the board it sits at U2's end of the line) (TIM1 BKF = 0 is required for the comparator trip, so the pin needs analog filtering; assertion is a strong open-drain pull-down, only the release slows to ~10 us)")
 two("R43", "10k 1%", R0402, "+3V3", "W_NTC", LCSC["R10k"], "weapon FET NTC pull-up")
 two("TH1", "NCP18XH103F03RB", "Resistor_SMD:R_0603_1608Metric", "W_NTC", "GND", LCSC["NTC10k"], "at the weapon FETs")
 two("C44", "100nF 16V", C0402, "W_NTC", "GND", LCSC["100n_16V_0402"], "NTC node filter at the MCU")
@@ -402,7 +402,7 @@ two("C73", "100nF 16V", C0402, "R_MTEMP", "GND", LCSC["100n_16V_0402"], "motor R
 for s in "LR":
     for ph in "ABC":
         two(f"R{'7' if s == 'L' else '8'}{ord(ph) - 65}", "330R", R0402, f"{s}_SO{ph}", f"{s}_SO{ph}_F", LCSC["R330"], f"drive {s} CSA {ph} filter R")
-        two(f"C{'8' if s == 'L' else '9'}{ord(ph) - 65}", "22pF C0G", C0402, f"{s}_SO{ph}_F", "GND", LCSC["22p_0402"], f"drive {s} CSA {ph} filter C (at the MCU pin)")
+        two(f"C{'8' if s == 'L' else '9'}{ord(ph) - 65}", "22pF C0G", C0402, f"{s}_SO{ph}_F", "GND", LCSC["22p_0402"], f"drive {s} CSA {ph} filter C (near the MCU pin; C82 / C92 sit 4.4-6 mm away on the board)")
 
 part("U5", "AP2112K-3.3TRG1", "Package_TO_SOT_SMD:SOT-23-5",
      {"1": ("VIN", "+5V"), "2": ("GND", "GND"), "3": ("EN", "+5V"), "4": ("NC", "NC"), "5": ("VOUT", "+3V3")},
@@ -417,7 +417,7 @@ part("J1", "B2B 2x10 1.27mm male", "motor_board:BOOMELE_1.27-2x10P_SMD",
       "9": ("SWDIO", "SWDIO"), "10": ("SWCLK", "SWCLK"), "11": ("GND", "GND"), "12": ("VBAT_SNS_H", "VBAT_SNS_H"),
       "13": ("+5V", "+5V"), "14": ("GND", "GND"), "15": ("GND", "GND"), "16": ("SPARE2", "NC"),
       "17": ("MB_TX", "MB_TX"), "18": ("W_ARM_CLK", "W_ARM_CLK"), "19": ("MB_RX", "MB_RX"), "20": ("GND", "GND")},
-     LCSC["B2B_M"], "to the compute board: 5 V out (<=0.45 A, 3 pins), UART, weapon ARM (toggled, pin 18 next to GND 20), reset + SWD for programming, pack voltage, cell monitor I2C + alert (pull-ups on the compute board); 7 and 16 spare (rev L4 order: UART at the MCU end, BMS at the U8 end).  Footprint: vendor land (20 x 1.5x0.74 mm pads at x = +-2.5 mm, odd pins left); the compute-board socket footprint is the mirror image")
+     LCSC["B2B_M"], "to the compute board: 5 V out (<=0.45 A, 3 pins), UART, weapon ARM (toggled, pin 18 next to GND 20), reset + SWD for programming, pack voltage, cell monitor I2C + alert (pull-ups on the compute board); 7 and 16 spare (rev L4 order: UART at the MCU end, BMS at the U8 end).  Footprint: vendor land (20 x 2.5x0.74 mm pads centred at x = +-2.0 mm, 1.5 mm gap, odd pins left); the compute-board socket footprint is the mirror image")
 two("R16", "10k 1%", R0402, "NRST", "+3V3", LCSC["R10k"], "NRST pull-up: an RP2040 pin in reset (~50k pull-down) must not hold NRST mid-level")
 two("R17", "10k 1%", R0402, "MB_RX", "+3V3", LCSC["R10k"], "MB_RX pull-up (compute board absent or in reset)")
 for i, (n, net) in enumerate((("3V3", "+3V3"), ("SWDIO", "SWDIO"), ("SWCLK", "SWCLK"), ("NRST", "NRST"), ("GND", "GND"),
