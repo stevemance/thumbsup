@@ -4,4 +4,5 @@ import v2_pre
 from v2_pre import EDITS  # noqa: F401
 
 ROT = float(os.environ.get("HX_ROT", "90"))
-EDITS.append(dict(op="move", ref="U6", x=61.75, y=30.25, rot=ROT, side="B"))
+for ref, x, y, r, s in (("D8", 37.6, 29.2, ROT, "B"), ("D7", 40.95, 28.5, ROT, "B")):
+    EDITS.append(dict(op="move", ref=ref, x=x, y=y, rot=r, side=s))
