@@ -1,0 +1,62 @@
+L2 (In1.Cu GND plane): 278 holes, 241 with an antipad (non-GND vias / PTH / NPTH), antipad = drill/2 + 0.2 mm
+  minimum web between neighbouring antipads: -0.050 mm
+  worst webs (web mm | hole A | hole B):
+    -0.050 | via R_S3 (35.25, 29.85) dr 0.2 | via R_H2B (35.80, 29.85) dr 0.2
+    -0.041 | via SPI_MISO (25.40, 18.40) dr 0.2 | via R_FBBK (25.90, 18.15) dr 0.2
+    -0.041 | via R_SOC_F (37.25, 25.35) dr 0.2 | via W_INLA_M (36.75, 25.60) dr 0.2
+    -0.041 | via L_S2 (40.50, 29.85) dr 0.2 | via L_nCS (40.00, 30.10) dr 0.2
+    -0.030 | via R_S3 (36.95, 23.45) dr 0.2 | via R_SOB_F (36.50, 23.10) dr 0.2
+    -0.030 | via L_SOB_F (34.55, 26.80) dr 0.2 | via R_H1B (35.10, 26.95) dr 0.2
+    -0.025 | via +3V3 (15.15, 28.95) dr 0.25 | via L_H3B (15.15, 28.35) dr 0.2
+    -0.017 | via R_INHC (38.00, 22.75) dr 0.2 | via +3V3A (38.60, 22.65) dr 0.25
+     0.000 | via W_INHC (46.85, 25.55) dr 0.2 | via W_INHB (46.25, 25.55) dr 0.2
+     0.002 | via R_VSRC (77.85, 26.50) dr 0.2 | via R_VS (77.90, 27.10) dr 0.2
+     0.008 | via R_MTEMP (71.50, 34.30) dr 0.2 | via R_H3B (71.60, 33.70) dr 0.2
+     0.008 | via L_S1 (39.90, 33.40) dr 0.2 | via L_INHC (40.50, 33.30) dr 0.2
+     0.010 | via W_ARM_S (57.00, 25.60) dr 0.2 | via W_INLB_M (57.50, 25.95) dr 0.2
+     0.018 | via CELL0 (45.35, 30.00) dr 0.2 | via W_INLB_M (45.20, 29.40) dr 0.2
+     0.026 | via L_INHC (10.90, 31.55) dr 0.2 | via L_H1 (10.35, 31.85) dr 0.2
+  antipad chains with webs < 0.25 mm: 30; longer than 3.0 mm: 1
+    SLOT   3.30 mm, 6 holes, x 60.75-63.45 y 28.18-28.85: W_INHA, W_INHB, W_INHC, W_INLA, W_INLB, W_INLC
+    chain  2.60 mm, 4 holes, x 38.00-40.00 y 22.60-22.85: +3V3A, NRST, R_INHC, W_INLC_M
+    chain  2.18 mm, 4 holes, x 60.75-62.25 y 20.30-20.80: W_SLC, W_SNC, W_SOB, W_SOC
+    chain  1.99 mm, 3 holes, x 45.00-45.35 y 29.40-30.75: +3V3, CELL0, W_INLB_M
+    chain  1.83 mm, 3 holes, x 40.00-41.20 y 29.85-30.10: L_S2, L_nCS, R_H1B
+    chain  1.77 mm, 3 holes, x 45.60-46.50 y 21.65-22.40: +3V3, W_SOC, W_VB
+    chain  1.41 mm, 2 holes, x 36.80-36.90 y 29.40-30.20: R_S2, W_INLB_M
+    chain  1.35 mm, 2 holes, x 58.50-59.25 y 25.85-25.85: W_ARM, W_ARM_S
+    chain  1.35 mm, 2 holes, x 7.65-8.40 y 31.60-31.60: +3V3, L_H3B
+    chain  1.32 mm, 2 holes, x 10.30-10.90 y 30.20-30.60: L_INHB, L_VSRC
+  connectivity (raster 0.025 mm): 6 copper region(s); main 2781.8 mm2
+    ISLAND 0.001 mm2 at x 25.60-25.60 y 18.18-18.18
+    ISLAND 0.001 mm2 at x 36.95-36.95 y 25.38-25.38
+    ISLAND 0.001 mm2 at x 57.25-57.25 y 25.78-25.78
+    ISLAND 0.001 mm2 at x 40.20-40.20 y 29.88-29.88
+    ISLAND 0.002 mm2 at x 71.53-71.58 y 34.00-34.00
+  copper necks narrower than 0.25 mm (raster ridge): 30
+    0.050 mm wide at (10.62, 31.70), ridge extent 0.00 mm
+    0.050 mm wide at (38.29, 22.71), ridge extent 0.20 mm
+    0.050 mm wide at (40.20, 33.36), ridge extent 0.08 mm
+    0.050 mm wide at (42.30, 34.69), ridge extent 0.25 mm
+    0.050 mm wide at (45.28, 29.70), ridge extent 0.05 mm
+    0.050 mm wide at (46.55, 25.55), ridge extent 0.10 mm
+    0.050 mm wide at (57.25, 25.78), ridge extent 0.10 mm
+    0.050 mm wide at (71.55, 34.00), ridge extent 0.05 mm
+    0.050 mm wide at (77.88, 26.80), ridge extent 0.15 mm
+    0.100 mm wide at (20.43, 16.86), ridge extent 0.15 mm
+  KiCad fill of a GND zone on In1 (copy): 1 filled outline(s), 0 holes
+L3 (In2.Cu): VBAT pour in the front band, GND pour behind it, lanes / vias / PTH of other nets cut out
+  VBAT pour: 1 piece(s); largest 1338.3 mm2
+  GND pour: 74 piece(s); largest 912.0 mm2
+    piece 33.68 mm2 at x 35.58-55.55 y 22.40-29.50
+    piece 15.78 mm2 at x 28.20-40.68 y 18.73-21.38
+    piece 10.67 mm2 at x 36.58-42.10 y 23.58-26.05
+    piece 10.28 mm2 at x 39.58-46.15 y 19.60-21.80
+    piece 9.95 mm2 at x 41.98-51.62 y 30.15-32.90
+    piece 5.56 mm2 at x 40.65-46.50 y 23.15-25.80
+    piece 3.89 mm2 at x 36.93-44.83 y 29.33-30.35
+    piece 2.86 mm2 at x 35.35-39.48 y 30.93-31.75
+    piece 2.58 mm2 at x 21.12-25.60 y 16.73-18.07
+    piece 2.39 mm2 at x 39.03-45.20 y 20.95-22.58
+    piece 1.59 mm2 at x 61.28-63.90 y 20.70-22.05
+    ... 62 more pieces, 13.53 mm2 together

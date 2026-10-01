@@ -80,6 +80,30 @@ for e in tail_edits.EDITS:
                 if e.get("reroute"):
                     rr_kill[id(x)] = x
                     rr_opt[x.GetNetname()] = e["reroute"] if isinstance(e["reroute"], dict) else {}
+# exact rips: dict(op="rip_segs", tracks=[(net, layer, a, b)], vias=[(net, c)]) - the listed segments / vias only
+# (matched to 0.005 mm, either direction), e.g. one stage's router-made copper replaced by a later global re-route
+_segs = {}
+for e in tail_edits.EDITS:
+    if e["op"] == "rip_segs":
+        for n, l, a, c in e.get("tracks", []):
+            for k in ((round(a[0], 2), round(a[1], 2), round(c[0], 2), round(c[1], 2)),
+                      (round(c[0], 2), round(c[1], 2), round(a[0], 2), round(a[1], 2))):
+                _segs[(n, l) + k] = True
+        for n, c in e.get("vias", []):
+            _segs[(n, "via", round(c[0], 2), round(c[1], 2))] = True
+if _segs:
+    for x in b.GetTracks():
+        n = x.GetNetname()
+        if x.GetClass() == "PCB_VIA":
+            p = loc(x.GetPosition())
+            if (n, "via", round(p[0], 2), round(p[1], 2)) in _segs:
+                kill_all[id(x)] = x
+                hard_via.add(id(x))
+        elif x.GetClass() == "PCB_TRACK":
+            p0, p1 = loc(x.GetStart()), loc(x.GetEnd())
+            if (n, pcbnew.BOARD.GetStandardLayerName(x.GetLayer()), round(p0[0], 2), round(p0[1], 2), round(p1[0], 2),
+                    round(p1[1], 2)) in _segs:
+                kill_all[id(x)] = x
 # a via caught only by layer-limited rips stays if a surviving track still lands on it
 for v in [x for x in kill_all.values() if id(x) in soft_via and id(x) not in hard_via]:
     vp = v.GetPosition()
@@ -215,7 +239,7 @@ for e in tail_edits.EDITS:
             y.SetNet(nets[q["net"]])
             b.Add(y)
         print(f"copy_nets: {len([q for q in src if q['net'] in ns])} items from {e['src']}")
-    elif op in ("rip", "rip_ref"):
+    elif op in ("rip", "rip_ref", "rip_segs"):
         pass                             # (done in pass 1)
     elif op == "track":
         for a, c in zip(e["pts"], e["pts"][1:]):

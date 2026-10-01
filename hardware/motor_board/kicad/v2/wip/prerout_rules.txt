@@ -218,3 +218,22 @@ new vias closer than 1.3 mm to another via: 56
     +3V3A(38.6, 22.65) - R_INHC(38.0, 22.75): 0.61
     SWCLK(81.6, 18.55) - MB_RX(81.65, 19.45): 0.90
     BAL3(57.35, 28.95) - W_INLA(58.53, 28.9): 1.18
+73 new track segments, 4 new vias
+  RULE analog on L4 L_MTEMP [43.3, 26.35]->[45.1, 26.35]
+  RULE analog on L4 L_MTEMP [42.75, 26.8]->[43.15, 26.4]
+  RULE analog on L4 L_MTEMP [42.65, 26.85]->[42.7, 26.8]
+  RULE analog on L4 L_MTEMP [45.1, 26.35]->[45.15, 26.3]
+  RULE analog on L4 L_MTEMP [42.65, 27.3]->[42.65, 26.85]
+  RULE analog on L4 L_MTEMP [43.25, 26.4]->[43.3, 26.35]
+  RULE analog on L4 L_MTEMP [42.7, 26.8]->[42.75, 26.8]
+  RULE analog on L4 L_MTEMP [42.45, 27.5]->[42.65, 27.3]
+  RULE analog on L4 L_MTEMP [45.15, 26.3]->[45.22, 26.25]
+  RULE analog on L4 L_MTEMP [43.15, 26.4]->[43.25, 26.4]
+  RULE analog on L4 CELL2 [67.9, 29.95]->[67.9, 29.55]
+  RULE analog on L4 CELL2 [67.9125, 30.0]->[67.9, 29.95]
+  RULE analog on L4 CELL2 [67.9, 29.55]->[67.9125, 29.5]
+  RULE ANALOG-shadow L3 BUCK_EN / L4 CELL2: 0.4 mm near (67.5, 29.9)
+  RULE ANALOG-shadow L3 W_INHA / L4 L_MTEMP: 0.4 mm near (53.5, 27.1)
+new vias closer than 1.3 mm to another via: 2
+    +5V(77.0, 22.65) - NRST(77.5, 23.1): 0.67
+    NRST(82.9, 21.5) - MB_RX(83.4, 20.65): 0.99
