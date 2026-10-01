@@ -10,13 +10,11 @@ v2_pre.VIA_PITCH = 0.9
 # (the bottom under the MCU is a parts farm: via spots from a clearance scan, tmp probe.py scan)
 via("W_INLA_M", (36.2, 26.0))
 route("W_INLA_M", P("U1", 37), ("via", 36.2, 26.0), [F1], margin=1.5, via_cost=99)
-tr("W_INLA_M", L3, [(36.2, 26.0), (41.5, 26.0), (42.0, 26.5), (44.6, 26.5)])
 via("W_INHA", (37.6, 27.4))
-route("W_INHA", P("U1", 44), ("via", 37.6, 27.4), [F1], margin=1.5, via_cost=99)
-tr("W_INHA", L3, [(37.6, 27.4), (44.6, 27.4)])
+route("W_INHA", P("U1", 44), ("via", 37.6, 27.4), [F1], margin=2.5, via_cost=99)
 tr("W_INLB_M", F1, [(32.33, 29.0), (35.6, 29.0)])
 via("W_INLB_M", (35.6, 29.0))
-tr("W_INLB_M", L3, [(35.6, 29.0), (44.6, 29.0)])
+# (their L3 legs east are routed in h3, to wherever U6 sits)
 
 # ======================================================================= B. MCU rear row
 # SWD (PA13/PA14, fixed): via in the pad (POFV, staggered) -> two L4 lanes under the rear pins, east to J1 / TPs
