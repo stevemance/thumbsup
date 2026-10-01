@@ -734,3 +734,14 @@ BMS_ALERT, 6 BMS_SCL (U8 end); 17 MB_TX, 19 MB_RX (MCU end); 18 W_ARM_CLK (under
 VBAT_SNS_H (under R33); 11 / 15 GND, 7 / 16 spare; +5V 1 / 2 / 13, NRST 8, SWD 9 / 10 unchanged.  Same signal set, same
 GND / +5V counts.  DESIGN.md §3.5 table updated; the compute board's socket must follow it.
 
+### Rev L4, layout v2 hand pass + review fixes (2026-10-01, layout)
+
+The hand pass took the v2 board to 0 signal/rail opens (stage chain kicad/gen/h1 ... hY; power pours and GND stitching
+still to do).  Parts moved, no part added, removed or changed: C64 (U1 VDD bulk) to (32.0, 21.0) bottom beside C61;
+C4 (cell-1 filter) under U8 at (73.3, 27.98) bottom; R11 (BAL4 -> BAT) beside R10 / J4.5 at (76.2, 29.37) bottom;
+R42 / C19 (W_nFAULT pull-up / filter) to (46.3, 20.3) / (47.3, 20.5) bottom; east cluster: C73 to the R117 end of
+R_MTEMP (79.7, 32.4), C114 (79.15, 26.6), D8 (74.95, 33.45), D5 to the bottom behind J4 (69.5, 33.5; DESIGN 6.13
+exception), R47 / C40 swapped.  Silk (stage hS): only parts handled after assembly keep silk (connectors, wire holes,
+JP, TP, MH, D3, C1); the rest moved to the Fab layers.  The adversarial review of the same day is in progress; its doc
+fixes are in FAB.md, BOM.md, DESIGN.md, PLACEMENT.md and ROUTING_PLAN.md.  No firmware impact: no pin changes in this
+pass.

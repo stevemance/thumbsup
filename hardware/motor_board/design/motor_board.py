@@ -394,8 +394,8 @@ two("R64", "10k 1%", R0402, "VBAT_SNS", "GND", LCSC["R10k"], "pack divider botto
 two("R33", "100k", R0402, "VBAT_SNS", "VBAT_SNS_H", LCSC["R100k"], "header branch of the pack divider: a compute-board pin's reset pull-down (RP2040 ~50 k) shifts the MCU reading < 6 % instead of 10-15 %; the compute board reads it through this 100 k (add ~10 nF at its ADC pin)")
 two("C68", "100nF 16V", C0402, "VBAT_SNS", "GND", LCSC["100n_16V_0402"], "pack divider filter (0.87 ms; the fast bus OV trip is the INA239 BOVL alert)")
 two("C74", "100nF 16V", C0402, "+3V3", "GND", LCSC["100n_16V_0402"], "U1 VBAT pin 1")
-two("C72", "100nF 16V", C0402, "L_MTEMP", "GND", LCSC["100n_16V_0402"], "motor L NTC filter at PF0")
-two("C73", "100nF 16V", C0402, "R_MTEMP", "GND", LCSC["100n_16V_0402"], "motor R NTC filter at PF1")
+two("C72", "100nF 16V", C0402, "L_MTEMP", "GND", LCSC["100n_16V_0402"], "motor L NTC filter at PF1")
+two("C73", "100nF 16V", C0402, "R_MTEMP", "GND", LCSC["100n_16V_0402"], "motor R NTC filter for PF0, placed at the R117 (connector) end, not at the MCU pin")
 # drive CSA outputs: TI SLVSH07 9.2.1.1.6 RC (330 ohm + 22 pF) at each ADC / OPAMP pin
 for s in "LR":
     for ph in "ABC":

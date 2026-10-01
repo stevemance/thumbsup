@@ -1,7 +1,7 @@
 # Motor board BOM notes (rev L, 2026-09-24)
 
 The machine-readable BOM is [`design/bom.csv`](design/bom.csv) (JLCPCB columns: Comment,
-Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`: **199 assembled
+Designator, Footprint, LCSC Part #), generated from `design/motor_board.py`: **194 assembled
 parts, 67 lines**, plus 6 DNP footprints (C110–C112, C114–C116, left out of the CSV; mark them
 DNP / exclude-from-position in KiCad).  Wire holes (plated through-holes), test pads, net-ties, solder jumpers and
 mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 2026-09-23/24
@@ -12,10 +12,10 @@ mounting holes are copper only.  Stock figures are from the JLC/LCSC lookups of 
 
 | Line | Part | LCSC | Note |
 |---|---|---|---|
-| U1 | STM32G474RET6 LQFP-64 | C521608 | Extended, **~200 at JLC: reserve it**.  RBT6/RCT6 (less flash, C1235414 / C529413) are pin-identical.  LCSC is not ST-authorised: check marking/ID/revision at bring-up |
+| U1 | STM32G474RET6 LQFP-64 | C521608 | Extended, **122 at JLC on 2026-10-01: reserve it**.  RBT6/RCT6 (less flash, C1235414 / C529413) are pin-identical.  LCSC is not ST-authorised: check marking/ID/revision at bring-up |
 | U2 | DRV8323RHRGZR VQFN-48 7×7 | C543035 | Extended, **~203 in stock: reserve it**; alt listing C2150467.  Must be **R** (buck) **H** (hardware/strap) 48-pin |
 | U3, U4 | DRV8316CRRGFR VQFN-40 5×7 | C5447274 | Extended, ~2,900.  **C** variant (datasheet SLVSH07), SPI; the "R" in the MPN is tape & reel.  Custom footprint (RGF0040E) |
-| U7 | INA239AIDGSR VSSOP-10 | C2876522 | Extended, **~101 in stock**.  INA229AIDGSR (C2846803) is pin/footprint compatible; firmware must handle its 24-bit registers |
+| U7 | INA239AIDGSR VSSOP-10 | C2876522 | Extended, **0 in stock at JLC (2026-10-01): owner decision pending**.  INA229AIDGSR (C2846803, pin/footprint compatible; firmware must handle its 24-bit registers) is also at 0; INA239AQDGSRQ1 (C4367136, VSSOP-10, same DGS package) had 7 |
 | U8 | BQ76907RGRR VQFN-20 3.5×3.5 | C22458649 | Extended, ~2,400.  CRC-off variant (not BQ7690701) |
 | U13 | LM74502DDFR SOT-23-8 (DDF) | C3236215 | Extended, ~8,300.  Must be the plain LM74502 (60 µA gate drive), **not LM74502H** (11 mA: no soft-start).  KiCad `Texas_DDF0008A_SOT-8_1.6x2.9mm_P0.65mm` |
 | U6 | SN74LVC08ABQAR WQFN-14 (BQA) 2.5×3 | C31971766 | Extended, ~3,000 (thin: reserve).  Same die and pin numbers as the TSSOP (SCAS283); thermal pad 15 to GND.  KiCad `DHWQFN-14-1EP_2.5x3mm_P0.5mm_EP1x1.5mm` (= TI BQA0014A land and JLC's footprint).  Its ARM inputs come from the U14 Schmitt buffer.  v2 swap (was SN74LVC08APWR C465737) |

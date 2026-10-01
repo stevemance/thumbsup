@@ -34,7 +34,7 @@ Rev B applied review round 1, rev C round 2, rev D round 3, rev E round 4, rev F
 | Compute link | 5 V / ≤ 0.45 A to the compute board, UART, reset + SWD programming, weapon ARM, cell-monitor I²C | 20-pin 1.27 mm header (2 spare) |
 | Safety | Weapon cannot be driven unless the compute board is alive and armed; everything off in reset; failsafe on command loss | **Dynamic ARM**: the compute board must keep toggling W_ARM_CLK from software (≥ 500 Hz); a charge pump + Schmitt buffer turns that into the ARM level, which gates every weapon phase enable in hardware (AND on INLx) and disarms ~30–200 ms after the toggling stops (sim: 52–164 ms with nominal parts, 25–85 °C).  Command timeout and a watchdog in firmware.  Pulled-down enables; DRVOFF pulled up |
 | Environment | Indoor arena, ambient 0–50 °C | The DRV8316 VM filters (R302/R402 0.1 Ω + 2 × 10 µF 1210, ~15 µF at 16.8 V) keep the simulated switch-closure, re-close and loaded contact-bounce steps at the DRV8316 VM pins ≤ ~1.9 V/µs with C1 down to 0 °C (~2.1 V/µs only at C1's −40 °C ESR limit; voltage-dependent MLCC model), under the 4 V/µs abs max (§5, §7.2).  Not covered: a weapon phase-to-ground short (§7.21) |
-| Build | JLCPCB assembly | All parts on LCSC; 199 assembled parts + 6 DNP footprints, 67 BOM lines; **two-sided**: power stage, tall parts, connectors and test pads on top, low-profile passives/logic and J1 on the bottom; J4 THT.  Board area and chassis fit are settled at layout (§6.13 lists the estimate and the levers) |
+| Build | JLCPCB assembly | All parts on LCSC; 194 assembled parts + 6 DNP footprints, 67 BOM lines; **two-sided**: power stage, tall parts, connectors and test pads on top, low-profile passives/logic and J1 on the bottom; J4 THT.  Board area and chassis fit are settled at layout (§6.13 lists the estimate and the levers) |
 
 Not on this board (compute board): Pico/MCU for control, IMU + high-g accel, logging flash,
 Bluetooth, status LEDs, the physical ARM link.  All power functions (pack input, protection,
@@ -102,7 +102,7 @@ Path: **BAT+ (BAT_IN) → Q7 → PSW_S → Q8 → VBAT_SW → RS4 (1 mΩ) → VB
 | Part | Value | Notes |
 |---|---|---|
 | JBAT1 / J_BAT− | plated through-holes (KiCad `SolderWire-1.5sqmm_1x01_D1.7mm_OD3.9mm`: 2.15 mm drill, 3.9 mm pad) | wires pushed through and soldered (SMD pads peel in combat); 16–18 AWG pigtail to an XT30 on the lead (XT30: 15 A cont / 30 A burst; pack peak is 22 A for 0.5 s).  **The external power switch is in the + wire** (see below) |
-| U13 | LM74502DDFR (SOT-23-8 thin / DDF, top side next to Q7/Q8) | High-side switch controller: charge pump (C12 220 nF VCAP–VS), 60 µA gate source, 2.4 A gate sink, −65 V reverse rating, 45 µA quiescent.  VS = BAT_IN with C14 100 nF **100 V** 0805 (BAT_IN rings to 40–60 V when the switch opens under load; Q7 avalanches).  OV pin to GND (no over-voltage cut-off: a disconnect during regen would make things worse) |
+| U13 | LM74502DDFR (SOT-23-8 thin / DDF, top side next to Q7/Q8) | High-side switch controller: charge pump (C12 220 nF VCAP–VS), 60 µA gate source, 2.4 A gate sink, −65 V reverse rating, 45 µA quiescent.  VS = BAT_IN with C14 100 nF **100 V** 0603 (BAT_IN rings to 40–60 V when the switch opens under load; Q7 avalanches).  OV pin to GND (no over-voltage cut-off: a disconnect during regen would make things worse) |
 | Q7, Q8 | 2 × HYG015N04LS1C2 (same as the weapon FETs), common source PSW_S, common gate PSW_G | **Q7** (drain at the pack): body diode blocks the plug-in surge; it is the FET in its linear region during soft-start (16 W peak, 54–57 mJ per closure).  **Q8** (drain at the board): conducts backwards when on; its body diode blocks a reversed pack.  On: 2 × 1.4 mΩ, ~2.0–2.5 W together at 22 A (hot), 0.5 s bursts |
 | R1 / D10 / C13 / R32 / D4 | 4.7 k / 1N4148W / 22 nF (Cdvdt) / 1 M / 12 V zener gate–source | Soft-start: VBAT ramps at ~(I_GATE − R32 bleed) / C13 ≈ 2.2 V/ms (sim; ~3.0 V/ms at the 77 µA max gate current), ~0.8 A into ~380 µF.  R1 isolates C13 so turn-off stays fast.  D10 lets C13 only *slow the gate's rise*: with a reversed pack GND is the most positive node and C13 would otherwise push the gate up and turn Q7/Q8 on (sim: 102–147 A without D10 if U13's unpowered gate hold is weak; only the C14 charge spike with it).  R32 resets C13 between power-ups (22 ms); it draws ~20–28 µA of the gate drive, so the ramp is 1.3–3.0 V/ms over the gate-current spread.  After a UVLO trip C13 stays charged for ~20–40 ms (D10 blocks its discharge through the gate); a re-close in that window is not slowed by C13 but is still benign (≤ 0.06 V/µs).  D4 clamps Vgs at 12 V (U13 GATE–SRC abs max 15 V) at full charge-pump voltage and through sag/recovery transients.  |
 | R13 / R14 / C18 | 100 k / 15 k / 100 nF on EN/UVLO | Switch off below ~9.0 V (7.7–10.1 V with 1 % resistors and the 0–5 µA EN sink), on above ~9.8 V (worst 10.8 V).  C18 (1.3 ms) filters the weapon's 24 kHz bus ripple so it cannot trip the UVLO early.  Stays below a tired 4S pack under load (~11.5 V average) **provided firmware folds current back at ~12 V** (§8); limits an *unloaded* quick re-close step to ~9 V (under load the bus can fall further before the filtered UVLO opens: §7.2) |
@@ -119,7 +119,8 @@ with 220 nF 25 V across each cell and from VC0 to VSS (C4–C8): a 22 µs filter
 10–1000 Ω / 0.1 µF min / RC ≤ 200 µs limits.  4S wiring per the BQ76907 datasheet Table 7-1: cells
 on VC7–VC6, VC5–VC4, VC3–VC2 and VC1–VC0, with VC6=VC5, VC4=VC3 and VC2=VC1 shorted on the
 board.  U8 is powered from the top balance tap through R11 100 Ω 0603 into C9 4.7 µF 50 V X7R
-(≥ 1 µF effective at 16.8 V) on BAT and REGSRC; REGOUT (enabled at 3.3 V by OTP default) has
+(≥ 1 µF effective at 16.8 V) on BAT and REGSRC (layout v2: C9 sits on top by the rear edge near J1, ~19 mm of
+trace from U8.16/17; a local cap at U8.16/17 is an owner decision pending); REGOUT (enabled at 3.3 V by OTP default) has
 C11 4.7 µF and no load.  Unused functions per TI Table 8-3: SRP/SRN and TS to VSS, CHG/DSG open.
 **D5 (B5819W, anode GND, cathode CELL0)** keeps VC0 near VSS when the balance lead is plugged
 without the main lead (U8's return current then flows through VC0) and carries the C9 charge at
@@ -342,8 +343,8 @@ group takes ~8.7 µs (with 24.5-cycle ranks), inside the allowed windows.  Enabl
 right under its coupling cap C15 with GND 20 beside it; the compute board's socket follows this table.)
 
 J1 is on the **bottom** side (it faces the compute board below), with the other low-profile bottom
-parts (§6.13); JLC two-sided assembly is therefore required.  Footprint: custom `thumbsup:BOOMELE_1.27-2x10P_SMD` to the vendor land (20 × 1.5 ×
-0.74 mm pads at x = ±2.5 mm; odd pins in the left column, pin 1 top-left, seen from the side it
+parts (§6.13); JLC two-sided assembly is therefore required.  Footprint: custom `motor_board:BOOMELE_1.27-2x10P_SMD` to the vendor land (20 × 2.5 ×
+0.74 mm pads centred at x = ±2.0 mm, 1.5 mm gap; odd pins in the left column, pin 1 top-left, seen from the side it
 is mounted on).  JLC's second-side assembly adds ~$30 per order (a second stencil and the
 two-sided fee).
 
@@ -534,7 +535,8 @@ the UART to the compute board (USART1 at 2 Mbaud ≈ 200 kB/s; a 64-byte fast fr
     ~3100 mm² v1.1 bay.  Assembly is two-sided anyway (J1).  **Top:** Q1–Q8, RS1–RS4, C1,
     C25/C26/C31, U1–U4, U13 and the power-entry parts (BAT_IN must not appear on the bottom face),
     L1, D1/D2, J2–J4, the wire holes, D3, the test pads, and every part taller than ~1.1 mm (U5,
-    C9, the SOD-123 diodes).  **Bottom** (low-profile, inside the stack gap minus the compute
+    C9, the SOD-123 diodes; layout v2 exception: D5 sits on the bottom behind J4, so the compute board keeps a clear zone
+    under it).  **Bottom** (low-profile, inside the stack gap minus the compute
     board's own top-side parts): 0402/0603 passives that are not loop-critical, the SC-70/SOT-23/
     VSSOP/TSSOP logic and monitor ICs.  Loop-critical parts (bridge caps, CSA filters, DRV
     decoupling, gate network, buck loop) stay on the same side as their IC.  Levers if it does not
