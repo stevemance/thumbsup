@@ -18,7 +18,7 @@ def move(ref, x, y, rot, side):
 # routed_r2), minus the nets listed in H3_DROP (conflicts with the new hub)
 import json, os  # noqa: E401,E402
 from pathlib import Path  # noqa: E402
-_drop = set(os.environ.get("H3_DROP", "CELL0,R_MTEMP,BMS_SCL").split(","))
+_drop = set(os.environ.get("H3_DROP", "CELL0,R_MTEMP,BMS_SCL,VBAT_SNS_H").split(","))
 EDITS += [e for e in json.load(open(Path(__file__).with_name("h3_replay.json")))
           if e["net"].split("/")[-1] not in _drop]
 
@@ -33,6 +33,16 @@ route("U2_DVDD", P("U2", 36), P("C22", 1), [F1], margin=1.0)
 route("U2_MODE", P("U2", 29), P("R44", 1), [F1], margin=1.5)
 route("U2_IDRIVE", P("U2", 30), P("R45", 1), [F1], margin=1.5)
 route("U2_VDS", P("U2", 31), P("R46", 1), [F1], margin=1.5)
+
+# ---------------------------------------------------------------- the L3 weapon bus MCU -> U2 / U6 (h1 vias)
+tr("W_INHB", L3, [(45.8, 26.2), (46.55, 26.95), (59.0, 26.95)])
+tr("W_INHA", L3, [(35.2, 28.3), (35.45, 28.05), (59.0, 28.05)])
+tr("W_INHC", L3, [(39.9, 28.6), (40.05, 28.45), (59.0, 28.45)])
+tr("W_INLB_M", L3, [(35.6, 29.0), (35.95, 29.35), (61.75, 29.35)])
+tr("W_INLA_M", L3, [(38.5, 29.9), (38.75, 29.65), (59.0, 29.65), (59.4, 30.0)])
+via("W_INLA_M", (59.4, 30.0))
+tr("W_INLA_M", L4, [(59.4, 30.0), (60.31, 30.0)])
+move("R47", 61.5, 33.1, 90, "B")      # W_INLA_M pull-down south of U6
 
 # ---------------------------------------------------------------- U2 rear gate pins
 # INL 38 / 40 / 42: L1 stubs south into vias in U6's output pads 3 / 6 / 8

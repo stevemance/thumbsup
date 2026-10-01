@@ -7,14 +7,20 @@ v2_pre.VIA_PITCH = 0.9
 # ======================================================================= A. MCU west weapon pins -> L3 under the MCU
 # PB15 / PA10 / PA12 (TIM1 CH3N / CH3 / CH2N) are on the west edge; the bottom under the west pins carries the drive's
 # L_SOA / L_SOB lanes, so these go inward on L1 between the drive's west-pin escapes and drop to L3 inside the body.
-# (the bottom under the MCU is a parts farm: via spots from a clearance scan, tmp probe.py scan)
-via("W_INLA_M", (36.2, 26.0))
-route("W_INLA_M", P("U1", 37), ("via", 36.2, 26.0), [F1], margin=1.5, via_cost=99)
-via("W_INHA", (37.6, 27.4))
-route("W_INHA", P("U1", 44), ("via", 37.6, 27.4), [F1], margin=2.5, via_cost=99)
+# (the bottom under the MCU is a parts farm: via spots from a clearance scan, r2/probe.py scan)
+# The five weapon lines leave the MCU on L3 in the order U2 / U6 need them (north -> south: INHB, INHA, INHC, INLB_M,
+# INLA_M): INHA and INLB_M drop right inside the west pins, INLA_M crosses over them on L1 to a via further south, and
+# INHC (an east pin) comes in from the east side to a via between them (lanes: h3).
+via("W_INHA", (35.2, 28.3))
+route("W_INHA", P("U1", 44), ("via", 35.2, 28.3), [F1], margin=2.5, via_cost=99)
 tr("W_INLB_M", F1, [(32.33, 29.0), (35.6, 29.0)])
 via("W_INLB_M", (35.6, 29.0))
-# (their L3 legs east are routed in h3, to wherever U6 sits)
+via("W_INLA_M", (38.5, 29.9))
+route("W_INLA_M", P("U1", 37), ("via", 38.5, 29.9), [F1], margin=3.5, via_cost=99)
+via("W_INHC", (39.9, 28.6))
+tr("W_INHC", F1, [(43.67, 26.5), (42.6, 26.5), (39.9, 28.6)])
+via("W_INHB", (45.8, 26.2))
+tr("W_INHB", F1, [(43.67, 26.0), (45.4, 26.0), (45.6, 26.2), (45.8, 26.2)])
 
 # ======================================================================= B. MCU rear row
 # SWD (PA13/PA14, fixed): via in the pad (POFV, staggered) -> two L4 lanes under the rear pins, east to J1 / TPs
