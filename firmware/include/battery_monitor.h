@@ -1,9 +1,10 @@
 #ifndef BATTERY_MONITOR_H
 #define BATTERY_MONITOR_H
 
-// Low-battery alerts from the weapon ESC's voltage telemetry.
+// Low-battery alerts from the Pico's battery divider (H-bridge builds) or the
+// weapon ESC's voltage telemetry.
 //
-// Alert only: this never limits or stops anything.  The ESC voltage sags hard
+// Alert only: this never limits or stops anything.  The voltage sags hard
 // during weapon spin-up, so it is smoothed and the levels have hysteresis.
 // The ESC only reports voltage while the weapon is armed (DShot running); the
 // last level is kept while disarmed.

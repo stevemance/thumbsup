@@ -1,7 +1,5 @@
 #include "drive.h"
 #include "motor_control.h"
-#include "motor_linearization.h"
-#include "trim_mode.h"
 #include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,41 +147,6 @@ void drive_update(drive_control_t* control) {
     int8_t forward = control->forward;
     int8_t turn = control->turn;
 
-    // TRIM MODE: Pass through normal driving (no overrides, no trim applied)
-    if (trim_mode_is_active()) {
-        // In trim mode, drive normally without any trim correction
-        // User adjusts steering to make robot go straight, then captures samples
-        drive_output_t output = drive_mix(forward, turn);
-
-        // SAFETY: Verify output is within expected range
-        if (output.left_speed < -100 || output.left_speed > 100 ||
-            output.right_speed < -100 || output.right_speed > 100) {
-            DEBUG_PRINT("CRITICAL: Drive mix produced invalid output (%d, %d)\n",
-                        output.left_speed, output.right_speed);
-            drive_stop();
-            return;
-        }
-
-        // Apply per-motor linearization compensation
-        int8_t left_compensated = motor_linearization_compensate(MOTOR_LEFT_DRIVE, output.left_speed);
-        int8_t right_compensated = motor_linearization_compensate(MOTOR_RIGHT_DRIVE, output.right_speed);
-
-        motor_control_set_speed(MOTOR_LEFT_DRIVE, left_compensated);
-        motor_control_set_speed(MOTOR_RIGHT_DRIVE, right_compensated);
-        return;
-    }
-
-    // NORMAL MODE: Apply dynamic trim based on current speed
-    // Calculate speed as signed percentage (-100 to +100)
-    int8_t speed_percent = (int8_t)((forward * 100) / 127);
-
-    // Get interpolated trim offset based on current speed (supports forward and reverse)
-    int8_t trim_offset = trim_mode_get_offset(speed_percent);
-
-    // Apply trim to turn value
-    int32_t adjusted_turn = (int32_t)turn + trim_offset;
-    turn = (int8_t)CLAMP(adjusted_turn, -127, 127);
-
     drive_output_t output = drive_mix(forward, turn);
 
     // SAFETY: Verify output is within expected range before sending to motors
@@ -195,12 +158,10 @@ void drive_update(drive_control_t* control) {
         return;
     }
 
-    // Apply per-motor linearization compensation
-    int8_t left_compensated = motor_linearization_compensate(MOTOR_LEFT_DRIVE, output.left_speed);
-    int8_t right_compensated = motor_linearization_compensate(MOTOR_RIGHT_DRIVE, output.right_speed);
-
-    motor_control_set_speed(MOTOR_LEFT_DRIVE, left_compensated);
-    motor_control_set_speed(MOTOR_RIGHT_DRIVE, right_compensated);
+    // Left/right differences (a damaged gearbox) are corrected per motor by
+    // drive_hbridge's learned speed matching.
+    motor_control_set_speed(MOTOR_LEFT_DRIVE, output.left_speed);
+    motor_control_set_speed(MOTOR_RIGHT_DRIVE, output.right_speed);
 }
 
 void drive_stop(void) {

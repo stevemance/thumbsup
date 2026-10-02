@@ -11,6 +11,7 @@
 #endif
 
 #include "config.h"
+#include "drive_hbridge.h"
 #include "hitl_overrides.h"
 #include "bluetooth_platform.h"
 #include "pico/stdlib.h"
@@ -110,6 +111,17 @@ static void hitl_print_help(void) {
     printf("  HITL BATTERY <mv>\n");
     printf("  HITL BATTERY OFF\n");
     printf("  HITL PWMHZ <50..490>\n");
+#if DRIVE_HBRIDGE
+    printf("  HITL DRV                       (H-bridge status)\n");
+    printf("  HITL DRVACCEL <pct_per_s>      (0 = off)\n");
+    printf("  HITL DRVDRAG <0..1000>         (zero-command brake fraction)\n");
+    printf("  HITL DRVSET <L|R> <-1000..1000|OFF>\n");
+    printf("  HITL DRVPROBE <L|R> <ms>       (coast window for EMF ground truth)\n");
+    printf("  HITL DRVTRACE <L|R> [n]        (raw current-sense samples)\n");
+    printf("  HITL DRVHEALTH [RESET]         (learned speed gains, health)\n");
+    printf("  HITL DRVMATCH <0|1>            (speed matching)\n");
+    printf("  HITL DRVDERATE <L|R> <0..1000> (simulate a weak motor)\n");
+#endif
     printf("  HITL RXSTATS [RESET]\n");
     printf("  HITL EDTSTATS [RESET]\n");
     printf("  HITL WEAPON <-100..100|OFF>   (armed only; overrides triggers)\n");
@@ -599,6 +611,133 @@ static void hitl_handle_command(const char* line, const uni_gamepad_t* last_gp) 
         bluetooth_platform_print_rx_stats(arg && streq_case(arg, "RESET"));
         return;
     }
+
+#if DRIVE_HBRIDGE
+    if (streq_case(cmd, "DRV")) {
+        drive_hb_status_t st;
+        drive_hb_get_status(&st);
+        printf("HITL DRV awake=%u fault=%u fault_events=%lu batt_mv=%lu accel=%u drag=%u match=%u "
+               "degraded_events=%lu",
+               st.awake ? 1u : 0u, st.fault ? 1u : 0u, (unsigned long)st.fault_events,
+               (unsigned long)st.battery_mv, st.accel_limit_pct_s, st.drag_brake_permille,
+               st.match_enabled ? 1u : 0u, (unsigned long)st.degraded_events);
+        for (int i = 0; i < 2; i++) {
+            const drive_hb_motor_t* m = &st.motor[i];
+            const char* n = i == 0 ? "l" : "r";
+            printf(" %s_tgt=%d %s_app=%d %s_ma=%u %s_emf_mv=%ld %s_rpm=%ld %s_valid=%u "
+                   "%s_r_mohm=%lu %s_rcal_n=%lu %s_rrun_n=%lu %s_ovr=%u %s_scale=%u %s_health=%u %s_degraded=%u "
+                   "%s_rough=%u %s_derate=%u",
+                   n, m->target_permille, n, m->applied_permille, n, m->current_ma,
+                   n, (long)m->emf_mv, n, (long)m->wheel_rpm, n, m->emf_valid ? 1u : 0u,
+                   n, (unsigned long)m->resistance_mohm, n, (unsigned long)m->resistance_samples,
+                   n, (unsigned long)m->resistance_run_samples,
+                   n, m->overridden ? 1u : 0u, n, m->match_scale_permille, n, m->health_permille,
+                   n, m->degraded ? 1u : 0u, n, m->roughness_permille, n, m->derate_permille);
+        }
+        printf("\n");
+        return;
+    }
+
+    if (streq_case(cmd, "DRVACCEL") || streq_case(cmd, "DRVDRAG")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        long v = value ? strtol(value, NULL, 0) : -1;
+        bool accel = streq_case(cmd, "DRVACCEL");
+        if (v < 0 || v > (accel ? 60000 : 1000)) {
+            printf("ERR HITL %s bad value\n", cmd);
+            return;
+        }
+        if (accel) {
+            drive_hb_set_accel_limit((uint16_t)v);
+        } else {
+            drive_hb_set_drag_brake((uint16_t)v);
+        }
+        printf("HITL %s %ld\n", accel ? "DRVACCEL" : "DRVDRAG", v);
+        return;
+    }
+
+    if (streq_case(cmd, "DRVHEALTH")) {
+        char* arg = strtok_r(NULL, " \t", &save);
+        if (arg && streq_case(arg, "RESET")) {
+            drive_hb_reset_learning();
+        }
+        drive_hb_print_learning();
+        return;
+    }
+
+    if (streq_case(cmd, "DRVMATCH")) {
+        char* value = strtok_r(NULL, " \t", &save);
+        if (!value || (strcmp(value, "0") && strcmp(value, "1"))) {
+            printf("ERR HITL DRVMATCH expects 0|1\n");
+            return;
+        }
+        drive_hb_set_match(value[0] == '1');
+        printf("HITL DRVMATCH %s\n", value);
+        return;
+    }
+
+    if (streq_case(cmd, "DRVDERATE")) {
+        char* side = strtok_r(NULL, " \t", &save);
+        char* value = strtok_r(NULL, " \t", &save);
+        long v = value ? strtol(value, NULL, 0) : -1;
+        if (!side || (!streq_case(side, "L") && !streq_case(side, "R")) || v < 0 || v > 1000) {
+            printf("ERR HITL DRVDERATE expects L|R 0..1000\n");
+            return;
+        }
+        drive_hb_set_derate(streq_case(side, "L") ? MOTOR_LEFT_DRIVE : MOTOR_RIGHT_DRIVE, (uint16_t)v);
+        printf("HITL DRVDERATE %s %ld\n", side, v);
+        return;
+    }
+
+    if (streq_case(cmd, "DRVTRACE")) {
+        char* side = strtok_r(NULL, " \t", &save);
+        char* value = strtok_r(NULL, " \t", &save);
+        if (!side || (!streq_case(side, "L") && !streq_case(side, "R"))) {
+            printf("ERR HITL DRVTRACE expects L|R\n");
+            return;
+        }
+        drive_hb_dump_current(streq_case(side, "L") ? MOTOR_LEFT_DRIVE : MOTOR_RIGHT_DRIVE,
+                              value ? (uint32_t)strtoul(value, NULL, 0) : 0);
+        return;
+    }
+
+    if (streq_case(cmd, "DRVSET") || streq_case(cmd, "DRVPROBE")) {
+        char* side = strtok_r(NULL, " \t", &save);
+        char* value = strtok_r(NULL, " \t", &save);
+        motor_channel_t m;
+        if (side && streq_case(side, "L")) {
+            m = MOTOR_LEFT_DRIVE;
+        } else if (side && streq_case(side, "R")) {
+            m = MOTOR_RIGHT_DRIVE;
+        } else {
+            printf("ERR HITL %s expects L|R\n", cmd);
+            return;
+        }
+        if (!value) {
+            printf("ERR HITL %s missing value\n", cmd);
+            return;
+        }
+        if (streq_case(cmd, "DRVPROBE")) {
+            long ms = strtol(value, NULL, 0);
+            if (ms < 1 || ms > 1000 || !drive_hb_probe(m, (uint16_t)ms)) {
+                printf("ERR HITL DRVPROBE failed\n");
+            }
+            return;
+        }
+        if (streq_case(value, "OFF")) {
+            drive_hb_set_override(m, false, 0);
+            printf("HITL DRVSET %s OFF\n", side);
+            return;
+        }
+        long d = strtol(value, NULL, 0);
+        if (d < -1000 || d > 1000) {
+            printf("ERR HITL DRVSET expects -1000..1000|OFF\n");
+            return;
+        }
+        drive_hb_set_override(m, true, (int16_t)d);
+        printf("HITL DRVSET %s %ld\n", side, d);
+        return;
+    }
+#endif
 
     if (streq_case(cmd, "PWMHZ")) {
         char* value = strtok_r(NULL, " \t", &save);

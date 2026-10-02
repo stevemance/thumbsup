@@ -10,21 +10,48 @@
 // Safety: Disable actual motor PWM output for testing (set to 1 to disable motors)
 #define DISABLE_MOTOR_OUTPUT 0
 
+// Drive motor driver.  1 = two DRV8874 H-bridge carriers driven directly
+// (drive_hbridge.c); 0 = two RC ESCs (SAX2) on servo PWM.
+#ifndef DRIVE_HBRIDGE
+#define DRIVE_HBRIDGE       1
+#endif
+
 // Pin Definitions
+#if DRIVE_HBRIDGE
+// DRV8874 carriers in PWM (IN/IN) mode: PMODE high, both SLEEPs on one pin,
+// both nFAULTs (open drain) on one pin.  IN1/IN2 of a motor share a PWM slice.
+#define PIN_HB_LEFT_IN1     0    // GP0 - left  IN1 (slice 0 A)
+#define PIN_HB_LEFT_IN2     1    // GP1 - left  IN2 (slice 0 B)
+#define PIN_HB_RIGHT_IN1    2    // GP2 - right IN1 (slice 1 A)
+#define PIN_HB_RIGHT_IN2    3    // GP3 - right IN2 (slice 1 B)
+#define PIN_HB_SLEEP        6    // GP6 - nSLEEP, both carriers (high = awake)
+#define PIN_HB_FAULT        7    // GP7 - nFAULT, both carriers (low = fault)
+#define PIN_HB_CS_LEFT      26   // GP26/ADC0 - left  current sense (IPROPI)
+#define PIN_HB_CS_RIGHT     27   // GP27/ADC1 - right current sense (IPROPI)
+#else
 #define PIN_DRIVE_LEFT_PWM  0    // GP0 - Left drive motor PWM
 #define PIN_DRIVE_RIGHT_PWM 1    // GP1 - Right drive motor PWM
+#endif
 // GP4 is UART1 TX, allowing AM32 config mode and DShot on the same pin
 #define PIN_WEAPON_PWM      4    // GP4 - Weapon motor PWM/UART1_TX/DShot
 
 // Addressable Status LEDs (SK6812/WS2812)
+#if DRIVE_HBRIDGE
+#define PIN_STATUS_LEDS     9    // GP9 - SK6812 addressable LEDs data line
+#else
 #define PIN_STATUS_LEDS     28   // GP28 - SK6812 addressable LEDs data line
+#endif
 #define NUM_STATUS_LEDS     2    // Number of addressable LEDs in chain
 
 // Optional Safety Button
 #define PIN_SAFETY_BUTTON   8    // GP8 - Physical safety switch (optional)
 
 // Battery Monitoring
+#if DRIVE_HBRIDGE
+#define PIN_BATTERY_ADC     28   // GP28/ADC2 - Battery divider (100k / 20k)
+#else
 #define PIN_BATTERY_ADC     26   // GP26/ADC0 - Battery voltage divider
+#endif
 
 // Latency marker: driven high while the last received gamepad report has a
 // deflected stick or pressed trigger.  Probed by the HITL logic analyzer; a
@@ -146,7 +173,7 @@
 //
 // Hardware safety inputs: set to 0 when the corresponding hardware is not
 // wired up.  Floating ADC / GPIO pins cause spurious emergency stops.
-#define BATTERY_ADC_ENABLED     0   // Set to 1 when battery voltage divider is wired to GP26
+#define BATTERY_ADC_ENABLED     DRIVE_HBRIDGE  // battery divider is on the H-bridge boards
 #define SAFETY_BUTTON_ENABLED   0   // Set to 1 when physical e-stop button is wired to GP8
 #define WEAPON_ARM_TIMEOUT  2000  // Weapon arm timeout (ms).  Must allow ESC to
                                   // settle after DShot 3D mode setup to avoid
@@ -271,10 +298,10 @@
 #define BATTERY_CRITICAL    9000  // Critical battery voltage (mV)
 #define BATTERY_MAX_VOLTAGE 12600 // Fully charged 3S (mV)
 
-// Low-battery alerts (battery_monitor.c) from the weapon ESC's voltage
-// telemetry: controller rumble, controller player-LED gauge and the system
-// LED.  Alert only; nothing is limited.  The ESC reads ~0.1-0.25 V below the
-// true pack voltage, so these trip slightly early.
+// Low-battery alerts (battery_monitor.c) from the Pico's battery divider
+// (H-bridge builds) or else the weapon ESC's voltage telemetry: controller
+// rumble, controller player-LED gauge and the system LED.  Alert only; nothing
+// is limited.
 #define BATTERY_ALERT_LOW_MV         10200  // 3.4 V/cell
 #define BATTERY_ALERT_CRITICAL_MV     9600  // 3.2 V/cell
 #define BATTERY_ALERT_HYSTERESIS_MV    300  // must recover this far above a level to leave it
@@ -282,8 +309,61 @@
 #define BATTERY_CRITICAL_REPEAT_MS   30000  // repeat the critical rumble while critical
 #define BATTERY_GAUGE_FULL_MV        11400  // controller LEDs: 4 lit at/above
 #define BATTERY_GAUGE_MID_MV         10800  //                  3 lit at/above, else 2
+#define BATTERY_PRESENT_MV            5000  // Pico ADC: below this, no battery (USB power only)
 #define BATTERY_ADC_SCALE   3.3f  // ADC reference voltage
+#if DRIVE_HBRIDGE
+#define BATTERY_DIVIDER     6.0f  // 100k / 20k divider
+#else
 #define BATTERY_DIVIDER     4.0f  // Voltage divider ratio (adjust for your circuit)
+#endif
+
+#if DRIVE_HBRIDGE
+// DRV8874 drive (drive_hbridge.c)
+#define DRIVE_HB_PWM_HZ            20000  // above hearing; DRV8874 max 100 kHz
+#define DRIVE_HB_LEFT_INVERT       0      // flip a motor whose leads are swapped
+#define DRIVE_HB_RIGHT_INVERT      0
+// IPROPI: 450 uA/A into 2.49 kohm
+#define DRIVE_HB_CS_VOLTS_PER_AMP  1.1205f
+// Zero command: fraction of the PWM period spent braking (rest coasts).
+// 1000 = full brake.
+#define DRIVE_DRAG_BRAKE_PERMILLE  1000
+// Acceleration limit (percent of full duty per second, increases only);
+// 0 = off.  Runtime adjustable from the HITL console.
+#define DRIVE_ACCEL_LIMIT_PCT_PER_S 0
+// Motor model for the wheel-speed (back-EMF) estimate.  R is measured on
+// every start from rest; this is only the starting value.
+#define DRIVE_MOTOR_R_OHM          5.0f
+#define DRIVE_MOTOR_RPM_PER_V      100.0f // wheel rpm per volt of back-EMF (calibrate)
+#define DRIVE_EMF_FILTER_S         0.003f // estimate low-pass time constant
+// Start-from-rest resistance measurement
+#define DRIVE_REST_MS              300    // command 0 at least this long ...
+#define DRIVE_REST_EMF_V           0.3f   // ... and estimated EMF below this
+#define DRIVE_RCAL_MIN_DUTY        150.0f // permille
+#define DRIVE_RCAL_FROM_US         300    // peak-current window after the start
+#define DRIVE_RCAL_TO_US           2500
+#define DRIVE_RCAL_MAX_A           2.4f   // above this the current limit may be chopping
+// Running resistance from drive -> brake transitions (preferred once seen)
+#define DRIVE_BRCAL_MIN_DUTY       300.0f // permille driven before the brake
+#define DRIVE_BRCAL_STEADY_S       0.10f  // command steady this long before
+#define DRIVE_BRCAL_FROM_US        300    // peak brake-current window after the brake
+#define DRIVE_BRCAL_TO_US          2500
+#define DRIVE_BRCAL_ALPHA          0.2f
+// Wheel health / speed matching (drive_hbridge.c)
+#define DRIVE_HB_MOTORS_FACE_EACH_OTHER 1 // robot forward = left +, right - (motor frame)
+#define DRIVE_MATCH_ENABLED        1
+#define DRIVE_MATCH_STEADY_S       0.30f  // command steady this long before learning
+#define DRIVE_MATCH_LEARN_S        1.0f   // learning time constant (steady time)
+#define DRIVE_MATCH_MIN_SAMPLES    50     // updates (2 ms) before a bin is trusted
+#define DRIVE_MATCH_MIN_GAIN       0.30f  // below: stalled / pinned, not learned
+#define DRIVE_MATCH_DEADBAND       0.03f  // differences under 3% are left alone
+#define DRIVE_MATCH_MIN_SCALE      0.60f  // never cut a motor below 60% of command
+#define DRIVE_HEALTH_ALERT         0.85f  // gain vs other side below this = degraded
+#define DRIVE_HEALTH_HYST          0.05f
+#define DRIVE_HEALTH_MIN_DUTY      0.375f // health ignores slower bins (static friction)
+#define DRIVE_HEALTH_PERSIST_MS    1000   // below the alert level this long before reporting
+#define DRIVE_HEALTH_ROUGH_S       0.5f   // roughness averaging time
+#define DRIVE_HEALTH_RUMBLE_MS     600
+#endif
 
 // LED Blink Patterns (in ms)
 #define LED_BLINK_FAST      100
@@ -346,11 +426,6 @@
 #define BTN_TRIGGER_R       0x0080  // ZR / RT
 #define BTN_L3              0x0100
 #define BTN_R3              0x0200
-
-// Trim Configuration
-#define TRIM_STEP           5      // Trim adjustment step size
-#define TRIM_MAX            50     // Maximum trim value
-#define TRIM_MIN            -50    // Minimum trim value
 
 // Timing Constants
 #define MAIN_LOOP_DELAY     10     // Main loop delay in ms (100Hz update)

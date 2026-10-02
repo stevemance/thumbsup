@@ -4,6 +4,9 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
+#if DRIVE_HBRIDGE
+#include "drive_hbridge.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -29,6 +32,16 @@ static uint16_t speed_to_pulse(int8_t speed) {
         return (uint16_t)CLAMP(pulse, PWM_MIN_PULSE, PWM_MAX_PULSE);
     }
 }
+
+#if DRIVE_HBRIDGE
+// Drive channels keep their servo-pulse interface (1000..2000 us, 1500 =
+// stop) so callers are unchanged; the pulse maps linearly onto H-bridge duty.
+static void hb_apply(motor_channel_t channel, uint16_t pulse_us) {
+    if (channel == MOTOR_LEFT_DRIVE || channel == MOTOR_RIGHT_DRIVE) {
+        drive_hb_set(channel, (int16_t)(((int32_t)pulse_us - PWM_NEUTRAL_PULSE) * 2));
+    }
+}
+#endif
 
 static void setup_pwm_pin(uint8_t pin, uint8_t* slice, uint8_t* channel) {
     // SAFETY: Validate pointer parameters
@@ -60,6 +73,15 @@ bool motor_control_init(void) {
         return true;
     }
 
+#if DRIVE_HBRIDGE
+    drive_hb_init();
+    motors[MOTOR_LEFT_DRIVE].gpio_pin = PIN_HB_LEFT_IN1;
+    motors[MOTOR_LEFT_DRIVE].reversed = false;
+    motors[MOTOR_LEFT_DRIVE].pwm_enabled = false;   // owned by drive_hbridge
+    motors[MOTOR_RIGHT_DRIVE].gpio_pin = PIN_HB_RIGHT_IN1;
+    motors[MOTOR_RIGHT_DRIVE].reversed = true;  // Reversed because motor is mounted facing opposite direction
+    motors[MOTOR_RIGHT_DRIVE].pwm_enabled = false;
+#else
     motors[MOTOR_LEFT_DRIVE].gpio_pin = PIN_DRIVE_LEFT_PWM;
     motors[MOTOR_LEFT_DRIVE].reversed = false;
     setup_pwm_pin(PIN_DRIVE_LEFT_PWM,
@@ -73,6 +95,7 @@ bool motor_control_init(void) {
                   &motors[MOTOR_RIGHT_DRIVE].pwm_slice,
                   &motors[MOTOR_RIGHT_DRIVE].pwm_channel);
     motors[MOTOR_RIGHT_DRIVE].pwm_enabled = true;
+#endif
 
     motors[MOTOR_WEAPON].gpio_pin = PIN_WEAPON_PWM;
     motors[MOTOR_WEAPON].reversed = false;
@@ -110,6 +133,9 @@ bool motor_control_init(void) {
 }
 
 bool motor_control_update(void) {
+#if DRIVE_HBRIDGE
+    drive_hb_update();
+#endif
     if (!initialized) {
         return false;
     }
@@ -150,7 +176,7 @@ bool motor_control_update(void) {
 // Changes the drive PWM frame rate at runtime (HITL experiments).  Pulse widths
 // stay in microseconds, so only the frame period changes.
 bool motor_control_set_drive_frame_rate(uint32_t hz) {
-    if (!initialized || hz < 50 || hz > 490) {
+    if (!initialized || hz < 50 || hz > 490 || DRIVE_HBRIDGE) {
         return false;
     }
     const motor_channel_t drive[] = {MOTOR_LEFT_DRIVE, MOTOR_RIGHT_DRIVE};
@@ -192,6 +218,15 @@ bool motor_control_set_pulse(motor_channel_t channel, uint16_t pulse_us) {
     // Apply immediately.  The drive ESCs get the new width at the next PWM
     // frame; any ramping here adds directly to stick-to-wheel latency.
     motors[channel].target_pulse_us = pulse_us;
+#if DRIVE_HBRIDGE
+    if (channel != MOTOR_WEAPON) {
+        motors[channel].current_pulse_us = pulse_us;
+        #if !DISABLE_MOTOR_OUTPUT
+        hb_apply(channel, pulse_us);
+        #endif
+        return true;
+    }
+#endif
     if (motors[channel].pwm_enabled && motors[channel].current_pulse_us != pulse_us) {
         motors[channel].current_pulse_us = pulse_us;
         #if !DISABLE_MOTOR_OUTPUT
@@ -246,6 +281,9 @@ void motor_control_stop_all(void) {
         } else {
             motors[i].target_pulse_us = PWM_NEUTRAL_PULSE;
             motors[i].current_pulse_us = PWM_NEUTRAL_PULSE;
+#if DRIVE_HBRIDGE
+            hb_apply((motor_channel_t)i, PWM_NEUTRAL_PULSE);
+#endif
         }
 
         if (motors[i].pwm_enabled) {

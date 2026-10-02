@@ -132,15 +132,14 @@ make -j8
 The firmware consists of:
 - `src/main.c` - Main entry point and initialization
 - `src/bluetooth_platform.c` - Bluepad32 platform implementation (competition mode)
-- `src/motor_control.c` - Motor PWM/DShot control
+- `src/motor_control.c` - Motor output abstraction (drive channels go to drive_hbridge)
 - `src/drive.c` - Drive mixing and control
 - `src/weapon.c` - Weapon motor control
 - `src/safety.c` - Safety systems
 - `src/status.c` - LED status indicators
 - `src/ws2812.c` - SK6812 addressable LED driver
-- `src/motor_linearization.c` - Motor response curve compensation
-- `src/calibration_mode.c` - Motor calibration system
-- `src/trim_mode.c` - Dynamic trim adjustment
+- `src/drive_hbridge.c` - DRV8874 H-bridge drive: PWM, sleep/fault, ADC (current sense, battery), wheel speed estimate, wheel health and speed matching
+- `src/battery_monitor.c` - Low-battery alerts (rumble, player LEDs, system LED)
 - `src/am32_config.c` - AM32 ESC configuration
 - `src/dshot.c` - DShot digital protocol
 

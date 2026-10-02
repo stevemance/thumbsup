@@ -2,58 +2,105 @@
 
 ## Complete Pin Configuration
 
+The drive motors run from two Pololu DRV8874 single brushed-DC motor driver
+carriers driven directly by the Pico (firmware `DRIVE_HBRIDGE 1`, the default).
+The older two-RC-ESC (SAX2) servo wiring is still selectable with
+`DRIVE_HBRIDGE 0`, with the pins in the git history.
+
 ### Raspberry Pi Pico W Pinout Usage
 
 ```
                     ┌─────────┐
-     LEFT PWM ←─ 1  │● GP0   ●│ 40  VBUS (5V from USB)
-    RIGHT PWM ←─ 2  │● GP1   ●│ 39  VSYS (5V from BEC) ←── ESC BEC Power
-          (GP2)  3  │●       ●│ 38  GND
-          (GP3)  4  │●       ●│ 37  3V3_EN
-   WEAPON PWM ←─ 5  │● GP4   ●│ 36  3V3(OUT)
-          (GP5)  6  │●       ●│ 35  ADC_VREF
-          (GP6)  7  │●       ●│ 34  GP28 ←── SK6812 Status LEDs
-          (GP7)  8  │●       ●│ 33  AGND
- SAFETY BUTTON ←─ 9  │● GP8   ●│ 32  GP27 (ADC1)
-          (GP9) 10  │●       ●│ 31  GP26 (ADC0) ←── Battery Monitor
-         (GP10) 11  │●       ●│ 30  RUN
-         (GP11) 12  │●       ●│ 29  GP22
-         (GP12) 13  │●       ●│ 28  GND
-         (GP13) 14  │●       ●│ 27  GP21
-            GND 15  │●       ●│ 26  GP20
-         (GP14) 16  │●       ●│ 25  GP19
-         (GP15) 17  │●       ●│ 24  GP18
-         (GP16) 18  │●       ●│ 23  GND
-         (GP17) 19  │●       ●│ 22  GP17
-            GND 20  │●       ●│ 21  GP16
+  LEFT IN1   ←─ 1  │● GP0   ●│ 40  VBUS (5V from USB)
+  LEFT IN2   ←─ 2  │● GP1   ●│ 39  VSYS (5V logic supply)
+            GND 3  │●       ●│ 38  GND
+  RIGHT IN1  ←─ 4  │● GP2   ●│ 37  3V3_EN
+  RIGHT IN2  ←─ 5  │● GP3   ●│ 36  3V3(OUT) ──→ DRV8874 PMODE (both)
+ WEAPON DSHOT←─ 6  │● GP4   ●│ 35  ADC_VREF
+         (GP5)  7  │●       ●│ 34  GP28 (ADC2) ←── Battery divider
+            GND 8  │●       ●│ 33  AGND
+  DRV SLEEP  ←─ 9  │● GP6   ●│ 32  GP27 (ADC1) ←── RIGHT current sense
+  DRV FAULT  ──→10 │● GP7   ●│ 31  GP26 (ADC0) ←── LEFT current sense
+ SAFETY BTN  ──→11 │● GP8   ●│ 30  RUN
+ STATUS LEDS ←─ 12 │● GP9   ●│ 29  GP22
+                   │   ...   │
+ LAT. MARKER ←─ 20 │● GP15  ●│
                     └─────────┘
 ```
+(Physical pin numbers: GP0=1, GP1=2, GP2=4, GP3=5, GP4=6, GP6=9, GP7=10, GP8=11,
+GP9=12, GP15=20, GP26=31, GP27=32, GP28=34.)
 
 ## Pin Assignments Summary
 
-| GPIO | Pin# | Function | Direction | Description | Wire Color (Suggested) |
-|------|------|----------|-----------|-------------|----------------------|
-| GP0 | 1 | PWM | Output | Left Drive Motor Signal | Yellow |
-| GP1 | 2 | PWM | Output | Right Drive Motor Signal | Orange |
-| GP4 | 5 | PWM/UART1/DShot | Output | Weapon Motor Signal (AM32 ESC, DShot) | Red |
-| GP8 | 9 | Digital | Input (Pull-up) | Safety Button | White |
-| GP26 | 31 | ADC0 | Input | Battery Voltage Monitor | Brown |
-| GP28 | 34 | Data | Output | SK6812 Addressable LEDs (2 LEDs) | Green |
+| GPIO | Function | Direction | Description |
+|------|----------|-----------|-------------|
+| GP0 | PWM slice 0 A | Output | Left DRV8874 IN1 |
+| GP1 | PWM slice 0 B | Output | Left DRV8874 IN2 |
+| GP2 | PWM slice 1 A | Output | Right DRV8874 IN1 |
+| GP3 | PWM slice 1 B | Output | Right DRV8874 IN2 |
+| GP4 | PIO / UART1 TX | Output | Weapon ESC signal (AM32, bidirectional DShot300) |
+| GP6 | Digital | Output | nSLEEP, both DRV8874s (high = awake) |
+| GP7 | Digital | Input (pull-up) | nFAULT, both DRV8874s (open drain, low = fault) |
+| GP8 | Digital | Input (pull-up) | Safety button (optional, `SAFETY_BUTTON_ENABLED`) |
+| GP9 | PIO | Output | SK6812 status LEDs (2) |
+| GP15 | Digital | Output | HITL latency marker (high while a received report is deflected) |
+| GP26 | ADC0 | Input | Left DRV8874 IPROPI (current sense) |
+| GP27 | ADC1 | Input | Right DRV8874 IPROPI (current sense) |
+| GP28 | ADC2 | Input | Battery divider (100 kΩ / 20 kΩ) |
+
+## DRV8874 Drive Boards
+
+Per carrier:
+
+| Carrier pin | Connection | Why |
+|-------------|------------|-----|
+| VIN / GND | Battery + / − | Motor supply (UVLO 4.35 V) |
+| OUT1 / OUT2 | Motor | Swap these, or set `DRIVE_HB_LEFT/RIGHT_INVERT`, if a wheel runs backwards |
+| PMODE | 3V3 | PWM (IN/IN) mode, latched at power-up |
+| IN1 / IN2 | GP0/GP1 (left), GP2/GP3 (right) | 20 kHz PWM |
+| SLEEP | GP6 (shared) | Drivers off until a controller is connected |
+| FAULT | GP7 (shared) | Wired-OR of both open-drain fault outputs |
+| VREF | SLEEP (3.3 V when awake) | Current limit: 3.3 V / (450 µA/A × 2.49 kΩ) ≈ 2.9 A per motor |
+| CS (IPROPI) | GP26 (left), GP27 (right) | 1.12 V/A on the carrier's 2.49 kΩ |
+
+How the firmware drives them:
+- **Slow decay (drive/brake):** forward is IN1 high with IN2 PWM'd. The off part
+  of each cycle shorts the motor (brake), so speed is nearly linear in duty.
+- **Zero stick brakes** (`DRIVE_DRAG_BRAKE_PERMILLE`, default 100%).
+- **SLEEP** stays low until a controller is ready, and drops on disconnect.
+- **nFAULT** (undervoltage, overcurrent, overtemperature, and current-limit
+  chopping) is counted and logged.
+- **The ADC** samples both current senses and the battery divider continuously
+  (round robin into a DMA ring). From duty, battery voltage and current, the
+  firmware estimates each wheel's speed (back-EMF). The winding resistance
+  that estimate needs is measured on every start from rest and, more
+  accurately, on every drive→brake transition: just before, the motor draws
+  (V − EMF)/R; just after, braked, EMF/R; their sum gives V/R. Peak currents are
+  used because the current settles with the motor's ~0.4 ms L/R time
+  constant. Re-measuring continuously also tracks the winding as it heats.
+- **Wheel health:** each wheel learns how fast it turns for a given duty. A wheel
+  clearly slower than the other (a damaged gearbox) is reported (console event +
+  controller rumble). The faster wheel is then trimmed so the robot still drives
+  straight. See docs/USER_MANUAL.md.
+
+## Battery Divider
+
+```
+Battery + ──── 100 kΩ ──┬──── GP28 (ADC2)
+                        │
+                       20 kΩ
+                        │
+                       GND
+```
+Ratio 6.0 (`BATTERY_DIVIDER`): 18 V full scale, so 4S fits. Measured on the HITL
+rig: within 0.4% from 9 V to 15 V.
 
 ## Safety Button Configuration
 
 ### Physical Button
 The safety button (GP8) is **OPTIONAL but HIGHLY RECOMMENDED** for:
 
-1. **Calibration Mode Entry**
-   - Hold X+Y buttons at startup to enter motor calibration mode
-   - Used to capture motor response curves for linearization
-
-2. **Trim Mode Entry**
-   - Hold L3+R3 buttons during operation for trim adjustment
-   - Compensates for motor asymmetry and drift
-
-3. **Diagnostic Mode Entry** (requires special build)
+1. **Diagnostic Mode Entry** (requires special build)
    - Build with -DDIAGNOSTIC_MODE=ON
    - Provides WiFi access point with web dashboard
    - For testing and telemetry monitoring
@@ -77,11 +124,11 @@ If you choose not to install a safety button:
 
 ## LED Indicators
 
-The system uses **2 SK6812 addressable RGB LEDs** on GP28:
+The system uses **2 SK6812 addressable RGB LEDs** on GP9:
 - **LED 0**: System Status
 - **LED 1**: Weapon Status
 
-### System Status LED (LED 0 - GP28)
+### System Status LED (LED 0)
 - **Dim Blue**: Booting/initializing
 - **Green Solid**: Ready, no controller connected
 - **Cyan (Green+Blue)**: Controller connected, normal operation
@@ -91,20 +138,12 @@ The system uses **2 SK6812 addressable RGB LEDs** on GP28:
 - **Red Solid/Blinking**: Error or emergency stop
 - **Purple Pulse**: Test/diagnostic mode
 
-### Weapon Status LED (LED 1 - GP28)
+### Weapon Status LED (LED 1)
 - **Off**: Weapon disarmed (safe)
 - **Amber/Yellow Blinking**: Arming sequence in progress
 - **Orange Solid**: Armed but not spinning
 - **Red Solid**: ⚠️ WEAPON SPINNING - DANGER ⚠️
 - **Red Fast Blinking**: Emergency stop active
-
-### Trim Mode LED Feedback
-When in trim calibration mode (L3+R3 hold):
-- **Green Blink**: Sample captured (A button pressed)
-- **Red Blink**: Last sample removed (B button pressed)
-- **Orange Pulse**: Fitting curves in progress
-- **Green Solid**: Trim calibration complete
-- **Red 3x Blinks**: Error - not enough samples
 
 ### WiFi LED (Built-in on Pico W)
 - **ON during boot**: Initializing
@@ -112,45 +151,20 @@ When in trim calibration mode (L3+R3 hold):
 - **Blinking**: Bluetooth activity
 - **Solid ON**: Diagnostic mode active (WiFi AP)
 
-## Battery Monitoring Circuit
-
-### Voltage Divider for 3S LiPo (12.6V max)
-```
-Battery + ─────┬───── R1 (10kΩ) ────┬───── GP26 (ADC0)
-               │                     │
-               │                     ├───── R2 (4.7kΩ) ───── GND
-               │                     │
-               └─────────────────────┴───── C1 (100nF) ───── GND
-```
-
-### Component Values
-- **R1**: 10kΩ (1% tolerance recommended)
-- **R2**: 4.7kΩ (1% tolerance recommended)
-- **C1**: 100nF ceramic (filtering)
-- **Divider Ratio**: 4.7/(10+4.7) = 0.32
-- **Max Input**: 12.6V × 0.32 = 4.03V (safe for 3.3V ADC)
-
-### Calibration
-The firmware uses these constants (in config.h):
-```c
-#define BATTERY_DIVIDER     3.13  // Voltage divider ratio
-#define BATTERY_ADC_SCALE   3.3   // ADC reference voltage
-```
-Adjust `BATTERY_DIVIDER` if your resistor values differ.
-
 ## Power Supply Requirements
 
 ### Main Power (3S LiPo)
 - **Voltage**: 11.1V nominal (9.0V - 12.6V range)
 - **Current**:
-  - Drive motors: 2-3A peak each
+  - Drive motors: up to ~2.9A each (DRV8874 current limit set by VREF)
   - Weapon motor: 10-20A peak
   - Logic: 200mA
 - **Total**: 30A+ capability recommended
 - **Connector**: XT60 recommended
 
 ### Logic Power (5V BEC)
-- **Source**: ESC BEC or separate UBEC
+- **Source**: a BEC/UBEC (the DRV8874 carriers have no BEC; the old SAX2 drive
+  ESCs did)
 - **Voltage**: 5V ±5%
 - **Current**: 500mA minimum
 - **Connection**: VSYS pin (39)
@@ -173,7 +187,7 @@ When diagnostic mode is enabled (requires special build):
 ## Recommended Connectors
 
 ### Motor/ESC Connections
-- **Drive ESCs**: 3-pin servo connectors (0.1" pitch)
+- **Drive motors**: DRV8874 carrier OUT1/OUT2 screw terminals or solder
 - **Weapon ESC**: Solder or bullet connectors for high current
 
 ### Board Connections

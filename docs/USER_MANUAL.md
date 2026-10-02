@@ -38,24 +38,29 @@ weapon motor controlled through an AM32 ESC.
 | Component | Detail |
 |-----------|--------|
 | MCU | Raspberry Pi Pico W (RP2040, dual-core ARM Cortex-M0+) |
-| Drive Motors | 2x brushed DC (PWM control) |
+| Drive Motors | 2x brushed DC gearmotors on Pololu DRV8874 H-bridge carriers |
 | Weapon Motor | FingerTech Silver Spark F2822-1100KV (brushless, 14 poles) |
 | Weapon ESC | AT32F421-based, running AM32 firmware |
 | Weapon Protocol | DShot300 with bidirectional EDT telemetry |
 | Controller | Bluetooth gamepad via Bluepad32 (Switch Pro, Xbox, PS4/PS5, etc.) |
-| Status LEDs | 2x SK6812 addressable RGB LEDs (GRB format) on GP28 |
+| Status LEDs | 2x SK6812 addressable RGB LEDs (GRB format) on GP9 |
 | Battery | 3S LiPo (11.1V nominal, 12.6V full) |
 
 ### Pin Assignments
 
 | Pin | Function |
 |-----|----------|
-| GP0 | Left drive motor PWM |
-| GP1 | Right drive motor PWM |
+| GP0 / GP1 | Left DRV8874 IN1 / IN2 (20 kHz PWM) |
+| GP2 / GP3 | Right DRV8874 IN1 / IN2 |
 | GP4 | Weapon motor (UART1 TX / DShot) |
-| GP28 | SK6812 status LEDs (2 LEDs) |
+| GP6 | DRV8874 SLEEP (both) |
+| GP7 | DRV8874 FAULT (both, input) |
 | GP8 | Safety button (optional, active low with pull-up) |
-| GP26 | Battery voltage monitor (ADC0, optional) |
+| GP9 | SK6812 status LEDs (2 LEDs) |
+| GP26 / GP27 | Left / right motor current sense (ADC0 / ADC1) |
+| GP28 | Battery voltage divider, 100k/20k (ADC2) |
+
+Full wiring: docs/HARDWARE_SETUP.md.
 
 ---
 
@@ -105,8 +110,8 @@ ThumbsUp has two SK6812 addressable LEDs that provide at-a-glance status.
 | Green | Solid | **Ready** - waiting for controller connection |
 | Cyan (green-blue) | Solid | **Connected** - controller paired and active |
 | Yellow | Blinking fast | **Failsafe** - controller connection lost |
-| Orange | Solid | **Low Battery** - battery below 9.6V |
-| Red | Solid | **Critical Battery** - battery below 9.0V |
+| Orange | Solid | **Low Battery** - battery below 10.2V (see Battery) |
+| Red | Blinking fast | **Critical Battery** - battery below 9.6V |
 | Red | Solid | **Error** - safety violation detected |
 | Red | Blinking fast | **Emergency Stop** - E-stop active |
 | Purple | Pulsing | **Test Mode** - controller test mode active |
@@ -125,12 +130,6 @@ ThumbsUp has two SK6812 addressable LEDs that provide at-a-glance status.
 
 | Mode | LED 0 | LED 1 |
 |------|-------|-------|
-| Calibration Mode | Purple/Cyan alternating | Purple/Cyan alternating |
-| Calibration Complete | Green slow blink | Green slow blink |
-| Trim Mode | Teal solid | Teal solid |
-| Trim: Sample Captured | Bright green flash (750 ms) | - |
-| Trim: Sample Removed | Bright red flash (750 ms) | - |
-| Trim: Fitting Curves | Orange pulsing | - |
 | Safety Test Failure | Red fast blink | Red fast blink |
 
 ### Pico W Onboard LED
@@ -163,7 +162,10 @@ vice versa. (Compile-time option `DRIVE_LAYOUT_SPLIT 0` restores single-stick.)
 | Maximum Turn Speed | 70% of motor maximum |
 | Deadzones (512 raw range) | Throttle 24, turn 32 |
 | Expo Curve | Throttle 70% cubic, turn 30% cubic |
-| Drive PWM | 100 Hz (the SAX2 drive ESC reacts after ~5 frames) |
+| Drive PWM | 20 kHz, slow decay (drive/brake) |
+| Stick to motor output | ~0.2 ms after the controller report arrives |
+| Zero stick | Brake (wheels stop in well under 150 ms) |
+| Acceleration limit | Off (HITL `DRVACCEL`; ramps speed-ups only) |
 
 ### Expo Curve
 
@@ -182,12 +184,60 @@ Throttle (left stick Y) and turn (right stick X) are combined:
 If the combined values exceed 100%, both channels are scaled proportionally to
 maintain the turn ratio.
 
-### Motor Linearization
+### Braking
 
-The firmware includes a motor linearization system that compensates for non-linear
-ESC response and left/right motor asymmetry. This uses calibrated power-law curves
-(RPM = a * sqrt(throttle - deadband)) to ensure that equal stick input produces
-equal wheel speeds on both sides.
+Centering the stick brakes the wheels: the H-bridge shorts each motor, so the
+robot stops in a fraction of the coast distance (on the HITL rig a free wheel
+was at 2% of its speed 150 ms after release, against 37% coasting). The amount is
+`DRIVE_DRAG_BRAKE_PERMILLE` (100% by default); lower values mix in coasting.
+
+The drive boards are asleep (outputs off, wheels free) until a controller is
+connected and ready, and go back to sleep the moment it disconnects.
+
+### Wheel Speed and Wheel Health
+
+The firmware estimates each wheel's speed from the motor's back-EMF (duty,
+battery voltage and the drive board's current sense). On the HITL rig it is
+within ~0.5 V of the measured back-EMF across the whole speed range, about 5% of
+full speed, including while a wheel is accelerating from rest.
+
+From that, each wheel learns how fast it turns for a given power, separately
+per direction and speed band. It learns only while the stick is held steady,
+and ignores near-stalled readings (pushing, being pinned), so the arena doesn't
+look like damage. If one wheel is clearly slower than the other (below 85%,
+for more than a second) - typically a damaged or binding gearbox:
+
+- the controller rumbles once (600 ms) and the serial log prints
+  `DRV HEALTH motor=<L|R> level=DEGRADED`;
+- **speed matching** slows the faster wheel so both turn at the speed the
+  stick asks for, and the robot keeps driving straight and turning evenly. Only
+  the faster wheel is ever slowed (nothing is boosted). Differences under 3%
+  are left alone, and a wheel is never cut below 60% of its command, so a dead
+  motor cannot cripple the good side. Top speed drops to what the weak wheel can
+  do.
+
+On the rig, with a genuinely damaged right gearbox, matching took the
+straight-line wheel-speed mismatch at full stick from 26% to under 5%. The
+learned state resets at power-up. It replaces the old manual trim and
+linearization calibration.
+
+## Battery
+
+The Pico measures the battery through a 100k/20k divider on GP28 (within 0.4%
+on the HITL rig from 9 V to 15 V). The reading is smoothed (5 s), so the sag of
+a weapon spin-up doesn't trip an alert.
+
+| Level | Below | Alerts |
+|-------|-------|--------|
+| Low | 10.2 V (3.4 V/cell) | Controller rumbles twice; one player LED; system LED orange |
+| Critical | 9.6 V (3.2 V/cell) | Rumbles three times, repeated every 30 s; outer two player LEDs; system LED red, blinking fast |
+
+A level clears only 0.3 V above its threshold. The controller's player LEDs
+otherwise show a gauge: 4 lit at 11.4 V or more, 3 at 10.8 V or more, else 2.
+
+**These are alerts only.** A low battery never stops or limits the drive or
+the weapon mid-match. The one rule is that the weapon will not *arm* below
+9.6 V.
 
 ---
 
@@ -289,8 +339,7 @@ The safety system runs continuously every 10 ms.
 
 | Check | Threshold | Action |
 |-------|-----------|--------|
-| Battery Low | Below 9.6V | System LED orange; weapon arm rejected |
-| Battery Critical | Below 9.0V | System LED red; weapon disarmed |
+| Battery | Below 9.6V | Weapon arm rejected (nothing is stopped; see Battery) |
 | Connection Loss | No input for 1500 ms | Failsafe: all motors stop |
 | Safety Violations | 5 cumulative | Emergency stop triggered |
 | Boot Self-Test | On power-up | Validates all subsystems |
@@ -334,46 +383,6 @@ While active:
 - All stick axes, buttons, D-pad, gyroscope, and accelerometer data are displayed
   at 20 Hz.
 - All motor outputs are disabled.
-
-### Trim Calibration Mode
-
-**Purpose:** Captures drive samples to calibrate motor trim correction, fixing the
-robot pulling to one side during straight-line driving.
-
-| Action | Control |
-|--------|---------|
-| Enter | Hold **D-pad Up + D-pad Right** for 2 seconds |
-| Exit | Hold **D-pad Up + D-pad Right** for 2 seconds again |
-| Capture sample | Press **A** while driving |
-| Remove last sample | Press **B** |
-
-While active:
-- Both LEDs turn **teal** (solid).
-- Full driving is enabled. Drive in a straight line, then press A to capture a
-  sample.
-- Minimum 5 samples required for a valid calibration.
-- On exit, the firmware fits trim correction curves and saves to flash.
-- Trim data persists across power cycles.
-- Weapon is kept disarmed during trim mode.
-
-### Motor Calibration Mode
-
-**Purpose:** Steps through predefined throttle levels for measuring motor RPM with
-an external tachometer.
-
-| Action | Control |
-|--------|---------|
-| Enter | Hold **X + Y** buttons for 1 second |
-| Exit | Hold **X + Y** buttons for 1 second again |
-| Next step | Press **A** |
-| Repeat step | Press **B** |
-
-While active:
-- LEDs alternate **purple** and **cyan** every 500 ms.
-- Each step applies a specific PWM percentage to both drive motors.
-- Instructions and expected values are printed to USB serial.
-
-**Ensure wheels are elevated and the robot is secured before entering this mode.**
 
 ---
 
@@ -510,8 +519,6 @@ firmware prints:
 |    A (hold 2s)    Clear emergency stop                            |
 |    L1 + R1        EMERGENCY STOP (immediate)                     |
 |    - + + (hold)   Enter/exit controller test mode                 |
-|    X + Y (hold)   Enter/exit motor calibration mode               |
-|    D-Up+Right     Enter/exit trim mode (hold 2s)                  |
 |                                                                   |
 |  STATUS LEDs:        System (LED 0)       Weapon (LED 1)          |
 |    Boot              Blue pulse            Off                    |
@@ -522,10 +529,11 @@ firmware prints:
 |    E-Stop            Red fast blink        Red fast blink         |
 |    Failsafe          Yellow blink          Off                    |
 |    Low Battery       Orange solid          ---                    |
+|    Critical Battery  Red fast blink        ---                    |
 |                                                                   |
-|  BATTERY:                                                         |
-|    Full        12.6V    Normal       11.1V                        |
-|    Low         9.6V     Critical     9.0V                         |
+|  BATTERY (alerts only, never stops the robot):                    |
+|    Full 12.6V   Low < 10.2V (2 rumbles)   Critical < 9.6V (3)     |
+|    Weapon will not arm below 9.6V                                 |
 |                                                                   |
 +-------------------------------------------------------------------+
 ```

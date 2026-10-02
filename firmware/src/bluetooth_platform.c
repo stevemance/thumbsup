@@ -26,11 +26,9 @@
 #include "status.h"
 #include "system_status.h"
 #include "test_mode.h"
-#include "trim_mode.h"
-#include "calibration_mode.h"
-#include "motor_linearization.h"
 #include "hitl_overrides.h"
 #include "battery_monitor.h"
+#include "drive_hbridge.h"
 #include "hitl_console.h"
 
 #if SERIAL_GAMEPAD
@@ -283,13 +281,8 @@ static void my_platform_init(int argc, const char **argv) {
     // Initialize test mode
     test_mode_init();
 
-    // Initialize trim mode
-    trim_mode_init();
-    calibration_mode_init();
-
     // Initialize thumbsup subsystems
     motor_control_init();
-    motor_linearization_init();
     drive_init();
     weapon_init();
     status_init();
@@ -393,6 +386,9 @@ static void my_platform_on_device_disconnected(uni_hid_device_t *d) {
     // CRITICAL: Ensure PWM outputs are driven to a safe state even if we never
     // receive another controller update after the disconnect callback.
     motor_control_stop_all();
+#if DRIVE_HBRIDGE
+    drive_hb_set_awake(false);
+#endif
 
     // Update system status LED
     status_set_system(SYSTEM_STATUS_FAILSAFE, LED_EFFECT_BLINK_FAST);
@@ -454,6 +450,9 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t *d) {
     active_con_handle = d->conn.handle;
     active_device = d;
     battery_monitor_controller_ready();
+#if DRIVE_HBRIDGE
+    drive_hb_set_awake(true);
+#endif
 
     printf("BT LINK ready role=%s\n",
            gap_get_role(active_con_handle) == HCI_ROLE_MASTER ? "central" : "peripheral");
@@ -587,63 +586,6 @@ static void process_gamepad_input(uni_gamepad_t* gp, bool state_changed) {
     // If in test mode, just update the display and return
     if (test_mode_is_active()) {
         test_mode_update(gp);
-        return;
-    }
-
-    // Check for calibration mode activation
-    calibration_mode_check_activation(gp);
-
-    // If in calibration mode, step through motor test points
-    if (calibration_mode_is_active()) {
-        calibration_mode_update(gp);
-        motor_control_update();  // Update motors with calibration commands
-        return;  // Block all other inputs during calibration
-    }
-
-    // Check for trim mode activation
-    trim_mode_check_activation(gp);
-
-    // Handle exit feedback LED restoration
-    trim_mode_handle_exit_feedback();
-
-    // If in trim mode, handle calibration with full driving control
-    if (trim_mode_is_active()) {
-        // Update trim calibration (handles B button for removing samples)
-        trim_mode_update(gp);
-
-        // Keep weapon disarmed during trim mode
-        if (armed_state) {
-            weapon_disarm();
-            armed_state = false;
-        }
-
-        // Allow full driving control in trim mode
-        int32_t forward = 0, turn = 0;
-        read_drive_sticks(gp, &forward, &turn);
-
-        // Convert to percentage for trim sample capture (-100 to +100)
-        int8_t forward_percent = (int8_t)((forward * 100) / 127);
-        int8_t turn_percent = (int8_t)((turn * 100) / 127);
-
-        // Static variable for A button edge detection
-        static bool button_a_prev = false;
-        bool button_a = (gp->buttons & BTN_A) != 0;
-
-        // Check for A button press (capture sample)
-        if (button_a && !button_a_prev) {
-            // Capture current forward speed and turn value as a sample
-            trim_mode_capture_sample(forward_percent, turn_percent);
-        }
-        button_a_prev = button_a;
-
-        // Send drive commands (no trim applied in trim mode)
-        drive_control_t trim_cmd = {
-            .forward = (int8_t)forward,
-            .turn = (int8_t)turn,
-            .enabled = true
-        };
-        drive_update(&trim_cmd);
-        motor_control_update();
         return;
     }
 

@@ -223,6 +223,87 @@ Different checks are used depending on the subsystem:
 - **Safety**:
   - Emergency stop is verified by checking `failsafe=1`, outputs return to neutral/off, and current returns close to baseline.
 
+## H-Bridge Drive Suite (`tools/hitl_drive_hb.py`)
+
+Demonstrates each DRV8874 drive capability against independent ground truth.
+It runs against the flashed `thumbsup_hitl.uf2` (no build/flash step) with
+the wheels free to spin.
+
+```bash
+./tools/hitl_drive_hb.py --list
+./tools/hitl_drive_hb.py all                 # ~25 min
+./tools/hitl_drive_hb.py speed_estimate health_match
+```
+
+Artifacts go to `hitl_logs/drive_hb_<stamp>/`: `results.json` (every check and
+its measured numbers), robot/emulator logs, and every M2K capture (`.npz`).
+
+### M2K wiring
+
+| M2K | Signal |
+|-----|--------|
+| DIO0 | emulator GP15 (HID-send marker), currently not reading correctly, see below |
+| DIO1 | robot GP15 (report-received marker) |
+| DIO2 / DIO3 | robot GP0 / GP1, left IN1 / IN2 |
+| DIO4 | robot GP4, weapon DShot |
+| DIO5 / DIO6 | robot GP2 / GP3, right IN1 / IN2 |
+| DIO7 | robot GP6, DRV8874 SLEEP |
+| CH1 (+1/−1) | across the left motor (OUT1 / OUT2) |
+| CH2 (+2/−2) | across the right motor |
+
+`tools/m2k_hb_worker.py` runs the M2K (labctl venv) and does the analysis.
+Two M2K facts the analysis has to handle:
+- **Lag:** analog samples lag digital ones by ~5.2–5.7 ms, varying per capture,
+  even with mixed-signal start. Coast windows are therefore located in the
+  analog trace itself.
+- **Gain/offset:** the ±25 V inputs read ~5% low with a ~0.5 V offset. The suite
+  calibrates both channels at the start from the forward/reverse PWM rail levels
+  against the PSU voltage.
+
+### Ground truth
+
+| What | Truth |
+|------|-------|
+| Wheel speed | Back-EMF across the motor during a short coast (`HITL DRVPROBE`), extrapolated back to the start of the coast |
+| Output timing / duty / sleep | H-bridge input pins and SLEEP on the M2K logic inputs |
+| Current | PSU supply current (= quiescent + duty × motor current in slow decay) |
+| Battery | PSU voltage |
+
+### Tests
+
+| Test | Shows |
+|------|-------|
+| direction | each motor both ways: 20 kHz, exact duty on the pins, motor voltage = duty × supply |
+| stick_mapping | sticks → wheels: forward, back, both spin turns, proportional |
+| latency | report received → H-bridge output (0.2 ms) |
+| brake_vs_coast | released wheel at 2% speed after 150 ms braking vs 37% coasting |
+| sleep | asleep with no controller (commands ignored), awake when ready |
+| fault | undervoltage (PSU 3.8 V) reported on nFAULT, clears, drive recovers |
+| current_sense | current sense agrees with the PSU |
+| speed_estimate | estimate vs truth, both motors, ±15–100%, within 0.6 V |
+| speed_dynamic | estimate tracks a wheel accelerating from rest |
+| resistance_cal | R measured on starts from rest and drive→brake transitions, consistent within 20% |
+| accel_limit | 200 %/s ramp as specified; release still instant |
+| battery | divider accuracy 9–15 V; low/critical alerts with hysteresis; drive unaffected; arming refused < 9.6 V |
+| current_limit | full-speed reversal hits the DRV8874 current limit, reported, no lockout |
+| health_detect | damaged gearbox flagged, healthy side not |
+| health_match | speed matching on the damaged gearbox: mismatch 26% → <5% |
+| health_simulated | `DRVDERATE` 55% loss on the left: detected, right trimmed to the 60% floor, mismatch reduced |
+
+The rig's right gearbox is genuinely damaged (it drags hard above ~50% and
+varies from moment to moment), which is why health tests use it.
+
+Not verifiable on the rig:
+- **Controller rumble:** the emulator is a generic HID gamepad, so the console
+  logs whether the rumble request went out but nothing feels it.
+- **The GP9 status LEDs:** no M2K input is spare.
+- **Current limiting under real wheel load:** the wheels spin free; only the
+  reversal case is tested.
+
+Emulator-to-robot (Bluetooth) latency needs DIO0 to follow the emulator's GP15
+marker. On 2026-10-02 DIO0 toggled with sticks at neutral, so it isn't
+connected to that marker at the moment.
+
 ## Extending HITL
 
 The intended pattern is:

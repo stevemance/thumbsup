@@ -648,18 +648,6 @@ void weapon_update(void) {
             weapon_emergency_stop();
             return;
         }
-#else
-        // Only check battery voltage in the fast path (runs every 2ms).
-        // The safety button is checked separately by safety_update() which
-        // uses a violation counter with threshold — a single noise glitch on
-        // the floating GP8 pin (no physical button installed) won't trigger
-        // an unrecoverable emergency stop.
-        uint32_t battery_mv = read_battery_voltage();
-        if (!safety_check_battery(battery_mv)) {
-            DEBUG_PRINT("SAFETY VIOLATION: Low battery in weapon_update\n");
-            weapon_emergency_stop();
-            return;
-        }
 #endif
     }
 

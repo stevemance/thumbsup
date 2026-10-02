@@ -66,24 +66,16 @@ void safety_update(void) {
 
     // SAFETY: Perform continuous safety monitoring
     if (current_time - last_safety_check >= SAFETY_CHECK_INTERVAL) {
-        // Read current battery voltage (declared in config.h)
-        uint32_t battery_mv = read_battery_voltage();
-
-        // Check for safety violations
+        // Check for safety violations.  A low battery is not one: stopping
+        // the robot mid-match is worse than running the pack down, so it
+        // only raises alerts (battery_monitor.c) and blocks arming.
         bool violation = false;
 
 #if INTEGRATION_TEST_AUTO || SERIAL_GAMEPAD
-        bool check_battery = false;
         bool check_button = false;
 #else
-        bool check_battery = true;
         bool check_button = true;
 #endif
-
-        if (check_battery && !safety_check_battery(battery_mv)) {
-            DEBUG_PRINT("SAFETY VIOLATION: Low battery %umV\n", battery_mv);
-            violation = true;
-        }
 
         if (check_button && safety_is_button_pressed()) {
             DEBUG_PRINT("SAFETY VIOLATION: Safety button pressed\n");

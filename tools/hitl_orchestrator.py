@@ -4378,8 +4378,10 @@ def main() -> None:
     parser.add_argument("--drive-spin-hold-s", type=float, default=2.0, help="Seconds to hold each active drive command")
     parser.add_argument("--drive-spin-sample-interval-s", type=float, default=0.2, help="PSU current sample interval during drive tests (s)")
     parser.add_argument("--drive-spin-settle-s", type=float, default=0.3, help="Seconds after drive start to ignore for current stats")
-    parser.add_argument("--drive-spin-current-delta-a", type=float, default=0.08, help="Min median current delta to treat as drive spinning")
-    parser.add_argument("--drive-spin-min-current-a", type=float, default=0.10, help="Min median current during run to treat as drive spinning")
+    # DRV8874 slow-decay drive draws duty x motor current from the supply: two
+    # free wheels at 24% duty add only ~0.06 A (the old RC ESCs drew more).
+    parser.add_argument("--drive-spin-current-delta-a", type=float, default=0.04, help="Min median current delta to treat as drive spinning")
+    parser.add_argument("--drive-spin-min-current-a", type=float, default=0.06, help="Min median current during run to treat as drive spinning")
     parser.add_argument("--drive-spin-return-tol-a", type=float, default=0.08, help="Max median current deviation from baseline when stopped")
     parser.add_argument(
         "--suite",

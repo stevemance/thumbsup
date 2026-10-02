@@ -6,6 +6,7 @@
 #include <hardware/adc.h>
 #include <hardware/watchdog.h>
 #include "config.h"
+#include "drive_hbridge.h"
 #include "motor_control.h"
 #include "drive.h"
 #include "weapon.h"
@@ -16,9 +17,6 @@
 #include "integration_test.h"
 #include "serial_gamepad.h"
 #include "test_mode.h"
-#include "trim_mode.h"
-#include "calibration_mode.h"
-#include "motor_linearization.h"
 #include "hitl_overrides.h"
 
 // Competition mode (Bluetooth) - diagnostic mode removed
@@ -40,7 +38,7 @@ struct uni_platform* get_my_platform(void);
 static void init_hardware(void) {
     // Note: stdio_init_all() is called in main() before this function
 
-#if BATTERY_ADC_ENABLED
+#if BATTERY_ADC_ENABLED && !DRIVE_HBRIDGE
     adc_init();
     adc_gpio_init(PIN_BATTERY_ADC);
     adc_select_input(0);
@@ -69,6 +67,9 @@ uint32_t read_battery_voltage(void) {
 
 #if !BATTERY_ADC_ENABLED
     return BATTERY_MAX_VOLTAGE;  // ADC not wired — report nominal full voltage
+#elif DRIVE_HBRIDGE
+    // The drive module owns the ADC (round robin with the current senses).
+    return drive_hb_battery_mv();
 #endif
 
     uint16_t adc_raw = adc_read();
@@ -254,13 +255,8 @@ int main() {
 #endif
         #if SERIAL_GAMEPAD
         test_mode_init();
-        trim_mode_init();
-        calibration_mode_init();
         #endif
         motor_control_init();
-        #if SERIAL_GAMEPAD
-        motor_linearization_init();
-        #endif
 
         // Initialize other subsystems needed for tests
         weapon_init();

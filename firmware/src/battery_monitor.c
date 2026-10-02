@@ -6,6 +6,9 @@
 #include "config.h"
 #include "status.h"
 #include "weapon.h"
+#if BATTERY_ADC_ENABLED && DRIVE_HBRIDGE
+#include "drive_hbridge.h"
+#endif
 
 static battery_level_t level = BATTERY_LEVEL_UNKNOWN;
 static float filtered_mv = 0.0f;
@@ -122,20 +125,35 @@ static battery_level_t classify(float mv, battery_level_t current) {
 void battery_monitor_update(uint32_t now_ms) {
     run_rumble(now_ms);
 
+#if BATTERY_ADC_ENABLED && DRIVE_HBRIDGE
+    // Pico ADC on the battery divider.  Below BATTERY_PRESENT_MV the robot is
+    // running from USB alone: no reading.
+    uint32_t sample_ms = now_ms;
+    uint32_t raw_mv = drive_hb_battery_mv();
+    bool have_sample = raw_mv >= BATTERY_PRESENT_MV;
+    if (!have_sample && filtered_mv > 0.0f) {
+        filtered_mv = 0.0f;
+        level = BATTERY_LEVEL_UNKNOWN;
+    }
+#else
     weapon_telemetry_t t;
     weapon_get_telemetry_snapshot(&t);
-    if (t.voltage_ms != 0 && t.voltage_ms != last_sample_ms && t.voltage_cV > 0) {
-        float mv = (float)t.voltage_cV * 10.0f;
+    uint32_t sample_ms = t.voltage_ms;
+    uint32_t raw_mv = (uint32_t)t.voltage_cV * 10u;
+    bool have_sample = t.voltage_ms != 0 && t.voltage_cV > 0;
+#endif
+    if (have_sample && sample_ms != last_sample_ms) {
+        float mv = (float)raw_mv;
         if (filtered_mv <= 0.0f) {
             filtered_mv = mv;
         } else {
             // First-order low-pass with BATTERY_ALERT_FILTER_MS time constant,
             // so a spin-up sag of a second or two does not trip an alert.
-            float dt = (float)(t.voltage_ms - last_sample_ms);
+            float dt = (float)(sample_ms - last_sample_ms);
             float alpha = dt / ((float)BATTERY_ALERT_FILTER_MS + dt);
             filtered_mv += alpha * (mv - filtered_mv);
         }
-        last_sample_ms = t.voltage_ms;
+        last_sample_ms = sample_ms;
 
         battery_level_t next = classify(filtered_mv, level);
         if (next != level) {
